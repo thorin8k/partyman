@@ -18,12 +18,14 @@ export function createParticipantRoutes(db: Database) {
 
     const participant = findParticipantById(db, ctx.session.subjectId);
     if (!participant) {
+      console.log("[participants] GET /api/participants/me → NOT_FOUND");
       return Response.json(
         { error: { code: "NOT_FOUND", message: "Participant not found" } },
         { status: 404 }
       );
     }
 
+    console.log("[participants] GET /api/participants/me →", participant.displayName);
     return Response.json({
       participant: {
         id: participant.id,
@@ -51,13 +53,14 @@ export function createParticipantRoutes(db: Database) {
       .query<{ count: number }, [number, number]>(
         "SELECT COUNT(*) AS count FROM party_memberships WHERE party_id = ? AND participant_id = ?"
       )
-      .get(activeParty.id, participant.id);
+      .get(activeParty.id, ctx.session.subjectId);
 
     if (alreadyMember && alreadyMember.count > 0) {
       return Response.json({ joined: false, reason: "ALREADY_MEMBER" });
     }
 
     joinActiveParty(db, participant.id, participant.displayName);
+    console.log("[participants] POST /api/participants/join →", participant.displayName, "joined party#" + activeParty.id);
     return Response.json({ joined: true, partyId: activeParty.id });
   }
 }

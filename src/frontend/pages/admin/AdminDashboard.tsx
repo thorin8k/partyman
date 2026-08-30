@@ -277,12 +277,12 @@ export function AdminDashboard() {
       <div className="card" style={{ marginTop: '1rem' }}>
         <h2>ACCIONES RÁPIDAS</h2>
         <div className="grid grid-3" style={{ marginTop: '1rem' }}>
-          <button style={{ fontSize: '0.5rem' }}>
+          <a href="/admin/games" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>
             GESTIONAR JUEGOS
-          </button>
-          <button style={{ fontSize: '0.5rem' }}>
-            VER AUDIT LOG
-          </button>
+          </a>
+          <a href="/admin/planning" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>
+            PLANIFICACIÓN
+          </a>
           <button style={{ fontSize: '0.5rem' }}>
             BACKUP
           </button>

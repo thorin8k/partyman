@@ -8,6 +8,8 @@ import { AdminLogin } from './pages/login/AdminLogin';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { PartyDetail } from './pages/admin/PartyDetail';
 import { PublicDisplay } from './pages/public/PublicDisplay';
+import { AdminGames } from './pages/admin/AdminGames';
+import { AdminPlanning } from './pages/admin/AdminPlanning';
 
 function App() {
   return (
@@ -21,6 +23,8 @@ function App() {
           <Route path="/display" component={PublicDisplay} />
 
           {/* Admin routes */}
+          <Route path="/admin/games" component={AdminGames} />
+          <Route path="/admin/planning" component={AdminPlanning} />
           <Route path="/admin/parties/:id" component={PartyDetail} />
           <Route path="/admin" component={AdminDashboard} />
 

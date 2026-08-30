@@ -1,0 +1,145 @@
+import { useAuth } from '../../components/AuthContext';
+import { useLocation } from 'wouter';
+import { useEffect, useState } from 'react';
+
+interface Activity {
+  id: number;
+  partyId: number;
+  gameId: number | null;
+  gameTitleSnapshot: string | null;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  capacity: number | null;
+  status: string;
+}
+
+interface Game { id: number; title: string; }
+
+export function AdminPlanning() {
+  const { user, loading, logout } = useAuth();
+  const [, navigate] = useLocation();
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [games, setGames] = useState<Game[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({ title: '', gameId: '', startsAt: '', endsAt: '', capacity: '', notes: '' });
+
+  useEffect(() => {
+    if (!loading && !user) navigate('/admin/login');
+    else if (!loading && user?.role !== 'admin') navigate('/');
+  }, [user, loading, navigate]);
+
+  useEffect(() => { if (user?.role === 'admin') { fetchActivities(); fetchGames(); } }, [user]);
+
+  const fetchActivities = async () => {
+    const partyRes = await fetch('/api/parties/active');
+    const partyData = await partyRes.json();
+    if (!partyData.party) return;
+    const res = await fetch(`/api/admin/parties/${partyData.party.id}/activities`);
+    if (res.ok) setActivities((await res.json()).activities);
+  };
+
+  const fetchGames = async () => {
+    const res = await fetch('/api/admin/games');
+    if (res.ok) setGames((await res.json()).games);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    const partyRes = await fetch('/api/parties/active');
+    const partyData = await partyRes.json();
+    if (!partyData.party) { setError('No hay party activa'); return; }
+
+    const body = {
+      title: form.title,
+      gameId: form.gameId ? parseInt(form.gameId) : null,
+      startsAt: new Date(form.startsAt).toISOString(),
+      endsAt: new Date(form.endsAt).toISOString(),
+      capacity: form.capacity ? parseInt(form.capacity) : null,
+      notes: form.notes || null,
+    };
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    const res = await fetch(`/api/admin/parties/${partyData.party.id}/activities`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify(body),
+    });
+    if (res.ok) { setShowForm(false); setForm({ title: '', gameId: '', startsAt: '', endsAt: '', capacity: '', notes: '' }); fetchActivities(); }
+    else { const err = await res.json(); setError(err.error || 'Error'); }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('¿Eliminar esta actividad?')) return;
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    await fetch(`/api/admin/activities/${id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } });
+    fetchActivities();
+  };
+
+  if (loading || !user || user.role !== 'admin') return null;
+
+  return (
+    <div className="container">
+      <div className="header">
+        <h1>ADMIN</h1>
+        <div className="nav">
+          <a href="/admin">VOLVER →</a>
+          <a href="/display" target="_blank">DISPLAY →</a>
+          <button onClick={logout} style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}>SALIR</button>
+        </div>
+      </div>
+
+      {error && <div className="alert error">{error}</div>}
+
+      {showForm ? (
+        <div className="card">
+          <h2>NUEVA ACTIVIDAD</h2>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+            <div className="form-group"><label>TÍTULO *</label><input value={form.title} onChange={e => setForm({...form, title: e.target.value})} maxLength={120} required /></div>
+            <div className="form-group"><label>JUEGO</label>
+              <select value={form.gameId} onChange={e => setForm({...form, gameId: e.target.value})}>
+                <option value="">Ninguno</option>
+                {games.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-group"><label>INICIO *</label><input type="datetime-local" value={form.startsAt} onChange={e => setForm({...form, startsAt: e.target.value})} required /></div>
+              <div className="form-group"><label>FIN *</label><input type="datetime-local" value={form.endsAt} onChange={e => setForm({...form, endsAt: e.target.value})} required /></div>
+            </div>
+            <div className="form-group"><label>CAPACIDAD</label><input type="number" min="1" max="100" value={form.capacity} onChange={e => setForm({...form, capacity: e.target.value})} /></div>
+            <div className="form-group"><label>NOTAS</label><textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} rows={2} /></div>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button type="submit" className="primary">CREAR</button>
+              <button type="button" onClick={() => setShowForm(false)}>CANCELAR</button>
+            </div>
+          </form>
+        </div>
+      ) : (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h2>ACTIVIDADES ({activities.length})</h2>
+            <button className="primary" style={{ fontSize: '0.5rem' }} onClick={() => setShowForm(true)}>+ NUEVA ACTIVIDAD</button>
+          </div>
+          {activities.length === 0 ? (
+            <div className="empty-state"><h3>SIN ACTIVIDADES</h3><p style={{ fontSize: '0.875rem' }}>No hay actividades programadas.</p></div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {activities.map(a => (
+                <div key={a.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div>
+                    <h3 style={{ marginBottom: '0.25rem' }}>{a.title}</h3>
+                    <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+                      {a.gameTitleSnapshot ? `${a.gameTitleSnapshot} · ` : ''}
+                      {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                      {a.capacity ? ` · Cap: ${a.capacity}` : ''}
+                    </p>
+                  </div>
+                  <button className="danger" onClick={() => handleDelete(a.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>ELIMINAR</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

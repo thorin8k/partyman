@@ -33,6 +33,7 @@ export function createAuthRoutes(db: Database) {
   async function handleSteamLogin(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const returnTo = url.searchParams.get("returnTo") ?? "/";
+    console.log("[auth] GET /auth/steam → returnTo:", returnTo);
     
     if (!returnTo.startsWith("/") || returnTo.startsWith("//")) {
       return Response.json(
@@ -62,8 +63,10 @@ export function createAuthRoutes(db: Database) {
       const participant = upsertParticipant(db, steamId, profile.nickname, profile.avatarUrl);
       joinActiveParty(db, participant.id, participant.displayName);
       const info = createSession(db, "participant", participant.id);
+      console.log("[auth] Steam callback →", profile.nickname, "(steamId:", steamId, ")");
       return redirectWithSession("/", info);
-    } catch {
+    } catch (err) {
+      console.log("[auth] Steam callback FAILED:", err);
       return Response.redirect(`/?error=STEAM_UNAVAILABLE`, 302);
     }
   }
@@ -80,6 +83,7 @@ export function createAuthRoutes(db: Database) {
       : false;
 
     if (!sameOrigin) {
+      console.log("[auth] POST /auth/admin/login → REJECTED (cross-origin)");
       return Response.json(
         { error: { code: "FORBIDDEN", message: "Cross-origin login rejected" } },
         { status: 403 }
@@ -101,6 +105,7 @@ export function createAuthRoutes(db: Database) {
       .get(body.username);
 
     if (!admin || !(await verifyPassword(body.password, admin.password_hash))) {
+      console.log("[auth] POST /auth/admin/login → FAILED (bad credentials)");
       return Response.json(
         { error: { code: "AUTH_INVALID_CREDENTIALS", message: "Invalid credentials" } },
         { status: 401 }
@@ -108,6 +113,7 @@ export function createAuthRoutes(db: Database) {
     }
 
     const info = createSession(db, "admin", admin.id);
+    console.log("[auth] POST /auth/admin/login →", admin.username);
     return jsonWithSession(
       { user: { id: admin.id, displayName: admin.username, avatarUrl: null, role: "admin" } },
       200,
@@ -128,6 +134,7 @@ export function createAuthRoutes(db: Database) {
 
     const token = request.headers.get("cookie")?.match(/partyman_session=([^;]+)/)?.[1];
     if (token) db.run("DELETE FROM sessions WHERE id_hash = ?", [sha256Hex(token)]);
+    console.log("[auth] POST /auth/logout → session closed");
 
     return clearSession(Response.json({ ok: true }));
   }

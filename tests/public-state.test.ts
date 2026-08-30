@@ -9,6 +9,11 @@ function makeDb(): Database {
   db.exec("CREATE TABLE parties (id INTEGER PRIMARY KEY, name TEXT NOT NULL, starts_at TEXT NOT NULL, ends_at TEXT NOT NULL, description TEXT, location TEXT, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
   db.exec("CREATE TABLE participants (id INTEGER PRIMARY KEY, steam_id TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL, avatar_url TEXT, role TEXT NOT NULL DEFAULT 'participant', created_at TEXT NOT NULL)");
   db.exec("CREATE TABLE party_memberships (party_id INTEGER NOT NULL, participant_id INTEGER NOT NULL, display_name_snapshot TEXT NOT NULL, joined_at TEXT NOT NULL, PRIMARY KEY (party_id, participant_id))");
+  db.exec("CREATE TABLE games (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, min_players INTEGER, max_players INTEGER, duration_minutes INTEGER, setup_notes TEXT, image_path TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
+  db.exec("CREATE TABLE activities (id INTEGER PRIMARY KEY, party_id INTEGER NOT NULL, game_id INTEGER, game_title_snapshot TEXT, tournament_id INTEGER, title TEXT NOT NULL, starts_at TEXT NOT NULL, ends_at TEXT NOT NULL, capacity INTEGER, notes TEXT, status TEXT NOT NULL DEFAULT 'scheduled', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
+  db.exec("CREATE TABLE activity_participants (activity_id INTEGER NOT NULL, participant_id INTEGER NOT NULL, joined_at TEXT NOT NULL, PRIMARY KEY(activity_id, participant_id))");
+  db.exec("CREATE TABLE party_game_proposals (id INTEGER PRIMARY KEY, party_id INTEGER NOT NULL, game_id INTEGER NOT NULL, created_by_participant_id INTEGER NOT NULL, created_at TEXT NOT NULL, UNIQUE(party_id, game_id))");
+  db.exec("CREATE TABLE proposal_votes (proposal_id INTEGER NOT NULL, participant_id INTEGER NOT NULL, value INTEGER NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(proposal_id, participant_id))");
   return db;
 }
 
