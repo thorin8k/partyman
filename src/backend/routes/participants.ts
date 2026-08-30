@@ -1,11 +1,14 @@
 import type { Database } from "bun:sqlite";
 import { requireParticipant } from "../auth/guards";
-import { findParticipantById } from "../auth/participants";
+import { findParticipantById, joinActiveParty, findActiveParty } from "../auth/participants";
 
 export function createParticipantRoutes(db: Database) {
   return {
     "/api/participants/me": {
       GET: handleGetParticipant,
+    },
+    "/api/participants/join": {
+      POST: handleJoinActiveParty,
     },
   };
 
@@ -28,5 +31,33 @@ export function createParticipantRoutes(db: Database) {
         avatarUrl: participant.avatarUrl,
       },
     });
+  }
+
+  async function handleJoinActiveParty(request: Request): Promise<Response> {
+    const ctx = requireParticipant(db, request);
+    if (ctx instanceof Response) return ctx;
+
+    const participant = findParticipantById(db, ctx.session.subjectId);
+    if (!participant) {
+      return Response.json({ error: "PARTICIPANT_NOT_FOUND" }, { status: 404 });
+    }
+
+    const activeParty = findActiveParty(db);
+    if (!activeParty) {
+      return Response.json({ joined: false, reason: "NO_ACTIVE_PARTY" });
+    }
+
+    const alreadyMember = db
+      .query<{ count: number }, [number, number]>(
+        "SELECT COUNT(*) AS count FROM party_memberships WHERE party_id = ? AND participant_id = ?"
+      )
+      .get(activeParty.id, participant.id);
+
+    if (alreadyMember && alreadyMember.count > 0) {
+      return Response.json({ joined: false, reason: "ALREADY_MEMBER" });
+    }
+
+    joinActiveParty(db, participant.id, participant.displayName);
+    return Response.json({ joined: true, partyId: activeParty.id });
   }
 }

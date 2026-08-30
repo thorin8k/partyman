@@ -7,6 +7,7 @@ import { createHealthRoutes } from "./backend/routes/health";
 import { createAuthRoutes } from "./backend/routes/auth";
 import { createParticipantRoutes } from "./backend/routes/participants";
 import { createPartyRoutes } from "./backend/routes/parties";
+import { createPublicRoutes } from "./backend/routes/public";
 import serveStatic from "serve-static-bun";
 
 await executeMigrations();
@@ -17,6 +18,7 @@ const healthRoutes = createHealthRoutes(db);
 const authRoutes = createAuthRoutes(db);
 const participantRoutes = createParticipantRoutes(db);
 const partyRoutes = createPartyRoutes(db);
+const publicRoutes = createPublicRoutes(db);
 
 const server = serve({
   routes: {
@@ -25,6 +27,7 @@ const server = serve({
     ...authRoutes,
     ...participantRoutes,
     ...partyRoutes,
+    ...publicRoutes,
 
     // Static assets
     "/public/:filename{.+\\.(png|ico|txt|woff2|jpg|css)}": {

@@ -7,6 +7,7 @@ import { ParticipantLogin } from './pages/login/ParticipantLogin';
 import { AdminLogin } from './pages/login/AdminLogin';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { PartyDetail } from './pages/admin/PartyDetail';
+import { PublicDisplay } from './pages/public/PublicDisplay';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
           <Route path="/" component={Dashboard} />
           <Route path="/login" component={ParticipantLogin} />
           <Route path="/admin/login" component={AdminLogin} />
+          <Route path="/display" component={PublicDisplay} />
 
           {/* Admin routes */}
           <Route path="/admin/parties/:id" component={PartyDetail} />

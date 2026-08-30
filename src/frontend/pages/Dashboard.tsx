@@ -28,6 +28,7 @@ export function Dashboard() {
         .then(res => res.json())
         .then(data => setActiveParty(data.party))
         .catch(() => {});
+      fetch('/api/participants/join', { method: 'POST' }).catch(() => {});
     }
   }, [user]);
 
@@ -50,6 +51,7 @@ export function Dashboard() {
           {user.role === 'admin' && (
             <a href="/admin">ADMIN →</a>
           )}
+          <a href="/display" target="_blank">DISPLAY →</a>
           <button onClick={logout} style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}>
             SALIR
           </button>

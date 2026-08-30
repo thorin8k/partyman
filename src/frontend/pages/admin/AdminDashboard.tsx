@@ -148,6 +148,7 @@ export function AdminDashboard() {
             {user.displayName}
           </span>
           <a href="/">SITIO →</a>
+          <a href="/display" target="_blank">DISPLAY →</a>
           <button onClick={logout} style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}>
             SALIR
           </button>
