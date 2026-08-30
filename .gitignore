@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+/data/
+/uploads/
+/backups/
+.env
+.DS_Store

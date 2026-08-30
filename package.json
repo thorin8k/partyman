@@ -1,0 +1,32 @@
+{
+  "name": "partyman",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "module": "dist/backend.js",
+  "scripts": {
+    "dev": "bun --hot src/backend.ts",
+    "dev:proxy": "NODE_ENV=production bun src/backend.ts",
+    "build": "bun build --sourcemap --outdir=dist --target=bun --production src/backend.ts",
+    "copy": "bunx cp -r src/public dist/",
+    "compile": "bun run build && bun run copy",
+    "start": "NODE_ENV=production bun src/backend.ts",
+    "prod": "cd dist && NODE_ENV=production bun backend.js",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "format": "bun format src tests migrations *.json *.ts",
+    "format:check": "bun format --check src tests migrations *.json *.ts"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "serve-static-bun": "^0.5.3",
+    "wouter": "^3.10.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "typescript": "^5.9.3"
+  }
+}

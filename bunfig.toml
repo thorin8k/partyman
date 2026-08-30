@@ -1,0 +1,2 @@
+[serve.development]
+allowedHosts = ["all"]
