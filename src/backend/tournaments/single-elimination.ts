@@ -15,29 +15,34 @@ export function generateBracket(participantIds: number[]): MatchInput[] {
 
   const matches: MatchInput[] = [];
 
-  // First round: assign seeds and byes
-  const firstRound: (number | null)[] = [];
-  for (let i = 0; i < n; i++) {
-    firstRound.push(participantIds[i]);
-  }
-  // Add byes (null = bye)
+  // Build first round slots
+  // Top seeds (0..byes-1) get byes (skip first round)
+  // Remaining seeds (byes..n-1) play in first round
+  const slots: (number | null)[] = new Array(bracketSize).fill(null);
+  
+  // Assign top seeds to bye slots (even positions: 0, 2, 4, ...)
   for (let i = 0; i < byes; i++) {
-    firstRound.push(null);
+    slots[i * 2] = participantIds[i];
+  }
+  
+  // Assign remaining seeds to odd positions
+  let pIdx = byes;
+  for (let i = 0; i < bracketSize; i++) {
+    if (slots[i] === null && pIdx < n) {
+      slots[i] = participantIds[pIdx++];
+    }
   }
 
   // Pair up for first round
   for (let pos = 0; pos < bracketSize / 2; pos++) {
-    const a = firstRound[pos * 2];
-    const b = firstRound[pos * 2 + 1];
+    const a = slots[pos * 2];
+    const b = slots[pos * 2 + 1];
 
     if (a !== null && b === null) {
-      // Bye: auto-confirm
       matches.push({ round: 1, position: pos, participantAId: a, participantBId: null });
     } else if (a === null && b !== null) {
-      // Bye: auto-confirm
       matches.push({ round: 1, position: pos, participantAId: null, participantBId: b });
     } else {
-      // Regular match
       matches.push({ round: 1, position: pos, participantAId: a, participantBId: b });
     }
   }
@@ -61,5 +66,6 @@ export function getNextMatchPosition(currentRound: number, currentPosition: numb
 }
 
 export function isBye(match: { participantAId: number | null; participantBId: number | null }): boolean {
-  return match.participantAId === null || match.participantBId === null;
+  return (match.participantAId !== null && match.participantBId === null) ||
+         (match.participantAId === null && match.participantBId !== null);
 }
