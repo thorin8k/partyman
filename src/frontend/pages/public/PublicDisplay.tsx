@@ -1,9 +1,18 @@
 import { useEffect, useState, useRef } from 'react';
 
+interface Tournament {
+  id: number;
+  name: string;
+  gameTitle: string;
+  status: string;
+  maxParticipants: number;
+}
+
 interface PublicState {
   party: { id: number; name: string; startsAt: string; endsAt: string; status: string } | null;
   attendees: Array<{ id: number; displayName: string; avatarUrl: string | null; joinedAt: string }>;
-  tournaments: unknown[];
+  activities: Array<{ id: number; title: string; gameTitle: string | null; startsAt: string; endsAt: string; capacity: number | null; status: string }>;
+  tournaments: Tournament[];
   leaderboard: unknown[];
   activity: unknown[];
   generatedAt: string;
@@ -135,10 +144,43 @@ export function PublicDisplay() {
           </div>
 
           <div className="card">
-            <h2 style={{ marginBottom: '1rem' }}>PRÓXIMAMENTE</h2>
-            <div className="empty-state">
+            <h2 style={{ marginBottom: '1rem' }}>TORNEOS</h2>
+            {state.tournaments.length === 0 ? (
+              <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>No hay torneos programados</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {state.tournaments.map((t) => (
+                  <div key={t.id} style={{ padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <h3 style={{ fontSize: '0.875rem' }}>{t.name}</h3>
+                      <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: t.status === 'in_progress' ? 'var(--neon-orange)' : 'var(--neon-green)' }}>
+                        {t.status === 'in_progress' ? 'EN CURSO' : 'PRÓXIMAMENTE'}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', margin: '0.25rem 0 0' }}>{t.gameTitle} · Max {t.maxParticipants}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <h2 style={{ marginBottom: '1rem' }}>ACTIVIDADES</h2>
+            {state.activities.length === 0 ? (
               <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>No hay actividades programadas</p>
-            </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {state.activities.map((a) => (
+                  <div key={a.id} style={{ padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+                    <h3 style={{ fontSize: '0.875rem' }}>{a.title}</h3>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', margin: '0.25rem 0 0' }}>
+                      {a.gameTitle ? `${a.gameTitle} · ` : ''}
+                      {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       ) : (

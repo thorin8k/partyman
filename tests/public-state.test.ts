@@ -14,6 +14,7 @@ function makeDb(): Database {
   db.exec("CREATE TABLE activity_participants (activity_id INTEGER NOT NULL, participant_id INTEGER NOT NULL, joined_at TEXT NOT NULL, PRIMARY KEY(activity_id, participant_id))");
   db.exec("CREATE TABLE party_game_proposals (id INTEGER PRIMARY KEY, party_id INTEGER NOT NULL, game_id INTEGER NOT NULL, created_by_participant_id INTEGER NOT NULL, created_at TEXT NOT NULL, UNIQUE(party_id, game_id))");
   db.exec("CREATE TABLE proposal_votes (proposal_id INTEGER NOT NULL, participant_id INTEGER NOT NULL, value INTEGER NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(proposal_id, participant_id))");
+  db.exec("CREATE TABLE tournaments (id INTEGER PRIMARY KEY, party_id INTEGER NOT NULL, game_id INTEGER NOT NULL, game_title_snapshot TEXT NOT NULL, activity_id INTEGER, name TEXT NOT NULL, format TEXT NOT NULL DEFAULT 'single_elimination', status TEXT NOT NULL DEFAULT 'draft', max_participants INTEGER NOT NULL DEFAULT 16, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
   return db;
 }
 

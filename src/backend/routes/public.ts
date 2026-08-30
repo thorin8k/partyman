@@ -44,7 +44,20 @@ export function createPublicRoutes(db: Database) {
           }))
       : [];
 
-    const tournaments: unknown[] = [];
+    const tournaments = party
+      ? db
+          .query<{ id: number; name: string; game_title_snapshot: string; status: string; max_participants: number }, [number]>(
+            "SELECT id, name, game_title_snapshot, status, max_participants FROM tournaments WHERE party_id = ? AND status IN ('upcoming', 'in_progress') ORDER BY name"
+          )
+          .all(party.id)
+          .map((r) => ({
+            id: r.id,
+            name: r.name,
+            gameTitle: r.game_title_snapshot,
+            status: r.status,
+            maxParticipants: r.max_participants,
+          }))
+      : [];
     const leaderboard: unknown[] = [];
     const schedule: unknown[] = [];
     const activity: unknown[] = [];

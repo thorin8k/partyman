@@ -30,6 +30,15 @@ interface Proposal {
 
 interface Game { id: number; title: string; imageUrl: string | null; }
 
+interface Tournament {
+  id: number;
+  name: string;
+  gameTitleSnapshot: string;
+  status: string;
+  maxParticipants: number;
+  participants: Array<{ id: number; displayName: string; seed: number }>;
+}
+
 export function Dashboard() {
   const { user, loading, logout } = useAuth();
   const [, navigate] = useLocation();
@@ -37,6 +46,7 @@ export function Dashboard() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [games, setGames] = useState<Game[]>([]);
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [showPropose, setShowPropose] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -53,6 +63,7 @@ export function Dashboard() {
       fetch('/api/participants/join', { method: 'POST' }).catch(() => {});
       fetchPlanning();
       fetchGames();
+      fetchTournaments();
     }
   }, [user]);
 
@@ -64,6 +75,11 @@ export function Dashboard() {
   const fetchGames = async () => {
     const res = await fetch('/api/admin/games');
     if (res.ok) setGames((await res.json()).games);
+  };
+
+  const fetchTournaments = async () => {
+    const res = await fetch('/api/tournaments');
+    if (res.ok) setTournaments((await res.json()).tournaments);
   };
 
   const handleSearch = async () => {
@@ -130,6 +146,19 @@ export function Dashboard() {
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     await fetch(`/api/activities/${activityId}/leave`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } });
     fetchPlanning();
+  };
+
+  const handleJoinTournament = async (tournamentId: number) => {
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    const res = await fetch(`/api/tournaments/${tournamentId}/join`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
+    if (!res.ok) { const err = await res.json(); setError(err.error || 'Error'); }
+    fetchTournaments();
+  };
+
+  const handleLeaveTournament = async (tournamentId: number) => {
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    await fetch(`/api/tournaments/${tournamentId}/join`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } });
+    fetchTournaments();
   };
 
   if (loading || !user) return null;
@@ -255,6 +284,41 @@ export function Dashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card" style={{ marginTop: '1rem' }}>
+            <h2>TORNEOS</h2>
+            {tournaments.length === 0 ? (
+              <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginTop: '0.5rem' }}>No hay torneos programados</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                {tournaments.map(t => {
+                  const isMember = t.participants?.some(p => p.id === user?.id);
+                  return (
+                    <div key={t.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div>
+                        <h3 style={{ marginBottom: '0.25rem' }}>{t.name}</h3>
+                        <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+                          {t.gameTitleSnapshot} · {t.participants?.length || 0}/{t.maxParticipants} participantes
+                        </p>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: t.status === 'in_progress' ? 'var(--neon-orange)' : 'var(--neon-green)' }}>
+                          {t.status === 'in_progress' ? 'EN CURSO' : 'INSCRIPCIÓN ABIERTA'}
+                        </span>
+                        {t.status === 'upcoming' && (
+                          isMember ? (
+                            <button onClick={() => handleLeaveTournament(t.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem', borderColor: 'var(--error)', color: 'var(--error)' }}>SALIR</button>
+                          ) : (
+                            <button onClick={() => handleJoinTournament(t.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>INSCRIBIRME</button>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
