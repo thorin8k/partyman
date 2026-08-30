@@ -280,6 +280,9 @@ export function AdminDashboard() {
           <a href="/admin/games" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>
             GESTIONAR JUEGOS
           </a>
+          <a href="/admin/tournaments" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>
+            TORNEOS
+          </a>
           <a href="/admin/planning" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>
             PLANIFICACIÓN
           </a>
