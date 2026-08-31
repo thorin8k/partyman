@@ -206,16 +206,33 @@ export function createTournamentRoutes(db: Database) {
   }
 
   async function handleGetTournaments(request: Request): Promise<Response> {
-    const auth = requireParticipant(db, request);
-    if (auth instanceof Response) return auth;
+    const ctx = requireParticipant(db, request);
+    if (ctx instanceof Response) return ctx;
 
     const activeParty = findActiveParty(db);
     if (!activeParty) return Response.json({ tournaments: [] });
 
-    const tournaments = db.query<TournamentRow, [number]>(
-      "SELECT * FROM tournaments WHERE party_id = ? AND status IN ('upcoming', 'in_progress') ORDER BY name"
-    ).all(activeParty.id);
-    return Response.json({ tournaments });
+    // Admin sees all, participants see upcoming/in_progress
+    const isAdmin = ctx.session.subjectType === "admin" || (() => {
+      const p = db.query<{ role: string }, [number]>("SELECT role FROM participants WHERE id = ?").get(ctx.session.subjectId);
+      return p?.role === "admin";
+    })();
+
+    const tournaments = isAdmin
+      ? db.query<TournamentRow, [number]>(
+          "SELECT * FROM tournaments WHERE party_id = ? ORDER BY name"
+        ).all(activeParty.id)
+      : db.query<TournamentRow, [number]>(
+          "SELECT * FROM tournaments WHERE party_id = ? AND status IN ('upcoming', 'in_progress') ORDER BY name"
+        ).all(activeParty.id);
+
+    // Enrich with participant counts
+    const enriched = tournaments.map(t => {
+      const count = db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ?").get(t.id)!;
+      return { ...t, participantCount: count.count };
+    });
+
+    return Response.json({ tournaments: enriched });
   }
 
   async function handleGetTournament(request: Request): Promise<Response> {

@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { requireParticipant } from "../auth/guards";
+import { requireParticipant, requireAdmin } from "../auth/guards";
 import { findActiveParty } from "../auth/participants";
 
 export function createProposalsRoutes(db: Database) {
@@ -7,9 +7,18 @@ export function createProposalsRoutes(db: Database) {
     "/api/parties/active/proposals": {
       POST: handleCreateProposal,
     },
+    "/api/proposals": {
+      GET: handleGetProposals,
+    },
+    "/api/proposals/:id": {
+      DELETE: handleDeleteProposal,
+    },
     "/api/proposals/:id/vote": {
       PUT: handleVote,
       DELETE: handleDeleteVote,
+    },
+    "/api/admin/proposals/:id/approve": {
+      POST: handleApproveProposal,
     },
   };
 
@@ -114,5 +123,74 @@ export function createProposalsRoutes(db: Database) {
 
     console.log("[proposals] DELETE /api/proposals/" + id + "/vote → participant#" + ctx.session.subjectId);
     return Response.json({ voted: false, voteCount: voteCount?.count ?? 0 });
+  }
+
+  async function handleGetProposals(request: Request): Promise<Response> {
+    const ctx = requireParticipant(db, request);
+    if (ctx instanceof Response) return ctx;
+
+    const activeParty = findActiveParty(db);
+    if (!activeParty) return Response.json({ proposals: [] });
+
+    const rows = db.query<{ id: number; game_id: number; title: string; vote_count: number; created_by: number; created_at: string }, [number]>(
+      "SELECT ppg.id, ppg.game_id, g.title, (SELECT COUNT(*) FROM proposal_votes pv WHERE pv.proposal_id = ppg.id) AS vote_count, ppg.created_by_participant_id, ppg.created_at FROM party_game_proposals ppg JOIN games g ON g.id = ppg.game_id WHERE ppg.party_id = ? ORDER BY vote_count DESC"
+    ).all(activeParty.id);
+
+    const proposals = rows.map(r => ({
+      id: r.id,
+      gameId: r.game_id,
+      gameTitle: r.title,
+      voteCount: r.vote_count,
+      createdBy: r.created_by,
+      createdAt: r.created_at,
+    }));
+
+    console.log("[proposals] GET /api/proposals →", proposals.length, "proposals");
+    return Response.json({ proposals });
+  }
+
+  async function handleDeleteProposal(request: Request): Promise<Response> {
+    const ctx = requireParticipant(db, request);
+    if (ctx instanceof Response) return ctx;
+
+    const id = extractId(request.url, "/api/proposals/");
+    if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+
+    const proposal = db.query<{ id: number; created_by_participant_id: number }, [number]>(
+      "SELECT id, created_by_participant_id FROM party_game_proposals WHERE id = ?"
+    ).get(id);
+    if (!proposal) return Response.json({ error: "PROPOSAL_NOT_FOUND" }, { status: 404 });
+
+    if (proposal.created_by_participant_id !== ctx.session.subjectId) {
+      return Response.json({ error: "NOT_PROPOSER" }, { status: 403 });
+    }
+
+    db.run("DELETE FROM proposal_votes WHERE proposal_id = ?", [id]);
+    db.run("DELETE FROM party_game_proposals WHERE id = ?", [id]);
+    console.log("[proposals] DELETE /api/proposals/" + id + " → withdrawn by proposer");
+    return Response.json({ ok: true });
+  }
+
+  async function handleApproveProposal(request: Request): Promise<Response> {
+    const auth = requireAdmin(db, request);
+    if (auth instanceof Response) return auth;
+
+    const id = extractId(request.url, "/api/admin/proposals/");
+    if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+
+    const proposal = db.query<{ id: number; game_id: number }, [number]>(
+      "SELECT id, game_id FROM party_game_proposals WHERE id = ?"
+    ).get(id);
+    if (!proposal) return Response.json({ error: "PROPOSAL_NOT_FOUND" }, { status: 404 });
+
+    // Ensure game is enabled
+    db.run("UPDATE games SET enabled = 1 WHERE id = ?", [proposal.game_id]);
+
+    // Remove the proposal since it's now in the catalog
+    db.run("DELETE FROM proposal_votes WHERE proposal_id = ?", [id]);
+    db.run("DELETE FROM party_game_proposals WHERE id = ?", [id]);
+
+    console.log("[proposals] POST /api/admin/proposals/" + id + "/approve → game#" + proposal.game_id + " enabled");
+    return Response.json({ ok: true, gameId: proposal.game_id });
   }
 }

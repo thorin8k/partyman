@@ -277,13 +277,13 @@ export function AdminDashboard() {
       <div className="card" style={{ marginTop: '1rem' }}>
         <h2>ACCIONES RÁPIDAS</h2>
         <div className="grid grid-3" style={{ marginTop: '1rem' }}>
-          <a href="/admin/games" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>
+          <a href="/admin/games" style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>
             GESTIONAR JUEGOS
           </a>
-          <a href="/admin/tournaments" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>
+          <a href="/admin/tournaments" style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>
             TORNEOS
           </a>
-          <a href="/admin/planning" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>
+          <a href="/admin/planning" style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>
             PLANIFICACIÓN
           </a>
           <button style={{ fontSize: '0.5rem' }}>

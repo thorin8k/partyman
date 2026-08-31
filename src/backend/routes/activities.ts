@@ -73,7 +73,22 @@ export function createActivitiesRoutes(db: Database) {
       "SELECT * FROM activities WHERE party_id = ? ORDER BY starts_at"
     ).all(partyId);
 
-    return Response.json({ activities: rows.map(rowToActivity) });
+    const activities = rows.map(r => {
+      const participants = db
+        .query<{ id: number; display_name: string }, [number]>(
+          "SELECT p.id, p.display_name FROM activity_participants ap JOIN participants p ON p.id = ap.participant_id WHERE ap.activity_id = ? ORDER BY ap.joined_at"
+        )
+        .all(r.id)
+        .map(p => ({ id: p.id, displayName: p.display_name }));
+
+      const count = db.query<{ count: number }, [number]>(
+        "SELECT COUNT(*) AS count FROM activity_participants WHERE activity_id = ?"
+      ).get(r.id)!;
+
+      return { ...rowToActivity(r), participants, participantCount: count.count };
+    });
+
+    return Response.json({ activities });
   }
 
   async function handleCreateActivity(request: Request): Promise<Response> {
