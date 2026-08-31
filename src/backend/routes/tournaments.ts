@@ -278,7 +278,7 @@ export function createTournamentRoutes(db: Database) {
 
     const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
     if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
-    if (t.status !== "upcoming") return Response.json({ error: "TOURNAMENT_NOT_JOINABLE" }, { status: 409 });
+    if (t.status !== "upcoming" && t.status !== "draft") return Response.json({ error: "TOURNAMENT_NOT_JOINABLE" }, { status: 409 });
 
     const participant = db.query<{ id: number; display_name: string }, [number]>("SELECT id, display_name FROM participants WHERE id = ?").get(auth.session.subjectId);
     if (!participant) return Response.json({ error: "PARTICIPANT_NOT_FOUND" }, { status: 404 });
@@ -306,7 +306,7 @@ export function createTournamentRoutes(db: Database) {
 
     const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
     if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
-    if (t.status !== "upcoming") return Response.json({ error: "TOURNAMENT_NOT_JOINABLE" }, { status: 409 });
+    if (t.status !== "upcoming" && t.status !== "draft") return Response.json({ error: "TOURNAMENT_NOT_JOINABLE" }, { status: 409 });
 
     db.run("DELETE FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?", [id, auth.session.subjectId]);
     console.log("[tournaments] DELETE /api/tournaments/" + id + "/leave → participant#" + auth.session.subjectId);

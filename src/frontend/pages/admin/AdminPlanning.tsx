@@ -12,6 +12,8 @@ interface Activity {
   endsAt: string;
   capacity: number | null;
   status: string;
+  participantCount: number;
+  participants: Array<{ id: number; displayName: string }>;
 }
 
 interface Game { id: number; title: string; }
@@ -124,16 +126,28 @@ export function AdminPlanning() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {activities.map(a => (
-                <div key={a.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <div>
-                    <h3 style={{ marginBottom: '0.25rem' }}>{a.title}</h3>
-                    <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
-                      {a.gameTitleSnapshot ? `${a.gameTitleSnapshot} · ` : ''}
-                      {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                      {a.capacity ? ` · Cap: ${a.capacity}` : ''}
-                    </p>
+                <div key={a.id} className="list-item" style={{ padding: '0.75rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div>
+                      <h3 style={{ marginBottom: '0.25rem' }}>{a.title}</h3>
+                      <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+                        {a.gameTitleSnapshot ? `${a.gameTitleSnapshot} · ` : ''}
+                        {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                        {a.capacity ? ` · ${a.participantCount || 0}/${a.capacity}` : ''}
+                      </p>
+                    </div>
+                    <button className="danger" onClick={() => handleDelete(a.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>ELIMINAR</button>
                   </div>
-                  <button className="danger" onClick={() => handleDelete(a.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>ELIMINAR</button>
+                  {a.participants && a.participants.length > 0 && (
+                    <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border)' }}>
+                      <p style={{ fontSize: '0.625rem', color: 'var(--text-dim)', marginBottom: '0.25rem' }}>INSCRITOS ({a.participants.length}):</p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        {a.participants.map(p => (
+                          <span key={p.id} style={{ fontSize: '0.75rem', padding: '0.125rem 0.5rem', background: 'var(--bg)', borderRadius: 'var(--radius)' }}>{p.displayName}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

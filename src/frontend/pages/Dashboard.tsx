@@ -19,6 +19,8 @@ interface Activity {
   endsAt: string;
   capacity: number | null;
   status: string;
+  participantCount: number;
+  participants: Array<{ id: number; displayName: string }>;
 }
 
 interface Proposal {
@@ -36,6 +38,7 @@ interface Tournament {
   gameTitleSnapshot: string;
   status: string;
   maxParticipants: number;
+  participantCount: number;
   participants: Array<{ id: number; displayName: string; seed: number }>;
 }
 
@@ -268,22 +271,34 @@ export function Dashboard() {
               <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginTop: '0.5rem' }}>No hay actividades programadas</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
-                {activities.map(a => (
-                  <div key={a.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    <div>
-                      <h3 style={{ marginBottom: '0.25rem' }}>{a.title}</h3>
-                      <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
-                        {a.gameTitle ? `${a.gameTitle} · ` : ''}
-                        {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                        {a.capacity ? ` · Cap: ${a.capacity}` : ''}
-                      </p>
+                {activities.map(a => {
+                  const isJoined = a.participants?.some(p => p.id === user?.id);
+                  const isFull = a.capacity != null && (a.participantCount || 0) >= a.capacity;
+                  return (
+                    <div key={a.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div>
+                        <h3 style={{ marginBottom: '0.25rem' }}>{a.title}</h3>
+                        <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+                          {a.gameTitle ? `${a.gameTitle} · ` : ''}
+                          {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                          {a.capacity ? ` · ${a.participantCount || 0}/${a.capacity}` : ''}
+                        </p>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        {isJoined && (
+                          <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--neon-green)' }}>INSCRITO</span>
+                        )}
+                        {isJoined ? (
+                          <button onClick={() => handleLeaveActivity(a.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem', borderColor: 'var(--error)', color: 'var(--error)' }}>SALIR</button>
+                        ) : (
+                          <button onClick={() => handleJoinActivity(a.id)} disabled={isFull} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>
+                            {isFull ? 'LLENA' : 'UNIRME'}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button onClick={() => handleJoinActivity(a.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>UNIRME</button>
-                      <button onClick={() => handleLeaveActivity(a.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem', borderColor: 'var(--error)', color: 'var(--error)' }}>SALIR</button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -296,19 +311,22 @@ export function Dashboard() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
                 {tournaments.map(t => {
                   const isMember = t.participants?.some(p => p.id === user?.id);
+                  const canJoin = t.status === 'upcoming' || t.status === 'draft';
+                  const statusLabel = t.status === 'in_progress' ? 'EN CURSO' : t.status === 'finished' ? 'FINALIZADO' : 'INSCRIPCIÓN ABIERTA';
+                  const statusColor = t.status === 'in_progress' ? 'var(--neon-orange)' : t.status === 'finished' ? 'var(--muted)' : 'var(--neon-green)';
                   return (
                     <div key={t.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                       <div>
                         <h3 style={{ marginBottom: '0.25rem' }}>{t.name}</h3>
                         <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
-                          {t.gameTitleSnapshot} · {t.participants?.length || 0}/{t.maxParticipants} participantes
+                          {t.gameTitleSnapshot} · {t.participantCount || 0}/{t.maxParticipants} participantes
                         </p>
                       </div>
                       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: t.status === 'in_progress' ? 'var(--neon-orange)' : 'var(--neon-green)' }}>
-                          {t.status === 'in_progress' ? 'EN CURSO' : 'INSCRIPCIÓN ABIERTA'}
+                        <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: statusColor }}>
+                          {statusLabel}
                         </span>
-                        {t.status === 'upcoming' && (
+                        {canJoin && (
                           isMember ? (
                             <button onClick={() => handleLeaveTournament(t.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem', borderColor: 'var(--error)', color: 'var(--error)' }}>SALIR</button>
                           ) : (
