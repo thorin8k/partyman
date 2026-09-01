@@ -140,75 +140,91 @@ export function TournamentDetail() {
       </div>
 
       {tournament.matches.length > 0 && (
-        <div className="card" style={{ marginTop: '1rem' }}>
+        <div className="card" style={{ marginTop: '1rem', overflow: 'hidden' }}>
           <h2>BRACKET</h2>
-          <div style={{ display: 'flex', gap: '1.5rem', overflowX: 'auto', marginTop: '1rem' }}>
-            {rounds.map(round => (
-              <div key={round} style={{ minWidth: '200px' }}>
-                <h3 style={{ fontSize: '0.625rem', color: 'var(--neon-cyan)', marginBottom: '0.75rem', textAlign: 'center' }}>
-                  {roundLabels[round] || `RONDA ${round}`}
-                </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {tournament.matches.filter(m => m.round === round).map(m => (
-                    <div key={m.id} style={{ padding: '0.5rem', background: 'var(--bg-secondary)', border: `1px solid ${m.status === 'confirmed' ? 'var(--neon-green)' : 'var(--border)'}`, borderRadius: 'var(--radius)' }}>
-                      <div style={{ fontSize: '0.75rem', marginBottom: '0.25rem', color: m.winner === m.participantA ? 'var(--neon-green)' : undefined }}>
-                        {m.participantA || 'BYE'}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', marginBottom: '0.25rem', color: m.winner === m.participantB ? 'var(--neon-green)' : undefined }}>
-                        {m.participantB || 'BYE'}
-                      </div>
-                      {m.score && (
-                        <div style={{ fontSize: '0.625rem', color: 'var(--text-dim)' }}>
-                          {m.score.a} - {m.score.b}
+          <div style={{ display: 'flex', gap: '2rem', overflowX: 'auto', marginTop: '1rem', padding: '1rem 0', alignItems: 'stretch' }}>
+            {rounds.map(round => {
+              const roundMatches = tournament.matches.filter(m => m.round === round);
+              const isLastRound = round === Math.max(...rounds);
+              return (
+                <div key={round} style={{ minWidth: '220px', display: 'flex', flexDirection: 'column' }}>
+                  <h3 style={{ fontSize: '0.625rem', color: 'var(--neon-cyan)', marginBottom: '1rem', textAlign: 'center', fontFamily: 'var(--font-display)' }}>
+                    {roundLabels[round] || `RONDA ${round}`}
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, gap: '1rem' }}>
+                    {roundMatches.map(m => (
+                      <div key={m.id} style={{
+                        padding: '0.75rem',
+                        background: m.status === 'confirmed' ? 'rgba(0,255,136,0.06)' : 'var(--bg-secondary)',
+                        border: `1px solid ${m.status === 'confirmed' ? 'var(--neon-green)' : m.status === 'reported' ? 'var(--neon-orange)' : 'var(--border)'}`,
+                        borderRadius: 'var(--radius)',
+                        position: 'relative',
+                        boxShadow: m.status === 'confirmed' ? '0 0 8px rgba(0,255,136,0.15)' : 'none',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: m.winner === m.participantA ? 'bold' : 'normal', color: m.winner === m.participantA ? 'var(--neon-green)' : 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {m.participantA || '—'}
+                          </span>
+                          {m.score && <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 'bold' }}>{m.score.a}</span>}
                         </div>
-                      )}
-                      {(m.status === 'reported' || (m.status === 'pending' && m.participantAId && m.participantBId)) && (
-                        reportMatch === m.id ? (
-                          <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                            <select value={reportWinner} onChange={e => setReportWinner(e.target.value)} style={{ fontSize: '0.625rem', padding: '0.25rem' }}>
-                              <option value="">Ganador...</option>
-                              {m.participantAId && <option value={m.participantAId}>{m.participantA}</option>}
-                              {m.participantBId && <option value={m.participantBId}>{m.participantB}</option>}
-                            </select>
-                            <div style={{ display: 'flex', gap: '0.25rem' }}>
-                              <input type="number" min="0" max="99" placeholder={m.participantA ?? 'A'} value={scoreA} onChange={e => setScoreA(e.target.value)} style={{ width: '50%', fontSize: '0.625rem', padding: '0.25rem' }} />
-                              <input type="number" min="0" max="99" placeholder={m.participantB ?? 'B'} value={scoreB} onChange={e => setScoreB(e.target.value)} style={{ width: '50%', fontSize: '0.625rem', padding: '0.25rem' }} />
+                        <div style={{ height: '1px', background: 'var(--border)', margin: '0.5rem 0' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: m.winner === m.participantB ? 'bold' : 'normal', color: m.winner === m.participantB ? 'var(--neon-green)' : 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {m.participantB || 'BYE'}
+                          </span>
+                          {m.score && <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 'bold' }}>{m.score.b}</span>}
+                        </div>
+                        {(m.status === 'reported' || (m.status === 'pending' && m.participantAId && m.participantBId)) && (
+                          reportMatch === m.id ? (
+                            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                              <select value={reportWinner} onChange={e => setReportWinner(e.target.value)} style={{ fontSize: '0.7rem', padding: '0.375rem' }}>
+                                <option value="">Ganador...</option>
+                                {m.participantAId && <option value={m.participantAId}>{m.participantA}</option>}
+                                {m.participantBId && <option value={m.participantBId}>{m.participantB}</option>}
+                              </select>
+                              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <input type="number" min="0" max="99" placeholder={m.participantA ?? 'A'} value={scoreA} onChange={e => setScoreA(e.target.value)} style={{ flex: 1, fontSize: '0.7rem', padding: '0.375rem' }} />
+                                <input type="number" min="0" max="99" placeholder={m.participantB ?? 'B'} value={scoreB} onChange={e => setScoreB(e.target.value)} style={{ flex: 1, fontSize: '0.7rem', padding: '0.375rem' }} />
+                              </div>
+                              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button onClick={handleConfirmMatch} style={{ flex: 1, fontSize: '0.625rem', padding: '0.375rem' }} className="primary">ENVIAR</button>
+                                <button onClick={() => setReportMatch(null)} style={{ flex: 1, fontSize: '0.625rem', padding: '0.375rem' }}>CANCELAR</button>
+                              </div>
                             </div>
-                            <div style={{ display: 'flex', gap: '0.25rem' }}>
-                              <button onClick={handleConfirmMatch} style={{ fontSize: '0.375rem', padding: '0.125rem 0.5rem' }} className="primary">ENVIAR</button>
-                              <button onClick={() => setReportMatch(null)} style={{ fontSize: '0.375rem', padding: '0.125rem 0.5rem' }}>CANCELAR</button>
+                          ) : (
+                            <button onClick={() => setReportMatch(m.id)} style={{ width: '100%', marginTop: '0.75rem', fontSize: '0.625rem', padding: '0.375rem' }}>{m.status === 'pending' ? 'RELLENAR' : 'CONFIRMAR'}</button>
+                          )
+                        )}
+                        {m.status === 'confirmed' && (
+                          reportMatch === m.id ? (
+                            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                              <select value={reportWinner} onChange={e => setReportWinner(e.target.value)} style={{ fontSize: '0.7rem', padding: '0.375rem' }}>
+                                <option value="">Ganador...</option>
+                                {m.participantAId && <option value={m.participantAId}>{m.participantA}</option>}
+                                {m.participantBId && <option value={m.participantBId}>{m.participantB}</option>}
+                              </select>
+                              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <input type="number" min="0" max="99" placeholder={m.participantA ?? 'A'} value={scoreA} onChange={e => setScoreA(e.target.value)} style={{ flex: 1, fontSize: '0.7rem', padding: '0.375rem' }} />
+                                <input type="number" min="0" max="99" placeholder={m.participantB ?? 'B'} value={scoreB} onChange={e => setScoreB(e.target.value)} style={{ flex: 1, fontSize: '0.7rem', padding: '0.375rem' }} />
+                              </div>
+                              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button onClick={handleConfirmMatch} style={{ flex: 1, fontSize: '0.625rem', padding: '0.375rem' }} className="primary">GUARDAR</button>
+                                <button onClick={() => setReportMatch(null)} style={{ flex: 1, fontSize: '0.625rem', padding: '0.375rem' }}>CANCELAR</button>
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <button onClick={() => setReportMatch(m.id)} style={{ fontSize: '0.375rem', marginTop: '0.25rem', padding: '0.125rem 0.25rem' }}>{m.status === 'pending' ? 'RELLENAR' : 'CONFIRMAR'}</button>
-                        )
-                      )}
-                      {m.status === 'confirmed' && (
-                        reportMatch === m.id ? (
-                          <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                            <select value={reportWinner} onChange={e => setReportWinner(e.target.value)} style={{ fontSize: '0.625rem', padding: '0.25rem' }}>
-                              <option value="">Ganador...</option>
-                              {m.participantAId && <option value={m.participantAId}>{m.participantA}</option>}
-                              {m.participantBId && <option value={m.participantBId}>{m.participantB}</option>}
-                            </select>
-                            <div style={{ display: 'flex', gap: '0.25rem' }}>
-                              <input type="number" min="0" max="99" placeholder={m.participantA ?? 'A'} value={scoreA} onChange={e => setScoreA(e.target.value)} style={{ width: '50%', fontSize: '0.625rem', padding: '0.25rem' }} />
-                              <input type="number" min="0" max="99" placeholder={m.participantB ?? 'B'} value={scoreB} onChange={e => setScoreB(e.target.value)} style={{ width: '50%', fontSize: '0.625rem', padding: '0.25rem' }} />
-                            </div>
-                            <div style={{ display: 'flex', gap: '0.25rem' }}>
-                              <button onClick={handleConfirmMatch} style={{ fontSize: '0.375rem', padding: '0.125rem 0.5rem' }} className="primary">GUARDAR</button>
-                              <button onClick={() => setReportMatch(null)} style={{ fontSize: '0.375rem', padding: '0.125rem 0.5rem' }}>CANCELAR</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button onClick={() => setReportMatch(m.id)} style={{ fontSize: '0.375rem', marginTop: '0.25rem', padding: '0.125rem 0.25rem', borderColor: 'var(--neon-magenta)', color: 'var(--neon-magenta)' }}>EDITAR</button>
-                        )
-                      )}
-                    </div>
-                  ))}
+                          ) : (
+                            <button onClick={() => setReportMatch(m.id)} style={{ width: '100%', marginTop: '0.5rem', fontSize: '0.625rem', padding: '0.25rem', borderColor: 'var(--neon-magenta)', color: 'var(--neon-magenta)' }}>EDITAR</button>
+                          )
+                        )}
+                        {!isLastRound && (
+                          <div style={{ position: 'absolute', right: '-1rem', top: '50%', width: '1rem', height: '1px', background: 'var(--border)' }} />
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

@@ -101,38 +101,45 @@ export function ParticipantTournamentDetail() {
       </div>
 
       {tournament.matches.length > 0 ? (
-        <div className="card" style={{ marginTop: '1rem', overflowX: 'auto' }}>
+        <div className="card" style={{ marginTop: '1rem', overflow: 'hidden' }}>
           <h2>BRACKET</h2>
-          <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1rem', minWidth: 'max-content' }}>
+          <div style={{ display: 'flex', gap: '2rem', overflowX: 'auto', marginTop: '1rem', padding: '1rem 0', alignItems: 'stretch' }}>
             {rounds.map(round => (
-              <div key={round} style={{ minWidth: '200px' }}>
-                <h3 style={{ fontSize: '0.625rem', color: 'var(--neon-cyan)', marginBottom: '0.75rem', textAlign: 'center' }}>
+              <div key={round} style={{ minWidth: '220px', display: 'flex', flexDirection: 'column' }}>
+                <h3 style={{ fontSize: '0.625rem', color: 'var(--neon-cyan)', marginBottom: '1rem', textAlign: 'center', fontFamily: 'var(--font-display)' }}>
                   {roundLabels[round] || `RONDA ${round}`}
                 </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, gap: '1rem' }}>
                   {tournament.matches.filter(m => m.round === round).map(m => (
                     <div key={m.id} style={{
-                      padding: '0.5rem',
-                      background: isMyMatch(m) ? 'rgba(0,212,255,0.08)' : 'var(--bg-secondary)',
+                      padding: '0.75rem',
+                      background: isMyMatch(m) ? 'rgba(0,212,255,0.08)' : m.status === 'confirmed' ? 'rgba(0,255,136,0.06)' : 'var(--bg-secondary)',
                       border: `1px solid ${m.status === 'confirmed' ? 'var(--neon-green)' : isMyMatch(m) ? 'var(--neon-cyan)' : 'var(--border)'}`,
                       borderRadius: 'var(--radius)',
+                      position: 'relative',
+                      boxShadow: isMyMatch(m) ? '0 0 8px rgba(0,212,255,0.15)' : 'none',
                     }}>
-                      <div style={{ fontSize: '0.75rem', color: m.winner === m.participantA ? 'var(--neon-green)' : undefined }}>
-                        {m.participantA || 'BYE'} {m.score ? `(${m.score.a})` : ''}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: m.winner === m.participantA ? 'bold' : 'normal', color: m.winner === m.participantA ? 'var(--neon-green)' : 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {m.participantA || '—'}
+                        </span>
+                        {m.score && <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 'bold' }}>{m.score.a}</span>}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: m.winner === m.participantB ? 'var(--neon-green)' : undefined }}>
-                        {m.participantB || 'BYE'} {m.score ? `(${m.score.b})` : ''}
+                      <div style={{ height: '1px', background: 'var(--border)', margin: '0.5rem 0' }} />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: m.winner === m.participantB ? 'bold' : 'normal', color: m.winner === m.participantB ? 'var(--neon-green)' : 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {m.participantB || 'BYE'}
+                        </span>
+                        {m.score && <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 'bold' }}>{m.score.b}</span>}
                       </div>
                       {m.status === 'pending' && isMyMatch(m) && (
-                        <button onClick={() => setReportMatch(m.id)} style={{ fontSize: '0.375rem', marginTop: '0.25rem', padding: '0.125rem 0.5rem' }}>
-                          REPORTAR
-                        </button>
+                        <button onClick={() => setReportMatch(m.id)} style={{ width: '100%', marginTop: '0.75rem', fontSize: '0.625rem', padding: '0.375rem' }}>REPORTAR</button>
                       )}
                       {m.status === 'reported' && (
-                        <span style={{ fontSize: '0.5rem', color: 'var(--neon-orange)' }}>ESPERANDO CONFIRMACIÓN</span>
+                        <span style={{ display: 'block', textAlign: 'center', marginTop: '0.5rem', fontSize: '0.5rem', color: 'var(--neon-orange)', fontFamily: 'var(--font-display)' }}>ESPERANDO CONFIRMACIÓN</span>
                       )}
                       {m.status === 'confirmed' && m.winner && (
-                        <span style={{ fontSize: '0.5rem', color: 'var(--neon-green)' }}>GANADOR: {m.winner}</span>
+                        <span style={{ display: 'block', textAlign: 'center', marginTop: '0.5rem', fontSize: '0.5rem', color: 'var(--neon-green)', fontFamily: 'var(--font-display)' }}>GANADOR: {m.winner}</span>
                       )}
                     </div>
                   ))}

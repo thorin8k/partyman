@@ -81,7 +81,20 @@ export function PublicDisplay() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', padding: '2rem', fontFamily: 'var(--font-body)' }}>
+    <div style={{ minHeight: '100vh', padding: '2rem', fontFamily: 'var(--font-body)', maxWidth: '1600px', margin: '0 auto' }}>
+      <style>{`
+        @media (min-width: 1200px) {
+          .public-grid { grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)) !important; gap: 2rem !important; }
+          .public-grid .card { padding: 2rem !important; }
+          .public-grid .card h2 { font-size: 1.25rem !important; }
+        }
+        @media (min-width: 1600px) {
+          .public-grid { grid-template-columns: repeat(3, 1fr) !important; }
+        }
+        @media (max-width: 768px) {
+          .public-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--neon-cyan)' }}>
           PARTYMAN
@@ -107,7 +120,7 @@ export function PublicDisplay() {
       </div>
 
       {state?.party ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+        <div className="public-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
           <div className="card" style={{ gridColumn: '1 / -1' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
