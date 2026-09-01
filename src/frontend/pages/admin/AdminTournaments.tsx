@@ -18,6 +18,7 @@ export function AdminTournaments() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [games, setGames] = useState<Game[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [proposals, setProposals] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', gameId: '', maxParticipants: '16' });
 
@@ -27,8 +28,19 @@ export function AdminTournaments() {
   }, [user, loading, navigate]);
 
   useEffect(() => {
-    if (user?.role === 'admin') { fetchTournaments(); fetchGames(); }
+    if (user?.role === 'admin') { fetchTournaments(); fetchGames(); fetchProposals(); }
   }, [user]);
+
+  const fetchProposals = async () => {
+    const res = await fetch('/api/tournament-proposals');
+    if (res.ok) setProposals((await res.json()).proposals || []);
+  };
+
+  const handleApproveProposal = async (id: number) => {
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    const res = await fetch(`/api/admin/tournament-proposals/${id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
+    if (res.ok) { fetchProposals(); fetchTournaments(); }
+  };
 
   const fetchTournaments = async () => {
     const partyRes = await fetch('/api/parties/active');
@@ -83,6 +95,23 @@ export function AdminTournaments() {
       </div>
 
       {error && <div className="alert error">{error}</div>}
+
+      {proposals.length > 0 && (
+        <div className="card" style={{ borderColor: 'var(--neon-cyan)' }}>
+          <h2>PROPUESTAS DE TORNEOS ({proposals.length})</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem' }}>
+            {proposals.map((p: any) => (
+              <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ fontSize: '0.875rem' }}>{p.name}</h3>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle} · Max {p.maxParticipants}</p>
+                </div>
+                <button onClick={() => handleApproveProposal(p.id)} className="primary" style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>APROBAR</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {showForm ? (
         <div className="card">

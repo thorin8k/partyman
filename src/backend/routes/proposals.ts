@@ -7,6 +7,9 @@ export function createProposalsRoutes(db: Database) {
     "/api/parties/active/proposals": {
       POST: handleCreateProposal,
     },
+    "/api/proposals/from-search": {
+      POST: handleCreateFromSearch,
+    },
     "/api/proposals": {
       GET: handleGetProposals,
     },
@@ -192,5 +195,43 @@ export function createProposalsRoutes(db: Database) {
 
     console.log("[proposals] POST /api/admin/proposals/" + id + "/approve → game#" + proposal.game_id + " enabled");
     return Response.json({ ok: true, gameId: proposal.game_id });
+  }
+
+  async function handleCreateFromSearch(request: Request): Promise<Response> {
+    const ctx = requireParticipant(db, request);
+    if (ctx instanceof Response) return ctx;
+
+    const activeParty = findActiveParty(db);
+    if (!activeParty) return Response.json({ error: "NOT_ACTIVE_PARTY" }, { status: 400 });
+
+    const membership = db.query<{ count: number }, [number, number]>(
+      "SELECT COUNT(*) AS count FROM party_memberships WHERE party_id = ? AND participant_id = ?"
+    ).get(activeParty.id, ctx.session.subjectId);
+    if (!membership || membership.count === 0) return Response.json({ error: "NOT_PARTY_MEMBER" }, { status: 403 });
+
+    const body = await request.json().catch(() => null);
+    if (!body || !body.name || typeof body.name !== "string" || !body.name.trim()) {
+      return Response.json({ error: "VALIDATION_ERROR", details: ["name is required"] }, { status: 400 });
+    }
+    const title = body.name.trim().slice(0, 120);
+    const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl.slice(0, 500) : null;
+
+    let gameId: number;
+    const existing = db.query<{ id: number }, [string]>("SELECT id FROM games WHERE LOWER(title) = LOWER(?) LIMIT 1").get(title);
+    if (existing) {
+      gameId = existing.id;
+      // ensure enabled and image if missing
+      if (imageUrl) db.run("UPDATE games SET image_url = COALESCE(image_url, ?), enabled = 1 WHERE id = ?", [imageUrl, gameId]);
+    } else {
+      const res = db.run("INSERT INTO games (title, image_url, enabled) VALUES (?, ?, 1)", [title, imageUrl]);
+      gameId = Number(res.lastInsertRowid);
+    }
+
+    db.run("INSERT OR IGNORE INTO party_game_proposals (party_id, game_id, created_by_participant_id) VALUES (?, ?, ?)", [activeParty.id, gameId, ctx.session.subjectId]);
+    const proposal = db.query<{ id: number }, [number, number]>("SELECT id FROM party_game_proposals WHERE party_id = ? AND game_id = ?").get(activeParty.id, gameId)!;
+    const game = db.query<{ title: string }, [number]>("SELECT title FROM games WHERE id = ?").get(gameId)!;
+    const voteCount = db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM proposal_votes WHERE proposal_id = ?").get(proposal.id)!;
+    console.log("[proposals] POST /api/proposals/from-search →", title, "proposal#" + proposal.id);
+    return Response.json({ proposal: { id: proposal.id, gameId, gameTitle: game.title, createdBy: ctx.session.subjectId, voteCount: voteCount.count } }, { status: 201 });
   }
 }

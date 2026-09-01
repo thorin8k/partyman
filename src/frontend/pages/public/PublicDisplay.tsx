@@ -4,15 +4,18 @@ interface Tournament {
   id: number;
   name: string;
   gameTitle: string;
+  gameImage: string | null;
   status: string;
   maxParticipants: number;
+  matches: Array<{ id: number; round: number; position: number; participantAId: number | null; participantBId: number | null; participantA: string | null; participantB: string | null; winner: string | null; winnerId: number | null; status: string }>;
 }
 
 interface PublicState {
   party: { id: number; name: string; startsAt: string; endsAt: string; status: string } | null;
   attendees: Array<{ id: number; displayName: string; avatarUrl: string | null; joinedAt: string }>;
-  activities: Array<{ id: number; title: string; gameTitle: string | null; startsAt: string; endsAt: string; capacity: number | null; status: string }>;
+  activities: Array<{ id: number; title: string; gameTitle: string | null; gameImage: string | null; startsAt: string; endsAt: string; capacity: number | null; notes: string | null; status: string; participantCount: number; participants: Array<{ id: number; displayName: string }> }>;
   tournaments: Tournament[];
+  recentTournaments: Array<{ id: number; name: string; gameTitle: string; winner: string | null }>;
   leaderboard: unknown[];
   activity: unknown[];
   generatedAt: string;
@@ -23,6 +26,7 @@ export function PublicDisplay() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [tournamentIdx, setTournamentIdx] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -56,6 +60,14 @@ export function PublicDisplay() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!state?.tournaments || state.tournaments.length <= 1) return;
+    const id = setInterval(() => setTournamentIdx(i => (i + 1) % state.tournaments.length), 7000);
+    return () => clearInterval(id);
+  }, [state?.tournaments.length]);
+
+  useEffect(() => { setTournamentIdx(0); }, [state?.tournaments.length]);
+
   const handleFullscreen = () => {
     document.documentElement.requestFullscreen?.();
   };
@@ -70,7 +82,7 @@ export function PublicDisplay() {
 
   return (
     <div style={{ minHeight: '100vh', padding: '2rem', fontFamily: 'var(--font-body)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--neon-cyan)' }}>
           PARTYMAN
         </h1>
@@ -95,7 +107,7 @@ export function PublicDisplay() {
       </div>
 
       {state?.party ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', gridTemplateRows: 'auto 1fr' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
           <div className="card" style={{ gridColumn: '1 / -1' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
@@ -144,25 +156,72 @@ export function PublicDisplay() {
           </div>
 
           <div className="card">
-            <h2 style={{ marginBottom: '1rem' }}>TORNEOS</h2>
+            <h2 style={{ marginBottom: '1rem' }}>TORNEOS {state.tournaments.length > 1 && `(${tournamentIdx + 1}/${state.tournaments.length})`}</h2>
             {state.tournaments.length === 0 ? (
               <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>No hay torneos programados</p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {state.tournaments.map((t) => (
-                  <div key={t.id} style={{ padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <h3 style={{ fontSize: '0.875rem' }}>{t.name}</h3>
-                      <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: t.status === 'in_progress' ? 'var(--neon-orange)' : 'var(--neon-green)' }}>
-                        {t.status === 'in_progress' ? 'EN CURSO' : 'PRÓXIMAMENTE'}
-                      </span>
+              <>
+                {(() => {
+                  const t = state.tournaments[tournamentIdx % state.tournaments.length];
+                  return (
+                    <div style={{ padding: '0.75rem', background: 'var(--bg-secondary)', border: `1px solid ${t.status === 'in_progress' ? 'var(--neon-orange)' : 'var(--neon-green)'}`, borderRadius: 'var(--radius)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        {t.gameImage && <img src={t.gameImage} alt="" style={{ width: '48px', height: '48px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3 style={{ fontSize: '1rem' }}>{t.name}</h3>
+                            <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: t.status === 'in_progress' ? 'var(--neon-orange)' : 'var(--neon-green)', border: `1px solid ${t.status === 'in_progress' ? 'var(--neon-orange)' : 'var(--neon-green)'}`, padding: '0.25rem 0.5rem' }}>
+                              {t.status === 'in_progress' ? 'EN CURSO' : 'PRÓXIMAMENTE'}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: '0.875rem', color: 'var(--text-dim)', margin: '0.5rem 0 0' }}>{t.gameTitle} · Max {t.maxParticipants}</p>
+                        </div>
+                      </div>
+                      {t.matches && t.matches.length > 0 && (
+                        <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', overflowX: 'auto' }}>
+                          {[...new Set(t.matches.map(m => m.round))].sort((a,b)=>a-b).map(round => (
+                            <div key={round} style={{ minWidth: '120px', flex: '0 0 auto' }}>
+                              <div style={{ fontSize: '0.5rem', color: 'var(--neon-cyan)', textAlign: 'center', marginBottom: '0.25rem' }}>R{round}</div>
+                              {t.matches.filter(m => m.round === round).map(m => (
+                                <div key={m.id} style={{ fontSize: '0.625rem', padding: '0.25rem', background: 'var(--bg)', border: `1px solid ${m.status === 'confirmed' ? 'var(--neon-green)' : 'var(--border)'}`, marginBottom: '0.25rem', textAlign: 'center' }}>
+                                  {m.participantA ?? '—'} vs {m.participantB ?? 'BYE'}
+                                  {m.winner && <div style={{ color: 'var(--neon-green)' }}>→ {m.winner}</div>}
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', margin: '0.25rem 0 0' }}>{t.gameTitle} · Max {t.maxParticipants}</p>
+                  );
+                })()}
+                {state.tournaments.length > 1 && (
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '0.75rem' }}>
+                    {state.tournaments.map((_, i) => (
+                      <span key={i} style={{ width: '8px', height: '8px', borderRadius: '50%', background: i === tournamentIdx % state.tournaments.length ? 'var(--neon-cyan)' : 'var(--border)' }} />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {state.recentTournaments && state.recentTournaments.length > 0 && (
+            <div className="card">
+              <h2 style={{ marginBottom: '1rem' }}>TORNEOS RECIENTES</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {state.recentTournaments.map(t => (
+                  <div key={t.id} style={{ padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--neon-green)', borderRadius: 'var(--radius)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <h3 style={{ fontSize: '0.875rem' }}>{t.name}</h3>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', margin: '0.25rem 0 0' }}>{t.gameTitle}</p>
+                    </div>
+                    {t.winner && <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.625rem', color: 'var(--neon-green)', border: '1px solid var(--neon-green)', padding: '0.25rem 0.5rem' }}>🏆 {t.winner}</span>}
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="card">
             <h2 style={{ marginBottom: '1rem' }}>ACTIVIDADES</h2>
@@ -170,15 +229,29 @@ export function PublicDisplay() {
               <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>No hay actividades programadas</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {state.activities.map((a) => (
-                  <div key={a.id} style={{ padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-                    <h3 style={{ fontSize: '0.875rem' }}>{a.title}</h3>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', margin: '0.25rem 0 0' }}>
-                      {a.gameTitle ? `${a.gameTitle} · ` : ''}
-                      {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                {state.activities.map((a) => {
+                  const isLive = new Date(a.startsAt) <= new Date() && new Date() <= new Date(a.endsAt);
+                  return (
+                  <div key={a.id} style={{ padding: '0.5rem', background: isLive ? 'rgba(0,255,136,0.05)' : 'var(--bg-secondary)', border: `1px solid ${isLive ? 'var(--neon-green)' : 'var(--border)'}`, borderRadius: 'var(--radius)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    {a.gameImage && <img src={a.gameImage} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <h3 style={{ fontSize: '0.875rem' }}>{a.title}</h3>
+                        {isLive && <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--neon-green)', border: '1px solid var(--neon-green)', padding: '0.125rem 0.375rem' }}>EN CURSO</span>}
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', margin: '0.25rem 0 0' }}>
+                        {a.gameTitle ? `${a.gameTitle} · ` : ''}
+                        {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                        {a.capacity ? ` · ${a.participantCount || 0}/${a.capacity}` : ''}
+                      </p>
+                      {a.notes && <p style={{ fontSize: '0.65rem', color: 'var(--text-dim)', margin: '0.25rem 0 0', fontStyle: 'italic' }}>{a.notes}</p>}
+                      {a.participants && a.participants.length > 0 && (
+                        <p style={{ fontSize: '0.65rem', color: 'var(--text-dim)', margin: '0.25rem 0 0' }}>{a.participants.map(p => p.displayName).join(', ')}</p>
+                      )}
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

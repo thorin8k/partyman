@@ -1,0 +1,178 @@
+import { useAuth } from '../../components/AuthContext';
+import { useLocation, useParams } from 'wouter';
+import { useEffect, useState } from 'react';
+
+interface Tournament {
+  id: number;
+  name: string;
+  gameTitleSnapshot: string;
+  status: string;
+  maxParticipants: number;
+  participants: Array<{ id: number; displayName: string; seed: number }>;
+  matches: Array<{ id: number; round: number; position: number; participantAId: number | null; participantBId: number | null; participantA: string | null; participantB: string | null; winnerId: number | null; winner: string | null; score: { a: number; b: number } | null; status: string }>;
+}
+
+export function ParticipantTournamentDetail() {
+  const { user, loading, logout } = useAuth();
+  const [, navigate] = useLocation();
+  const params = useParams();
+  const tournamentId = params?.id;
+  const [tournament, setTournament] = useState<Tournament | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [reportMatch, setReportMatch] = useState<number | null>(null);
+  const [reportWinner, setReportWinner] = useState('');
+  const [scoreA, setScoreA] = useState('');
+  const [scoreB, setScoreB] = useState('');
+
+  useEffect(() => {
+    if (!loading && !user) navigate('/login');
+  }, [user, loading, navigate]);
+
+  useEffect(() => {
+    if (user && tournamentId) fetchTournament();
+  }, [user, tournamentId]);
+
+  const fetchTournament = async () => {
+    const res = await fetch(`/api/tournaments/${tournamentId}`);
+    if (res.ok) setTournament((await res.json()).tournament);
+    else setError('Torneo no encontrado');
+  };
+
+  const handleReport = async () => {
+    if (!reportMatch || !reportWinner) return;
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    const res = await fetch(`/api/matches/${reportMatch}/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
+      body: JSON.stringify({ winnerId: parseInt(reportWinner), score: { a: parseInt(scoreA), b: parseInt(scoreB) } }),
+    });
+    if (!res.ok) { const err = await res.json(); setError(err.error || 'Error al reportar'); }
+    else { setReportMatch(null); setReportWinner(''); setScoreA(''); setScoreB(''); fetchTournament(); }
+  };
+
+  if (loading || !user) return null;
+  if (error && !tournament) {
+    return (
+      <div className="container">
+        <div className="header">
+          <h1>PARTYMAN</h1>
+          <div className="nav"><a href="/">VOLVER →</a></div>
+        </div>
+        <div className="card"><div className="alert error">{error}</div></div>
+      </div>
+    );
+  }
+  if (!tournament) return <div className="container"><div className="loading">Cargando torneo...</div></div>;
+
+  const rounds = [...new Set(tournament.matches.map(m => m.round))].sort((a, b) => a - b);
+  const roundLabels: Record<number, string> = { 1: 'RONDA 1', 2: 'SEMIFINAL', 3: 'FINAL' };
+
+  const isMyMatch = (m: { participantAId: number | null; participantBId: number | null }) => {
+    return user.id === m.participantAId || user.id === m.participantBId;
+  };
+
+  return (
+    <div className="container">
+      <div className="header">
+        <h1>PARTYMAN</h1>
+        <div className="nav">
+          <a href="/">VOLVER →</a>
+          <button onClick={logout} style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}>SALIR</button>
+        </div>
+      </div>
+
+      {error && <div className="alert error">{error}</div>}
+
+      <div className="card">
+        <h2>{tournament.name}</h2>
+        <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+          {tournament.gameTitleSnapshot} · {tournament.status} · {tournament.participants.length}/{tournament.maxParticipants}
+        </p>
+        {tournament.status === 'finished' && (() => {
+          const final = tournament.matches.filter(m => m.status === 'confirmed').sort((a,b) => b.round - a.round)[0];
+          return final?.winner ? (
+            <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(0,255,136,0.1)', border: '1px solid var(--neon-green)', borderRadius: 'var(--radius)', textAlign: 'center' }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.625rem', color: 'var(--neon-green)' }}>CAMPEÓN</span>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--neon-green)', marginTop: '0.25rem' }}>{final.winner}</div>
+              {final.score && <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{final.score.a} - {final.score.b}</span>}
+            </div>
+          ) : null;
+        })()}
+      </div>
+
+      {tournament.matches.length > 0 ? (
+        <div className="card" style={{ marginTop: '1rem', overflowX: 'auto' }}>
+          <h2>BRACKET</h2>
+          <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1rem', minWidth: 'max-content' }}>
+            {rounds.map(round => (
+              <div key={round} style={{ minWidth: '200px' }}>
+                <h3 style={{ fontSize: '0.625rem', color: 'var(--neon-cyan)', marginBottom: '0.75rem', textAlign: 'center' }}>
+                  {roundLabels[round] || `RONDA ${round}`}
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {tournament.matches.filter(m => m.round === round).map(m => (
+                    <div key={m.id} style={{
+                      padding: '0.5rem',
+                      background: isMyMatch(m) ? 'rgba(0,212,255,0.08)' : 'var(--bg-secondary)',
+                      border: `1px solid ${m.status === 'confirmed' ? 'var(--neon-green)' : isMyMatch(m) ? 'var(--neon-cyan)' : 'var(--border)'}`,
+                      borderRadius: 'var(--radius)',
+                    }}>
+                      <div style={{ fontSize: '0.75rem', color: m.winner === m.participantA ? 'var(--neon-green)' : undefined }}>
+                        {m.participantA || 'BYE'} {m.score ? `(${m.score.a})` : ''}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: m.winner === m.participantB ? 'var(--neon-green)' : undefined }}>
+                        {m.participantB || 'BYE'} {m.score ? `(${m.score.b})` : ''}
+                      </div>
+                      {m.status === 'pending' && isMyMatch(m) && (
+                        <button onClick={() => setReportMatch(m.id)} style={{ fontSize: '0.375rem', marginTop: '0.25rem', padding: '0.125rem 0.5rem' }}>
+                          REPORTAR
+                        </button>
+                      )}
+                      {m.status === 'reported' && (
+                        <span style={{ fontSize: '0.5rem', color: 'var(--neon-orange)' }}>ESPERANDO CONFIRMACIÓN</span>
+                      )}
+                      {m.status === 'confirmed' && m.winner && (
+                        <span style={{ fontSize: '0.5rem', color: 'var(--neon-green)' }}>GANADOR: {m.winner}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="card" style={{ marginTop: '1rem' }}>
+          <p style={{ color: 'var(--text-dim)' }}>Bracket no generado aún. Esperando a que inicie el torneo.</p>
+        </div>
+      )}
+
+      {reportMatch && (() => {
+        const m = tournament.matches.find(x => x.id === reportMatch);
+        return (
+        <div className="card" style={{ marginTop: '1rem', borderColor: 'var(--neon-cyan)' }}>
+          <h2>REPORTAR RESULTADO</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
+            <div className="form-group">
+              <label>GANADOR</label>
+              <select value={reportWinner} onChange={e => setReportWinner(e.target.value)}>
+                <option value="">Selecciona ganador...</option>
+                {m?.participantAId && <option value={m.participantAId}>{m.participantA}</option>}
+                {m?.participantBId && <option value={m.participantBId}>{m.participantB}</option>}
+              </select>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+              <div className="form-group"><label>{m?.participantA ?? 'SCORE A'}</label><input type="number" min="0" max="99" value={scoreA} onChange={e => setScoreA(e.target.value)} placeholder={m?.participantA ?? '0'} /></div>
+              <div className="form-group"><label>{m?.participantB ?? 'SCORE B'}</label><input type="number" min="0" max="99" value={scoreB} onChange={e => setScoreB(e.target.value)} placeholder={m?.participantB ?? '0'} /></div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button className="primary" onClick={handleReport}>ENVIAR</button>
+              <button onClick={() => setReportMatch(null)}>CANCELAR</button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+     </div>
+   );
+}

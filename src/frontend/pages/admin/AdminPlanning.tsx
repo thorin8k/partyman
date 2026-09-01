@@ -7,10 +7,12 @@ interface Activity {
   partyId: number;
   gameId: number | null;
   gameTitleSnapshot: string | null;
+  gameImage: string | null;
   title: string;
   startsAt: string;
   endsAt: string;
   capacity: number | null;
+  notes: string | null;
   status: string;
   participantCount: number;
   participants: Array<{ id: number; displayName: string }>;
@@ -24,6 +26,8 @@ export function AdminPlanning() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [games, setGames] = useState<Game[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [proposals, setProposals] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ title: '', gameId: '', startsAt: '', endsAt: '', capacity: '', notes: '' });
 
@@ -32,7 +36,18 @@ export function AdminPlanning() {
     else if (!loading && user?.role !== 'admin') navigate('/');
   }, [user, loading, navigate]);
 
-  useEffect(() => { if (user?.role === 'admin') { fetchActivities(); fetchGames(); } }, [user]);
+  useEffect(() => { if (user?.role === 'admin') { fetchActivities(); fetchGames(); fetchProposals(); } }, [user]);
+
+  const fetchProposals = async () => {
+    const res = await fetch('/api/activity-proposals');
+    if (res.ok) setProposals((await res.json()).proposals || []);
+  };
+
+  const handleApprove = async (id: number) => {
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    const res = await fetch(`/api/admin/activity-proposals/${id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
+    if (res.ok) { fetchProposals(); fetchActivities(); }
+  };
 
   const fetchActivities = async () => {
     const partyRes = await fetch('/api/parties/active');
@@ -47,12 +62,22 @@ export function AdminPlanning() {
     if (res.ok) setGames((await res.json()).games);
   };
 
+  const handleEdit = (activity: Activity) => {
+    setEditingActivity(activity);
+    setForm({
+      title: activity.title,
+      gameId: activity.gameId?.toString() || '',
+      startsAt: new Date(activity.startsAt).toISOString().slice(0, 16),
+      endsAt: new Date(activity.endsAt).toISOString().slice(0, 16),
+      capacity: activity.capacity?.toString() || '',
+      notes: '',
+    });
+    setShowForm(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const partyRes = await fetch('/api/parties/active');
-    const partyData = await partyRes.json();
-    if (!partyData.party) { setError('No hay party activa'); return; }
 
     const body = {
       title: form.title,
@@ -63,6 +88,20 @@ export function AdminPlanning() {
       notes: form.notes || null,
     };
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+
+    if (editingActivity) {
+      const res = await fetch(`/api/admin/activities/${editingActivity.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify(body),
+      });
+      if (res.ok) { setShowForm(false); setEditingActivity(null); setForm({ title: '', gameId: '', startsAt: '', endsAt: '', capacity: '', notes: '' }); fetchActivities(); }
+      else { const err = await res.json(); setError(err.error || 'Error'); }
+      return;
+    }
+
+    const partyRes = await fetch('/api/parties/active');
+    const partyData = await partyRes.json();
+    if (!partyData.party) { setError('No hay party activa'); return; }
+
     const res = await fetch(`/api/admin/parties/${partyData.party.id}/activities`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify(body),
     });
@@ -92,9 +131,26 @@ export function AdminPlanning() {
 
       {error && <div className="alert error">{error}</div>}
 
+      {proposals.length > 0 && (
+        <div className="card" style={{ borderColor: 'var(--neon-cyan)' }}>
+          <h2>PROPUESTAS DE ACTIVIDADES ({proposals.length})</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem' }}>
+            {proposals.map((p: any) => (
+              <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ fontSize: '0.875rem' }}>{p.title}</h3>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle || 'Sin juego'} · {new Date(p.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+                <button onClick={() => handleApprove(p.id)} className="primary" style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>APROBAR</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {showForm ? (
         <div className="card">
-          <h2>NUEVA ACTIVIDAD</h2>
+          <h2>{editingActivity ? 'EDITAR ACTIVIDAD' : 'NUEVA ACTIVIDAD'}</h2>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             <div className="form-group"><label>TÍTULO *</label><input value={form.title} onChange={e => setForm({...form, title: e.target.value})} maxLength={120} required /></div>
             <div className="form-group"><label>JUEGO</label>
@@ -110,8 +166,8 @@ export function AdminPlanning() {
             <div className="form-group"><label>CAPACIDAD</label><input type="number" min="1" max="100" value={form.capacity} onChange={e => setForm({...form, capacity: e.target.value})} /></div>
             <div className="form-group"><label>NOTAS</label><textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} rows={2} /></div>
             <div style={{ display: 'flex', gap: '1rem' }}>
-              <button type="submit" className="primary">CREAR</button>
-              <button type="button" onClick={() => setShowForm(false)}>CANCELAR</button>
+              <button type="submit" className="primary">{editingActivity ? 'GUARDAR' : 'CREAR'}</button>
+              <button type="button" onClick={() => { setShowForm(false); setEditingActivity(null); }}>CANCELAR</button>
             </div>
           </form>
         </div>
@@ -128,15 +184,25 @@ export function AdminPlanning() {
               {activities.map(a => (
                 <div key={a.id} className="list-item" style={{ padding: '0.75rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    <div>
-                      <h3 style={{ marginBottom: '0.25rem' }}>{a.title}</h3>
-                      <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
-                        {a.gameTitleSnapshot ? `${a.gameTitleSnapshot} · ` : ''}
-                        {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                        {a.capacity ? ` · ${a.participantCount || 0}/${a.capacity}` : ''}
-                      </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      {a.gameImage && <img src={a.gameImage} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <h3 style={{ marginBottom: '0.25rem' }}>{a.title}</h3>
+                          {(() => { const now = new Date(); const live = new Date(a.startsAt) <= now && now <= new Date(a.endsAt); return live ? <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--neon-green)', border: '1px solid var(--neon-green)', padding: '0.125rem 0.375rem' }}>EN CURSO</span> : null; })()}
+                        </div>
+                        <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+                          {a.gameTitleSnapshot ? `${a.gameTitleSnapshot} · ` : ''}
+                          {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                          {a.capacity ? ` · ${a.participantCount || 0}/${a.capacity}` : ''}
+                        </p>
+                        {a.notes && <p style={{ margin: '0.25rem 0 0', color: 'var(--text-dim)', fontSize: '0.7rem', fontStyle: 'italic' }}>{a.notes}</p>}
+                      </div>
                     </div>
-                    <button className="danger" onClick={() => handleDelete(a.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>ELIMINAR</button>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <button onClick={() => handleEdit(a)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>EDITAR</button>
+                      <button className="danger" onClick={() => handleDelete(a.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>ELIMINAR</button>
+                    </div>
                   </div>
                   {a.participants && a.participants.length > 0 && (
                     <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border)' }}>

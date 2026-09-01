@@ -31,6 +31,9 @@ export function createTournamentRoutes(db: Database) {
     "/api/admin/tournaments/:id/start": { POST: handleStart },
     "/api/admin/tournaments/:id/cancel": { POST: handleCancel },
     "/api/admin/tournaments/:id/participants": { POST: handleAddParticipant },
+    "/api/admin/tournaments/:id/delete": { POST: handleDeleteTournament },
+    "/api/admin/tournaments/:id/fill-bots": { POST: handleFillBots },
+    "/api/admin/dev/seed-participants": { POST: handleSeedParticipants },
     "/api/tournaments": { GET: handleGetTournaments },
     "/api/tournaments/:id": { GET: handleGetTournament },
     "/api/tournaments/:id/join": { POST: handleJoinTournament },
@@ -177,6 +180,21 @@ export function createTournamentRoutes(db: Database) {
     return Response.json({ tournament: db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id) });
   }
 
+  async function handleDeleteTournament(request: Request): Promise<Response> {
+    const auth = requireAdmin(db, request);
+    if (auth instanceof Response) return auth;
+    const id = getTournamentId(request.url);
+    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
+    if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
+    db.run("DELETE FROM matches WHERE tournament_id = ?", [id]);
+    db.run("DELETE FROM match_reports WHERE match_id IN (SELECT id FROM matches WHERE tournament_id = ?)", [id]);
+    db.run("DELETE FROM tournament_participants WHERE tournament_id = ?", [id]);
+    db.run("DELETE FROM tournaments WHERE id = ?", [id]);
+    console.log("[tournaments] POST /api/admin/tournaments/" + id + "/delete");
+    return Response.json({ ok: true });
+  }
+
   async function handleAddParticipant(request: Request): Promise<Response> {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
@@ -205,6 +223,57 @@ export function createTournamentRoutes(db: Database) {
     return Response.json({ ok: true });
   }
 
+  async function handleFillBots(request: Request): Promise<Response> {
+    const auth = requireAdmin(db, request);
+    if (auth instanceof Response) return auth;
+    const id = getTournamentId(request.url);
+    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
+    if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
+    const activeParty = findActiveParty(db);
+    if (!activeParty) return Response.json({ error: "NO_ACTIVE_PARTY" }, { status: 400 });
+    const need = Math.max(0, 2 - db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ?").get(id)!.count);
+    // ensure at least 4 fake participants exist
+    for (let i = 0; i < Math.max(need, 3); i++) {
+      const steamId = `fake-bot-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+      const name = `Bot ${i + 1}`;
+      const res = db.run("INSERT OR IGNORE INTO participants (steam_id, display_name, role) VALUES (?, ?, 'participant')", [steamId, name]);
+      let pid: number;
+      if (res.changes === 0) {
+        pid = db.query<{ id: number }, [string]>("SELECT id FROM participants WHERE steam_id = ?").get(steamId)!.id;
+      } else {
+        pid = Number(res.lastInsertRowid);
+        db.run("INSERT OR IGNORE INTO party_memberships (party_id, participant_id, display_name_snapshot) VALUES (?, ?, ?)", [activeParty.id, pid, name]);
+      }
+      const already = db.query<{ count: number }, [number, number]>("SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?").get(id, pid)!;
+      if (already.count === 0 && db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ?").get(id)!.count < t.max_participants) {
+        const maxSeed = db.query<{ max_seed: number }, [number]>("SELECT COALESCE(MAX(seed), 0) AS max_seed FROM tournament_participants WHERE tournament_id = ?").get(id)!;
+        db.run("INSERT INTO tournament_participants (tournament_id, participant_id, display_name_snapshot, seed) VALUES (?, ?, ?, ?)", [id, pid, name, maxSeed.max_seed + 1]);
+      }
+    }
+    console.log("[tournaments] POST /api/admin/tournaments/" + id + "/fill-bots");
+    return Response.json({ ok: true });
+  }
+
+  async function handleSeedParticipants(request: Request): Promise<Response> {
+    const auth = requireAdmin(db, request);
+    if (auth instanceof Response) return auth;
+    const body = await request.json().catch(() => ({}));
+    const count = Math.min(10, Math.max(1, body.count ?? 3));
+    const activeParty = findActiveParty(db);
+    const created: number[] = [];
+    for (let i = 0; i < count; i++) {
+      const steamId = `fake-seed-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+      const name = `Bot ${Math.random().toString(36).slice(2, 6)}`;
+      const res = db.run("INSERT INTO participants (steam_id, display_name, role) VALUES (?, ?, 'participant')", [steamId, name]);
+      const pid = Number(res.lastInsertRowid);
+      if (activeParty) db.run("INSERT OR IGNORE INTO party_memberships (party_id, participant_id, display_name_snapshot) VALUES (?, ?, ?)", [activeParty.id, pid, name]);
+      created.push(pid);
+    }
+    console.log("[tournaments] POST /api/admin/dev/seed-participants →", created.length);
+    return Response.json({ created });
+  }
+
   async function handleGetTournaments(request: Request): Promise<Response> {
     const ctx = requireParticipant(db, request);
     if (ctx instanceof Response) return ctx;
@@ -226,10 +295,27 @@ export function createTournamentRoutes(db: Database) {
           "SELECT * FROM tournaments WHERE party_id = ? AND status IN ('upcoming', 'in_progress') ORDER BY name"
         ).all(activeParty.id);
 
-    // Enrich with participant counts
+    // Enrich with participant counts and lists (map snake→camel)
     const enriched = tournaments.map(t => {
       const count = db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ?").get(t.id)!;
-      return { ...t, participantCount: count.count };
+      const participants = db.query<{ participant_id: number; display_name_snapshot: string }, [number]>("SELECT participant_id, display_name_snapshot FROM tournament_participants WHERE tournament_id = ? ORDER BY seed").all(t.id).map(p => ({ id: p.participant_id, displayName: p.display_name_snapshot }));
+      const gameImage = db.query<{ image_url: string | null }, [number]>("SELECT image_url FROM games WHERE id = ?").get(t.game_id)?.image_url ?? null;
+      return {
+        id: t.id,
+        partyId: t.party_id,
+        gameId: t.game_id,
+        gameTitleSnapshot: t.game_title_snapshot,
+        gameImage,
+        activityId: t.activity_id,
+        name: t.name,
+        format: t.format,
+        status: t.status,
+        maxParticipants: t.max_participants,
+        createdAt: t.created_at,
+        updatedAt: t.updated_at,
+        participantCount: count.count,
+        participants,
+      };
     });
 
     return Response.json({ tournaments: enriched });
@@ -253,20 +339,36 @@ export function createTournamentRoutes(db: Database) {
     ).all(id);
 
     const enrichedMatches = matches.map(m => {
-      const pA = m.participant_a_id ? db.query<{ display_name: string }, [number, number]>("SELECT display_name FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?").get(id, m.participant_a_id) : null;
-      const pB = m.participant_b_id ? db.query<{ display_name: string }, [number, number]>("SELECT display_name FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?").get(id, m.participant_b_id) : null;
+      const pA = m.participant_a_id ? db.query<{ display_name_snapshot: string }, [number, number]>("SELECT display_name_snapshot FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?").get(id, m.participant_a_id) : null;
+      const pB = m.participant_b_id ? db.query<{ display_name_snapshot: string }, [number, number]>("SELECT display_name_snapshot FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?").get(id, m.participant_b_id) : null;
       return {
         id: m.id, round: m.round, position: m.position,
-        participantA: pA?.display_name ?? (m.participant_a_id ? "BYE" : null),
-        participantB: pB?.display_name ?? (m.participant_b_id ? "BYE" : null),
-        winner: m.winner_id ? db.query<{ display_name: string }, [number, number]>("SELECT display_name FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?").get(id, m.winner_id)?.display_name ?? null : null,
+        participantAId: m.participant_a_id, participantBId: m.participant_b_id,
+        participantA: pA?.display_name_snapshot ?? (m.participant_a_id ? "BYE" : null),
+        participantB: pB?.display_name_snapshot ?? (m.participant_b_id ? "BYE" : null),
+        winnerId: m.winner_id,
+        winner: m.winner_id ? db.query<{ display_name_snapshot: string }, [number, number]>("SELECT display_name_snapshot FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?").get(id, m.winner_id)?.display_name_snapshot ?? null : null,
         score: m.score_json ? JSON.parse(m.score_json) : null,
         status: m.status,
       };
     });
 
     return Response.json({
-      tournament: { ...t, participants: participants.map(p => ({ id: p.participant_id, displayName: p.display_name_snapshot, seed: p.seed })), matches: enrichedMatches },
+      tournament: {
+        id: t.id,
+        partyId: t.party_id,
+        gameId: t.game_id,
+        gameTitleSnapshot: t.game_title_snapshot,
+        activityId: t.activity_id,
+        name: t.name,
+        format: t.format,
+        status: t.status,
+        maxParticipants: t.max_participants,
+        createdAt: t.created_at,
+        updatedAt: t.updated_at,
+        participants: participants.map(p => ({ id: p.participant_id, displayName: p.display_name_snapshot, seed: p.seed })),
+        matches: enrichedMatches,
+      },
     });
   }
 
@@ -360,14 +462,14 @@ export function createTournamentRoutes(db: Database) {
       // Single report: auto-confirm
       db.run("UPDATE matches SET winner_id = ?, score_json = ?, status = 'confirmed', reported_by = ?, reported_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), confirmed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), version = version + 1 WHERE id = ?",
         [body.winnerId, JSON.stringify(body.score), auth.session.subjectId, id]);
-      advanceWinner(db, match);
+      advanceWinner(db, { ...match, winner_id: body.winnerId });
     } else {
       // Multiple reports: check for conflict
       const allSame = reports.every(r => r.winner_id === reports[0].winner_id && r.score_json === reports[0].score_json);
       if (allSame) {
         db.run("UPDATE matches SET winner_id = ?, score_json = ?, status = 'confirmed', reported_by = ?, reported_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), confirmed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), version = version + 1 WHERE id = ?",
           [reports[0].winner_id, reports[0].score_json, auth.session.subjectId, id]);
-        advanceWinner(db, match);
+        advanceWinner(db, { ...match, winner_id: reports[0].winner_id });
       } else {
         db.run("UPDATE matches SET status = 'reported', reported_by = ?, reported_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [auth.session.subjectId, id]);
       }
@@ -385,7 +487,8 @@ export function createTournamentRoutes(db: Database) {
 
     const match = db.query<MatchRow, [number]>("SELECT * FROM matches WHERE id = ?").get(id);
     if (!match) return Response.json({ error: "MATCH_NOT_FOUND" }, { status: 404 });
-    if (match.status !== "reported" && match.status !== "pending") return Response.json({ error: "INVALID_MATCH_STATE" }, { status: 409 });
+    const tournament = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(match.tournament_id);
+    if (tournament?.status === "finished" || tournament?.status === "cancelled") return Response.json({ error: "INVALID_TOURNAMENT_STATE" }, { status: 409 });
 
     const body = await request.json().catch(() => null);
     if (!body || !body.winnerId || !body.score) return Response.json({ error: "VALIDATION_ERROR" }, { status: 400 });
@@ -396,7 +499,7 @@ export function createTournamentRoutes(db: Database) {
 
     db.run("UPDATE matches SET winner_id = ?, score_json = ?, status = 'confirmed', confirmed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), version = version + 1 WHERE id = ?",
       [body.winnerId, JSON.stringify(body.score), id]);
-    advanceWinner(db, match);
+    advanceWinner(db, { ...match, winner_id: body.winnerId });
 
     // Check if tournament is finished
     checkTournamentFinished(db, match.tournament_id);

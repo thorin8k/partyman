@@ -85,7 +85,9 @@ export function createActivitiesRoutes(db: Database) {
         "SELECT COUNT(*) AS count FROM activity_participants WHERE activity_id = ?"
       ).get(r.id)!;
 
-      return { ...rowToActivity(r), participants, participantCount: count.count };
+      const gameImage = r.game_id ? db.query<{ image_url: string | null }, [number]>("SELECT image_url FROM games WHERE id = ?").get(r.game_id)?.image_url ?? null : null;
+
+      return { ...rowToActivity(r), participants, participantCount: count.count, gameImage };
     });
 
     return Response.json({ activities });

@@ -12,6 +12,8 @@ import { AdminGames } from './pages/admin/AdminGames';
 import { AdminPlanning } from './pages/admin/AdminPlanning';
 import { AdminTournaments } from './pages/admin/AdminTournaments';
 import { TournamentDetail } from './pages/admin/TournamentDetail';
+import { AdminUsers } from './pages/admin/AdminUsers';
+import { ParticipantTournamentDetail } from './pages/tournaments/TournamentDetail';
 
 function App() {
   return (
@@ -23,12 +25,14 @@ function App() {
           <Route path="/login" component={ParticipantLogin} />
           <Route path="/admin/login" component={AdminLogin} />
           <Route path="/display" component={PublicDisplay} />
+          <Route path="/tournaments/:id" component={ParticipantTournamentDetail} />
 
           {/* Admin routes */}
           <Route path="/admin/games" component={AdminGames} />
           <Route path="/admin/planning" component={AdminPlanning} />
           <Route path="/admin/tournaments/:id" component={TournamentDetail} />
           <Route path="/admin/tournaments" component={AdminTournaments} />
+          <Route path="/admin/users" component={AdminUsers} />
           <Route path="/admin/parties/:id" component={PartyDetail} />
           <Route path="/admin" component={AdminDashboard} />
 

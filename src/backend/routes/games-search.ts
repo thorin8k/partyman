@@ -32,13 +32,21 @@ export function createGamesSearchRoutes(db: Database) {
         return Response.json({ games: [] });
       }
 
-      const data = await res.json() as { data: Array<{ id: number; name: string; types: string[]; release_date: string; avatar: { thumb: string; small: string; medium: string; large: string; } }> };
+      const data = await res.json() as { data: Array<{ id: number; name: string; types: string[] }> };
+      const rawGames = (data.data || []).slice(0, 8);
 
-      const games = (data.data || []).slice(0, 10).map(g => ({
-        id: g.id,
-        name: g.name,
-        imageUrl: g.avatar?.thumb || g.avatar?.small || null,
-        types: g.types || [],
+      const games = await Promise.all(rawGames.map(async (g) => {
+        try {
+          const gridRes = await fetch(`${STEAMGRIDDB_API}/grids/game/${g.id}?dimensions=600x900,460x215&types=static&limit=1`, {
+            headers: { "Authorization": `Bearer ${apiKey}` },
+          });
+          if (gridRes.ok) {
+            const gridData = await gridRes.json() as { data: Array<{ thumb: string; url: string }> };
+            const thumb = gridData.data?.[0]?.thumb || gridData.data?.[0]?.url || null;
+            return { id: g.id, name: g.name, imageUrl: thumb, types: g.types || [] };
+          }
+        } catch {}
+        return { id: g.id, name: g.name, imageUrl: null, types: g.types || [] };
       }));
 
       console.log("[games-search] Found", games.length, "games for query:", query);

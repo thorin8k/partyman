@@ -15,31 +15,104 @@ interface Activity {
   id: number;
   title: string;
   gameTitle: string | null;
+  gameImage: string | null;
   startsAt: string;
   endsAt: string;
   capacity: number | null;
+  notes: string | null;
   status: string;
   participantCount: number;
   participants: Array<{ id: number; displayName: string }>;
 }
 
-interface Proposal {
-  id: number;
-  gameId: number;
-  gameTitle: string;
-  voteCount: number;
-}
-
-interface Game { id: number; title: string; imageUrl: string | null; }
-
 interface Tournament {
   id: number;
   name: string;
   gameTitleSnapshot: string;
+  gameImage: string | null;
   status: string;
   maxParticipants: number;
   participantCount: number;
   participants: Array<{ id: number; displayName: string; seed: number }>;
+}
+
+function ProposeActivityForm({ onSuccess }: { onSuccess: () => void }) {
+  const [q, setQ] = useState(''); const [results, setResults] = useState<any[]>([]); const [searching, setSearching] = useState(false);
+  const [selectedGame, setSelectedGame] = useState<any | null>(null);
+  const [title, setTitle] = useState(''); const [startsAt, setStartsAt] = useState(''); const [endsAt, setEndsAt] = useState(''); const [capacity, setCapacity] = useState('');
+  const handleSearch = async () => { if (!q.trim()) return; setSearching(true); const r = await fetch(`/api/games/search?q=${encodeURIComponent(q)}`); if (r.ok) setResults((await r.json()).games || []); setSearching(false); };
+  const handleSubmit = async () => {
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    const res = await fetch('/api/activity-proposals', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify({ gameName: selectedGame?.name ?? null, imageUrl: selectedGame?.imageUrl ?? null, title: title || selectedGame?.name || 'Actividad', startsAt: startsAt ? new Date(startsAt).toISOString() : new Date().toISOString(), endsAt: endsAt ? new Date(endsAt).toISOString() : new Date(Date.now()+3600000).toISOString(), capacity: capacity ? parseInt(capacity) : null }) });
+    if (res.ok) { onSuccess(); setSelectedGame(null); setTitle(''); setStartsAt(''); setEndsAt(''); setCapacity(''); setQ(''); setResults([]); }
+  };
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+        <input placeholder="Buscar juego en SteamGridDB (opcional)..." value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />
+        <button onClick={handleSearch} disabled={searching} style={{ fontSize: '0.5rem' }}>{searching ? '...' : 'BUSCAR'}</button>
+      </div>
+      {results.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.75rem' }}>
+          {results.map((g,i) => (
+            <div key={i} onClick={() => { setSelectedGame(g); setTitle(g.name); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: selectedGame?.name===g.name ? 'var(--panel-hover)' : 'var(--bg-secondary)', border: `1px solid ${selectedGame?.name===g.name ? 'var(--neon-cyan)' : 'var(--border)'}`, cursor: 'pointer', flexWrap: 'nowrap' }}>
+              {g.imageUrl && <img src={g.imageUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
+              <span style={{ fontSize: '0.875rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{g.name}</span>
+              {selectedGame?.name===g.name && <span style={{ color: 'var(--neon-green)', fontSize: '0.625rem', flexShrink: 0 }}>✓</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {selectedGame && <p style={{ fontSize: '0.75rem', color: 'var(--neon-cyan)', marginBottom: '0.5rem' }}>Juego: {selectedGame.name}</p>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        <input placeholder="Título de la actividad *" value={title} onChange={e => setTitle(e.target.value)} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+          <input type="datetime-local" value={startsAt} onChange={e => setStartsAt(e.target.value)} />
+          <input type="datetime-local" value={endsAt} onChange={e => setEndsAt(e.target.value)} />
+        </div>
+        <input type="number" placeholder="Capacidad (opcional)" value={capacity} onChange={e => setCapacity(e.target.value)} />
+        <button onClick={handleSubmit} className="primary" style={{ fontSize: '0.5rem' }}>PROPONER ACTIVIDAD</button>
+      </div>
+    </div>
+  );
+}
+
+function ProposeTournamentForm({ onSuccess }: { onSuccess: () => void }) {
+  const [q, setQ] = useState(''); const [results, setResults] = useState<any[]>([]); const [searching, setSearching] = useState(false);
+  const [selectedGame, setSelectedGame] = useState<any | null>(null);
+  const [name, setName] = useState(''); const [maxParticipants, setMaxParticipants] = useState('8');
+  const handleSearch = async () => { if (!q.trim()) return; setSearching(true); const r = await fetch(`/api/games/search?q=${encodeURIComponent(q)}`); if (r.ok) setResults((await r.json()).games || []); setSearching(false); };
+  const handleSubmit = async () => {
+    if (!selectedGame || !name.trim()) return;
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    const res = await fetch('/api/tournament-proposals', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify({ gameName: selectedGame.name, imageUrl: selectedGame.imageUrl, name: name.trim(), maxParticipants: parseInt(maxParticipants) || 8 }) });
+    if (res.ok) { onSuccess(); setSelectedGame(null); setName(''); setQ(''); setResults([]); }
+  };
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+        <input placeholder="Buscar juego en SteamGridDB..." value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />
+        <button onClick={handleSearch} disabled={searching} style={{ fontSize: '0.5rem' }}>{searching ? '...' : 'BUSCAR'}</button>
+      </div>
+      {results.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.75rem' }}>
+          {results.map((g,i) => (
+            <div key={i} onClick={() => { setSelectedGame(g); setName(g.name); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: selectedGame?.name===g.name ? 'var(--panel-hover)' : 'var(--bg-secondary)', border: `1px solid ${selectedGame?.name===g.name ? 'var(--neon-cyan)' : 'var(--border)'}`, cursor: 'pointer', flexWrap: 'nowrap' }}>
+              {g.imageUrl && <img src={g.imageUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
+              <span style={{ fontSize: '0.875rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{g.name}</span>
+              {selectedGame?.name===g.name && <span style={{ color: 'var(--neon-green)', fontSize: '0.625rem', flexShrink: 0 }}>✓</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {selectedGame && <p style={{ fontSize: '0.75rem', color: 'var(--neon-cyan)', marginBottom: '0.5rem' }}>Juego: {selectedGame.name}</p>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        <input placeholder="Nombre del torneo *" value={name} onChange={e => setName(e.target.value)} />
+        <input type="number" min="2" max="16" placeholder="Max participantes" value={maxParticipants} onChange={e => setMaxParticipants(e.target.value)} />
+        <button onClick={handleSubmit} className="primary" style={{ fontSize: '0.5rem' }}>PROPONER TORNEO</button>
+      </div>
+    </div>
+  );
 }
 
 export function Dashboard() {
@@ -47,13 +120,11 @@ export function Dashboard() {
   const [, navigate] = useLocation();
   const [activeParty, setActiveParty] = useState<Party | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [games, setGames] = useState<Game[]>([]);
+  const [activityProposals, setActivityProposals] = useState<any[]>([]);
+  const [tournamentProposals, setTournamentProposals] = useState<any[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [showPropose, setShowPropose] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [showActivityForm, setShowActivityForm] = useState(false);
+  const [showTournamentForm, setShowTournamentForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -65,77 +136,20 @@ export function Dashboard() {
       fetch('/api/parties/active').then(r => r.json()).then(d => setActiveParty(d.party)).catch(() => {});
       fetch('/api/participants/join', { method: 'POST' }).catch(() => {});
       fetchPlanning();
-      fetchGames();
       fetchTournaments();
     }
   }, [user]);
 
   const fetchPlanning = async () => {
     const res = await fetch('/api/planning');
-    if (res.ok) { const d = await res.json(); setActivities(d.activities || []); setProposals(d.proposals || []); }
-  };
-
-  const fetchGames = async () => {
-    const res = await fetch('/api/admin/games');
-    if (res.ok) setGames((await res.json()).games);
+    if (res.ok) { const d = await res.json(); setActivities(d.activities || []); }
+    const ap = await fetch('/api/activity-proposals'); if (ap.ok) setActivityProposals((await ap.json()).proposals || []);
+    const tp = await fetch('/api/tournament-proposals'); if (tp.ok) setTournamentProposals((await tp.json()).proposals || []);
   };
 
   const fetchTournaments = async () => {
     const res = await fetch('/api/tournaments');
     if (res.ok) setTournaments((await res.json()).tournaments);
-  };
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
-    setSearching(true);
-    const res = await fetch(`/api/games/search?q=${encodeURIComponent(searchQuery)}`);
-    if (res.ok) setSearchResults((await res.json()).games || []);
-    setSearching(false);
-  };
-
-  const handleProposeFromSearch = async (game: any) => {
-    setError(null);
-    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    const createRes = await fetch('/api/admin/games', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
-      body: JSON.stringify({ title: game.name, description: game.description || null, minPlayers: game.minPlayers || null, maxPlayers: game.maxPlayers || null, imageUrl: game.imageUrl || null }),
-    });
-    if (createRes.ok) {
-      const created = (await createRes.json()).game;
-      await fetch('/api/parties/active/proposals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
-        body: JSON.stringify({ gameId: created.id }),
-      });
-      fetchPlanning();
-      fetchGames();
-      setSearchResults([]);
-      setSearchQuery('');
-    }
-  };
-
-  const handlePropose = async (gameId: number) => {
-    setError(null);
-    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    const res = await fetch('/api/parties/active/proposals', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
-      body: JSON.stringify({ gameId }),
-    });
-    if (res.ok) { setShowPropose(false); fetchPlanning(); }
-    else { const err = await res.json(); setError(err.error || 'Error'); }
-  };
-
-  const handleVote = async (proposalId: number) => {
-    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    await fetch(`/api/proposals/${proposalId}/vote`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify({ value: 1 }) });
-    fetchPlanning();
-  };
-
-  const handleUnvote = async (proposalId: number) => {
-    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    await fetch(`/api/proposals/${proposalId}/vote`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } });
-    fetchPlanning();
   };
 
   const handleJoinActivity = async (activityId: number) => {
@@ -160,7 +174,7 @@ export function Dashboard() {
 
   const handleLeaveTournament = async (tournamentId: number) => {
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    await fetch(`/api/tournaments/${tournamentId}/join`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } });
+    await fetch(`/api/tournaments/${tournamentId}/leave`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } });
     fetchTournaments();
   };
 
@@ -213,59 +227,6 @@ export function Dashboard() {
       {activeParty && (
         <>
           <div className="card" style={{ marginTop: '1rem' }}>
-            <h2>PROPUESTAS DE JUEGOS</h2>
-            {proposals.length === 0 ? (
-              <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginTop: '0.5rem' }}>No hay propuestas todavía</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
-                {proposals.map(p => (
-                  <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>{p.gameTitle}</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <span style={{ color: 'var(--neon-green)', fontFamily: 'var(--font-display)', fontSize: '0.625rem' }}>{p.voteCount} VOTOS</span>
-                      <button onClick={() => handleVote(p.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>+ VOTAR</button>
-                      <button onClick={() => handleUnvote(p.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem', borderColor: 'var(--error)', color: 'var(--error)' }}>- QUITAR</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input placeholder="Buscar juego en SteamGridDB..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />
-                <button onClick={handleSearch} disabled={searching} style={{ fontSize: '0.5rem' }}>{searching ? 'BUSCANDO...' : 'BUSCAR'}</button>
-              </div>
-              {searchResults.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {searchResults.map((g, i) => (
-                    <div key={i} className="list-item" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      {g.imageUrl && <img src={g.imageUrl} alt="" style={{ width: '48px', height: '48px', borderRadius: '4px', objectFit: 'cover' }} />}
-                      <div style={{ flex: 1 }}><h3 style={{ fontSize: '0.875rem' }}>{g.name}</h3></div>
-                      <button onClick={() => handleProposeFromSearch(g)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>PROPONER</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {!showPropose ? (
-                <button onClick={() => setShowPropose(true)} style={{ fontSize: '0.5rem' }}>+ PROPONER DEL CATÁLOGO</button>
-              ) : (
-                <>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {games.filter(g => !proposals.find(p => p.gameId === g.id)).map(g => (
-                      <div key={g.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>{g.title}</span>
-                        <button onClick={() => handlePropose(g.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>PROPONER</button>
-                      </div>
-                    ))}
-                  </div>
-                  <button onClick={() => setShowPropose(false)} style={{ fontSize: '0.5rem' }}>CANCELAR</button>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="card" style={{ marginTop: '1rem' }}>
             <h2>ACTIVIDADES</h2>
             {activities.length === 0 ? (
               <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginTop: '0.5rem' }}>No hay actividades programadas</p>
@@ -274,15 +235,23 @@ export function Dashboard() {
                 {activities.map(a => {
                   const isJoined = a.participants?.some(p => p.id === user?.id);
                   const isFull = a.capacity != null && (a.participantCount || 0) >= a.capacity;
+                  const now = new Date(); const isLive = new Date(a.startsAt) <= now && now <= new Date(a.endsAt);
                   return (
-                    <div key={a.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      <div>
-                        <h3 style={{ marginBottom: '0.25rem' }}>{a.title}</h3>
-                        <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
-                          {a.gameTitle ? `${a.gameTitle} · ` : ''}
-                          {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                          {a.capacity ? ` · ${a.participantCount || 0}/${a.capacity}` : ''}
-                        </p>
+                    <div key={a.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', borderColor: isLive ? 'var(--neon-green)' : undefined, background: isLive ? 'rgba(0,255,136,0.05)' : undefined }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        {a.gameImage && <img src={a.gameImage} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />}
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <h3 style={{ marginBottom: '0.25rem' }}>{a.title}</h3>
+                            {isLive && <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--neon-green)', border: '1px solid var(--neon-green)', padding: '0.125rem 0.375rem', animation: 'pulse 2s infinite' }}>EN CURSO</span>}
+                          </div>
+                          <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+                            {a.gameTitle ? `${a.gameTitle} · ` : ''}
+                            {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                            {a.capacity ? ` · ${a.participantCount || 0}/${a.capacity}` : ''}
+                          </p>
+                          {a.notes && <p style={{ margin: '0.25rem 0 0', color: 'var(--text-dim)', fontSize: '0.7rem', fontStyle: 'italic' }}>{a.notes}</p>}
+                        </div>
                       </div>
                       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                         {isJoined && (
@@ -304,6 +273,29 @@ export function Dashboard() {
           </div>
 
           <div className="card" style={{ marginTop: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2>PROPONER ACTIVIDAD</h2>
+              <button onClick={() => setShowActivityForm(!showActivityForm)} style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}>{showActivityForm ? 'CERRAR' : '+ PROPONER'}</button>
+            </div>
+            {showActivityForm && (
+              <div style={{ marginTop: '1rem' }}>
+                <p style={{ color: 'var(--text-dim)', fontSize: '0.75rem', marginBottom: '0.75rem' }}>Propón una actividad para la party. El admin la programará.</p>
+                <ProposeActivityForm onSuccess={() => { fetchPlanning(); setShowActivityForm(false); }} />
+              </div>
+            )}
+            {activityProposals.length > 0 && (
+              <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {activityProposals.map((p: any) => (
+                  <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.875rem' }}>{p.title} {p.gameTitle ? `· ${p.gameTitle}` : ''}</span>
+                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; await fetch(`/api/activity-proposals/${p.id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }); fetchPlanning(); }} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem', borderColor: 'var(--error)', color: 'var(--error)' }}>RETIRAR</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card" style={{ marginTop: '1rem' }}>
             <h2>TORNEOS</h2>
             {tournaments.length === 0 ? (
               <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginTop: '0.5rem' }}>No hay torneos programados</p>
@@ -312,20 +304,37 @@ export function Dashboard() {
                 {tournaments.map(t => {
                   const isMember = t.participants?.some(p => p.id === user?.id);
                   const canJoin = t.status === 'upcoming' || t.status === 'draft';
-                  const statusLabel = t.status === 'in_progress' ? 'EN CURSO' : t.status === 'finished' ? 'FINALIZADO' : 'INSCRIPCIÓN ABIERTA';
-                  const statusColor = t.status === 'in_progress' ? 'var(--neon-orange)' : t.status === 'finished' ? 'var(--muted)' : 'var(--neon-green)';
+                  const statusMap: Record<string, { label: string; color: string }> = {
+                    draft: { label: 'BORRADOR', color: 'var(--text-dim)' },
+                    upcoming: { label: 'INSCRIPCIÓN ABIERTA', color: 'var(--neon-green)' },
+                    in_progress: { label: 'EN CURSO', color: 'var(--neon-orange)' },
+                    finished: { label: 'FINALIZADO', color: 'var(--muted)' },
+                    cancelled: { label: 'CANCELADO', color: 'var(--error)' },
+                  };
+                  const statusInfo = statusMap[t.status] || statusMap.upcoming;
                   return (
                     <div key={t.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      <div>
-                        <h3 style={{ marginBottom: '0.25rem' }}>{t.name}</h3>
-                        <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
-                          {t.gameTitleSnapshot} · {t.participantCount || 0}/{t.maxParticipants} participantes
-                        </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: '1 1 auto' }}>
+                        {t.gameImage && <img src={t.gameImage} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
+                        <div>
+                          <h3 style={{ marginBottom: '0.25rem' }}>{t.name}</h3>
+                          <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+                            {t.gameTitleSnapshot} · {t.participantCount || 0}/{t.maxParticipants} participantes
+                          </p>
+                          {t.participants && t.participants.length > 0 && (
+                            <p style={{ margin: '0.25rem 0 0', color: 'var(--text-dim)', fontSize: '0.7rem' }}>
+                              {t.participants.map(p => p.displayName).join(', ')}
+                            </p>
+                          )}
+                        </div>
                       </div>
                       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: statusColor }}>
-                          {statusLabel}
+                        <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: statusInfo.color }}>
+                          {statusInfo.label}
                         </span>
+                        {t.status === 'in_progress' && (
+                          <a href={`/tournaments/${t.id}`} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem', border: '1px solid var(--neon-cyan)', color: 'var(--neon-cyan)', textDecoration: 'none' }}>VER BRACKET →</a>
+                        )}
                         {canJoin && (
                           isMember ? (
                             <button onClick={() => handleLeaveTournament(t.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem', borderColor: 'var(--error)', color: 'var(--error)' }}>SALIR</button>
@@ -337,6 +346,29 @@ export function Dashboard() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+
+          <div className="card" style={{ marginTop: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2>PROPONER TORNEO</h2>
+              <button onClick={() => setShowTournamentForm(!showTournamentForm)} style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}>{showTournamentForm ? 'CERRAR' : '+ PROPONER'}</button>
+            </div>
+            {showTournamentForm && (
+              <div style={{ marginTop: '1rem' }}>
+                <p style={{ color: 'var(--text-dim)', fontSize: '0.75rem', marginBottom: '0.75rem' }}>Propón un torneo. El admin lo creará.</p>
+                <ProposeTournamentForm onSuccess={() => { fetchPlanning(); setShowTournamentForm(false); }} />
+              </div>
+            )}
+            {tournamentProposals.length > 0 && (
+              <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {tournamentProposals.map((p: any) => (
+                  <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.875rem' }}>{p.name} · {p.gameTitle}</span>
+                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; await fetch(`/api/tournament-proposals/${p.id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }); fetchPlanning(); }} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem', borderColor: 'var(--error)', color: 'var(--error)' }}>RETIRAR</button>
+                  </div>
+                ))}
               </div>
             )}
           </div>

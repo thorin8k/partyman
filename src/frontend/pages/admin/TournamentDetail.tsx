@@ -9,7 +9,7 @@ interface Tournament {
   status: string;
   maxParticipants: number;
   participants: Array<{ id: number; displayName: string; seed: number }>;
-  matches: Array<{ id: number; round: number; position: number; participantA: string | null; participantB: string | null; winner: string | null; score: { a: number; b: number } | null; status: string }>;
+  matches: Array<{ id: number; round: number; position: number; participantAId: number | null; participantBId: number | null; participantA: string | null; participantB: string | null; winnerId: number | null; winner: string | null; score: { a: number; b: number } | null; status: string }>;
 }
 
 export function TournamentDetail() {
@@ -19,6 +19,10 @@ export function TournamentDetail() {
   const tournamentId = params?.id;
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reportMatch, setReportMatch] = useState<number | null>(null);
+  const [reportWinner, setReportWinner] = useState<string>('');
+  const [scoreA, setScoreA] = useState('');
+  const [scoreB, setScoreB] = useState('');
 
   useEffect(() => {
     if (!loading && !user) navigate('/admin/login');
@@ -42,19 +46,30 @@ export function TournamentDetail() {
     fetchTournament();
   };
 
-  const handleConfirmMatch = async (matchId: number) => {
-    const winnerId = prompt('ID del ganador:');
-    if (!winnerId) return;
-    const scoreA = prompt('Puntuación A:');
-    const scoreB = prompt('Puntuación B:');
-    if (scoreA === null || scoreB === null) return;
-
+  const handleFillBots = async () => {
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    const res = await fetch(`/api/admin/matches/${matchId}/confirm`, {
+    const res = await fetch(`/api/admin/tournaments/${tournamentId}/fill-bots`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
+    if (!res.ok) { const err = await res.json(); setError(err.error || 'Error'); }
+    fetchTournament();
+  };
+
+  const handleDeleteTournament = async () => {
+    if (!confirm('¿Eliminar este torneo?')) return;
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    const res = await fetch(`/api/admin/tournaments/${tournamentId}/delete`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
+    if (res.ok) navigate('/admin/tournaments');
+    else { const err = await res.json(); setError(err.error || 'Error'); }
+  };
+
+  const handleConfirmMatch = async () => {
+    if (!reportMatch || !reportWinner) return;
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    const res = await fetch(`/api/admin/matches/${reportMatch}/confirm`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
-      body: JSON.stringify({ winnerId: parseInt(winnerId), score: { a: parseInt(scoreA), b: parseInt(scoreB) } }),
+      body: JSON.stringify({ winnerId: parseInt(reportWinner), score: { a: parseInt(scoreA), b: parseInt(scoreB) } }),
     });
     if (!res.ok) { const err = await res.json(); setError(err.error || 'Error'); }
+    else { setReportMatch(null); setReportWinner(''); setScoreA(''); setScoreB(''); }
     fetchTournament();
   };
 
@@ -87,6 +102,16 @@ export function TournamentDetail() {
         <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>
           {tournament.gameTitleSnapshot} · Max {tournament.maxParticipants} · {tournament.participants.length} inscritos
         </p>
+        {tournament.status === 'finished' && (() => {
+          const final = tournament.matches.filter(m => m.status === 'confirmed').sort((a,b) => b.round - a.round)[0];
+          return final?.winner ? (
+            <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(0,255,136,0.1)', border: '1px solid var(--neon-green)', borderRadius: 'var(--radius)', textAlign: 'center' }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.625rem', color: 'var(--neon-green)' }}>CAMPEÓN</span>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--neon-green)', marginTop: '0.25rem' }}>{final.winner}</div>
+              {final.score && <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{final.score.a} - {final.score.b}</span>}
+            </div>
+          ) : null;
+        })()}
       </div>
 
       <div className="card" style={{ marginTop: '1rem' }}>
@@ -102,6 +127,16 @@ export function TournamentDetail() {
             ))}
           </div>
         )}
+        {tournament.status === 'draft' && (
+          <button onClick={handleFillBots} style={{ marginTop: '1rem', fontSize: '0.5rem', borderColor: 'var(--neon-magenta)', color: 'var(--neon-magenta)' }}>
+            + RELLENAR CON BOTS (DEV)
+          </button>
+        )}
+      </div>
+
+      <div className="card" style={{ marginTop: '1rem', borderColor: 'var(--error)' }}>
+        <h2 style={{ color: 'var(--error)' }}>ZONA PELIGROSA</h2>
+        <button onClick={handleDeleteTournament} className="danger" style={{ width: '100%', marginTop: '1rem' }}>ELIMINAR TORNEO</button>
       </div>
 
       {tournament.matches.length > 0 && (
@@ -127,8 +162,47 @@ export function TournamentDetail() {
                           {m.score.a} - {m.score.b}
                         </div>
                       )}
-                      {m.status === 'reported' && user.role === 'admin' && (
-                        <button onClick={() => handleConfirmMatch(m.id)} style={{ fontSize: '0.375rem', marginTop: '0.25rem', padding: '0.125rem 0.25rem' }}>CONFIRMAR</button>
+                      {(m.status === 'reported' || (m.status === 'pending' && m.participantAId && m.participantBId)) && (
+                        reportMatch === m.id ? (
+                          <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                            <select value={reportWinner} onChange={e => setReportWinner(e.target.value)} style={{ fontSize: '0.625rem', padding: '0.25rem' }}>
+                              <option value="">Ganador...</option>
+                              {m.participantAId && <option value={m.participantAId}>{m.participantA}</option>}
+                              {m.participantBId && <option value={m.participantBId}>{m.participantB}</option>}
+                            </select>
+                            <div style={{ display: 'flex', gap: '0.25rem' }}>
+                              <input type="number" min="0" max="99" placeholder={m.participantA ?? 'A'} value={scoreA} onChange={e => setScoreA(e.target.value)} style={{ width: '50%', fontSize: '0.625rem', padding: '0.25rem' }} />
+                              <input type="number" min="0" max="99" placeholder={m.participantB ?? 'B'} value={scoreB} onChange={e => setScoreB(e.target.value)} style={{ width: '50%', fontSize: '0.625rem', padding: '0.25rem' }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.25rem' }}>
+                              <button onClick={handleConfirmMatch} style={{ fontSize: '0.375rem', padding: '0.125rem 0.5rem' }} className="primary">ENVIAR</button>
+                              <button onClick={() => setReportMatch(null)} style={{ fontSize: '0.375rem', padding: '0.125rem 0.5rem' }}>CANCELAR</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button onClick={() => setReportMatch(m.id)} style={{ fontSize: '0.375rem', marginTop: '0.25rem', padding: '0.125rem 0.25rem' }}>{m.status === 'pending' ? 'RELLENAR' : 'CONFIRMAR'}</button>
+                        )
+                      )}
+                      {m.status === 'confirmed' && (
+                        reportMatch === m.id ? (
+                          <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                            <select value={reportWinner} onChange={e => setReportWinner(e.target.value)} style={{ fontSize: '0.625rem', padding: '0.25rem' }}>
+                              <option value="">Ganador...</option>
+                              {m.participantAId && <option value={m.participantAId}>{m.participantA}</option>}
+                              {m.participantBId && <option value={m.participantBId}>{m.participantB}</option>}
+                            </select>
+                            <div style={{ display: 'flex', gap: '0.25rem' }}>
+                              <input type="number" min="0" max="99" placeholder={m.participantA ?? 'A'} value={scoreA} onChange={e => setScoreA(e.target.value)} style={{ width: '50%', fontSize: '0.625rem', padding: '0.25rem' }} />
+                              <input type="number" min="0" max="99" placeholder={m.participantB ?? 'B'} value={scoreB} onChange={e => setScoreB(e.target.value)} style={{ width: '50%', fontSize: '0.625rem', padding: '0.25rem' }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.25rem' }}>
+                              <button onClick={handleConfirmMatch} style={{ fontSize: '0.375rem', padding: '0.125rem 0.5rem' }} className="primary">GUARDAR</button>
+                              <button onClick={() => setReportMatch(null)} style={{ fontSize: '0.375rem', padding: '0.125rem 0.5rem' }}>CANCELAR</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button onClick={() => setReportMatch(m.id)} style={{ fontSize: '0.375rem', marginTop: '0.25rem', padding: '0.125rem 0.25rem', borderColor: 'var(--neon-magenta)', color: 'var(--neon-magenta)' }}>EDITAR</button>
+                        )
                       )}
                     </div>
                   ))}

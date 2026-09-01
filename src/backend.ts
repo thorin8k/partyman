@@ -13,6 +13,7 @@ import { createActivitiesRoutes } from "./backend/routes/activities";
 import { createProposalsRoutes } from "./backend/routes/proposals";
 import { createGamesSearchRoutes } from "./backend/routes/games-search";
 import { createTournamentRoutes } from "./backend/routes/tournaments";
+import { createActivityTournamentProposalRoutes } from "./backend/routes/activity-tournament-proposals";
 import serveStatic from "serve-static-bun";
 
 await executeMigrations();
@@ -29,6 +30,7 @@ const activitiesRoutes = createActivitiesRoutes(db);
 const proposalsRoutes = createProposalsRoutes(db);
 const gamesSearchRoutes = createGamesSearchRoutes(db);
 const tournamentRoutes = createTournamentRoutes(db);
+const proposalRoutes2 = createActivityTournamentProposalRoutes(db);
 
 const server = serve({
   routes: {
@@ -43,6 +45,7 @@ const server = serve({
     ...proposalsRoutes,
     ...gamesSearchRoutes,
     ...tournamentRoutes,
+    ...proposalRoutes2,
 
     // Static assets
     "/public/:filename{.+\\.(png|ico|txt|woff2|jpg|css)}": {

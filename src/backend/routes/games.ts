@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { requireAdmin } from "../auth/guards";
+import { requireAdmin, requireParticipant } from "../auth/guards";
 
 interface GameRow {
   id: number;
@@ -59,6 +59,10 @@ export function createGamesRoutes(db: Database) {
     },
     "/api/admin/games/:id": {
       PATCH: handleUpdateGame,
+      DELETE: handleDeleteGame,
+    },
+    "/api/games": {
+      GET: handleGetGamesForParticipants,
     },
   };
 
@@ -137,5 +141,26 @@ export function createGamesRoutes(db: Database) {
     const game = db.query<GameRow, [number]>("SELECT * FROM games WHERE id = ?").get(id);
     console.log("[games] PATCH /api/admin/games/" + id + " → updated");
     return Response.json({ game: rowToGame(game!) });
+  }
+
+  async function handleDeleteGame(request: Request): Promise<Response> {
+    const auth = requireAdmin(db, request);
+    if (auth instanceof Response) return auth;
+    const idStr = new URL(request.url).pathname.split("/").pop();
+    const id = parseInt(idStr ?? "", 10);
+    if (isNaN(id) || id <= 0) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    const existing = db.query<GameRow, [number]>("SELECT * FROM games WHERE id = ?").get(id);
+    if (!existing) return Response.json({ error: "GAME_NOT_FOUND" }, { status: 404 });
+    db.run("DELETE FROM games WHERE id = ?", [id]);
+    console.log("[games] DELETE /api/admin/games/" + id);
+    return Response.json({ ok: true });
+  }
+
+  async function handleGetGamesForParticipants(request: Request): Promise<Response> {
+    const ctx = requireParticipant(db, request);
+    if (ctx instanceof Response) return ctx;
+    const rows = db.query<GameRow, []>("SELECT * FROM games WHERE enabled = 1 ORDER BY title").all();
+    console.log("[games] GET /api/games →", rows.length);
+    return Response.json({ games: rows.map(rowToGame) });
   }
 }
