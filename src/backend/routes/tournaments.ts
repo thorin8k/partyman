@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { requireAdmin, requireParticipant } from "../auth/guards";
 import { findActiveParty } from "../auth/participants";
 import { generateBracket, getNextMatchPosition, isBye } from "../tournaments/single-elimination";
+import { scoreTournamentFinished } from "../scoring/service";
 
 interface TournamentRow {
   id: number; party_id: number; game_id: number; game_title_snapshot: string;
@@ -458,11 +459,13 @@ export function createTournamentRoutes(db: Database) {
       "SELECT winner_id, score_json FROM match_reports WHERE match_id = ?"
     ).all(id);
 
+    let confirmed = false;
     if (reports.length === 1) {
       // Single report: auto-confirm
       db.run("UPDATE matches SET winner_id = ?, score_json = ?, status = 'confirmed', reported_by = ?, reported_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), confirmed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), version = version + 1 WHERE id = ?",
         [body.winnerId, JSON.stringify(body.score), auth.session.subjectId, id]);
       advanceWinner(db, { ...match, winner_id: body.winnerId });
+      confirmed = true;
     } else {
       // Multiple reports: check for conflict
       const allSame = reports.every(r => r.winner_id === reports[0].winner_id && r.score_json === reports[0].score_json);
@@ -470,10 +473,12 @@ export function createTournamentRoutes(db: Database) {
         db.run("UPDATE matches SET winner_id = ?, score_json = ?, status = 'confirmed', reported_by = ?, reported_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), confirmed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), version = version + 1 WHERE id = ?",
           [reports[0].winner_id, reports[0].score_json, auth.session.subjectId, id]);
         advanceWinner(db, { ...match, winner_id: reports[0].winner_id });
+        confirmed = true;
       } else {
         db.run("UPDATE matches SET status = 'reported', reported_by = ?, reported_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [auth.session.subjectId, id]);
       }
     }
+    if (confirmed) checkTournamentFinished(db, match.tournament_id);
 
     console.log("[tournaments] POST /api/matches/" + id + "/report");
     return Response.json({ ok: true });
@@ -524,6 +529,8 @@ function checkTournamentFinished(db: Database, tournamentId: number) {
   const pending = db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM matches WHERE tournament_id = ? AND status != 'confirmed'").get(tournamentId)!;
   if (pending.count === 0) {
     db.run("UPDATE tournaments SET status = 'finished', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [tournamentId]);
+    const partyId = db.query<{ party_id: number }, [number]>("SELECT party_id FROM tournaments WHERE id = ?").get(tournamentId)?.party_id;
+    if (partyId) scoreTournamentFinished(db, tournamentId, partyId);
     console.log("[tournaments] Tournament #" + tournamentId + " FINISHED");
   }
 }

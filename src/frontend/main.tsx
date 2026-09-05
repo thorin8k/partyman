@@ -14,6 +14,9 @@ import { AdminTournaments } from './pages/admin/AdminTournaments';
 import { TournamentDetail } from './pages/admin/TournamentDetail';
 import { AdminUsers } from './pages/admin/AdminUsers';
 import { ParticipantTournamentDetail } from './pages/tournaments/TournamentDetail';
+import { Leaderboard } from './pages/history/Leaderboard';
+import { Rewards } from './pages/admin/Rewards';
+import { ParticipantHistory } from './pages/history/ParticipantHistory';
 
 function App() {
   return (
@@ -26,6 +29,9 @@ function App() {
           <Route path="/admin/login" component={AdminLogin} />
           <Route path="/display" component={PublicDisplay} />
           <Route path="/tournaments/:id" component={ParticipantTournamentDetail} />
+          <Route path="/leaderboard" component={Leaderboard} />
+          <Route path="/history/:id" component={ParticipantHistory} />
+          <Route path="/admin/rewards" component={Rewards} />
 
           {/* Admin routes */}
           <Route path="/admin/games" component={AdminGames} />

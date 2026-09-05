@@ -86,6 +86,18 @@ Turn party participation and tournament outcomes into a durable, understandable 
 
 - Do not add a generic event bus. Task 006 returns its committed result to the route handler; task 009 wires a direct scoring service call after commit. If scoring fails, the tournament remains finished and an admin retry endpoint reruns the idempotent scoring service.
 
+## Estado actual (2026-09-05) y pendiente de cierre
+
+Ya hecho en código (no re-hacer):
+- Back `src/backend/routes/scoring.ts`: `PATCH /api/admin/achievements/:id`, validación `partyId` en leaderboard (404 si no existe), awards exige `achievementId` o título no vacío + verifica participant/achievement, correcciones exigen `points` entero !=0 con `LEDGER_ALREADY_CORRECTED` vía `correction_of`, `POST /api/admin/parties/:id/score` verifica party y reporta `party_scoring_runs`.
+- Front `Rewards.tsx`: reglas con toggle, otorgar con achievementId/título, corrección ledger. `Leaderboard.tsx`: selector por party.
+- Hook `report` → `checkTournamentFinished` → scoring idempotente (`tournaments.ts:462`).
+
+Pendiente solo para cerrar la tarea:
+- `tests/scoring.test.ts`: seeding reglas, exact-once torneo, attendance scoring, corrección negativa + `LEDGER_ALREADY_CORRECTED`, tie-break (puntos → wins → nombre NOCASE → id), renombrado participante conserva historial (snapshots), redacción pública (sin Steam IDs/notas/source keys), auth admin vs participant.
+- Verificar `seedPointRules` se llama al arrancar (hoy solo existe en `service.ts:3` + inserts en migración; unificar en código con `INSERT OR IGNORE`).
+- Queda fuera de 007 (va a 012/013): autocomplete de participantes en Rewards y humanización de historial.
+
 ## Ownership and Parallelism
 
 Owns: scoring rules, point ledger, achievements, awards, and leaderboard read models. Consumes completion events from `006` and membership data from `002`; exposes summaries to `004`.

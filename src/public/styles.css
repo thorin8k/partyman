@@ -612,3 +612,13 @@ ul, ol {
   background: var(--neon-cyan);
   color: var(--bg);
 }
+
+/* Task 011: foco visible + respeto reduced-motion */
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--neon-green);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

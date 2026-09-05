@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { PartyRepository, AuditRepository } from './repository';
 import type { Party, CreatePartyInput, UpdatePartyInput } from '../../shared/contracts/parties';
+import { scorePartyParticipation } from '../scoring/service';
 
 export class PartyService {
   private partyRepo: PartyRepository;
@@ -138,7 +139,9 @@ export class PartyService {
       return updated;
     });
 
-    return transaction();
+    const result = transaction();
+    try { scorePartyParticipation(this.db, id); } catch {}
+    return result;
   }
 
   archive(id: number, adminId: number): Party {

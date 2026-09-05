@@ -101,50 +101,62 @@ export function AdminDashboard() {
         </div>
       )}
 
-      {(activityProposals.length > 0 || tournamentProposals.length > 0) && (
-        <div className="card" style={{ marginTop: '1rem', borderColor: 'var(--neon-cyan)' }}>
+      <div className="card" style={{ marginTop: '1rem', borderColor: 'var(--neon-cyan)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2>PROPUESTAS PENDIENTES</h2>
-          {activityProposals.length > 0 && (
-            <div style={{ marginTop: '1rem' }}>
-              <h3 style={{ fontSize: '0.75rem', color: 'var(--neon-cyan)', marginBottom: '0.5rem' }}>ACTIVIDADES ({activityProposals.length})</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {activityProposals.map((p: any) => (
-                  <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <h3 style={{ fontSize: '0.875rem' }}>{p.title}</h3>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle || 'Sin juego'} · {new Date(p.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
-                    </div>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.5rem', color: 'var(--neon-cyan)', border: '1px solid var(--neon-cyan)', padding: '0.25rem 0.5rem' }}>{activityProposals.length + tournamentProposals.length} TOTAL</span>
+        </div>
+        <div style={{ marginTop: '1rem' }}>
+          <h3 style={{ fontSize: '0.75rem', color: 'var(--neon-cyan)', marginBottom: '0.5rem' }}>ACTIVIDADES ({activityProposals.length})</h3>
+          {activityProposals.length === 0 ? <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Sin propuestas de actividades</p> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {activityProposals.map((p: any) => (
+                <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ fontSize: '0.875rem' }}>{p.title}</h3>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle || 'Sin juego'} · {new Date(p.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.25rem' }}>
                     <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; const res = await fetch(`/api/admin/activity-proposals/${p.id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } }); if (res.ok) fetchProposals(); }} className="primary" style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>APROBAR</button>
+                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; await fetch(`/api/activity-proposals/${p.id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }); fetchProposals(); }} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>RECHAZAR</button>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {tournamentProposals.length > 0 && (
-            <div style={{ marginTop: '1rem' }}>
-              <h3 style={{ fontSize: '0.75rem', color: 'var(--neon-cyan)', marginBottom: '0.5rem' }}>TORNEOS ({tournamentProposals.length})</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {tournamentProposals.map((p: any) => (
-                  <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <h3 style={{ fontSize: '0.875rem' }}>{p.name}</h3>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle} · Max {p.maxParticipants}</p>
-                    </div>
-                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; const res = await fetch(`/api/admin/tournament-proposals/${p.id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } }); if (res.ok) fetchProposals(); }} className="primary" style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>APROBAR</button>
-                  </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
-      )}
+        <div style={{ marginTop: '1rem' }}>
+          <h3 style={{ fontSize: '0.75rem', color: 'var(--neon-cyan)', marginBottom: '0.5rem' }}>TORNEOS ({tournamentProposals.length})</h3>
+          {tournamentProposals.length === 0 ? <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Sin propuestas de torneos</p> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {tournamentProposals.map((p: any) => (
+                <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ fontSize: '0.875rem' }}>{p.name}</h3>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle} · Max {p.maxParticipants}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.25rem' }}>
+                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; const res = await fetch(`/api/admin/tournament-proposals/${p.id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } }); if (res.ok) fetchProposals(); }} className="primary" style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>APROBAR</button>
+                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; await fetch(`/api/tournament-proposals/${p.id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }); fetchProposals(); }} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>RECHAZAR</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {(activityProposals.length > 0 || tournamentProposals.length > 0) && <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
+          <a href="/admin/planning" style={{ fontSize: '0.5rem' }}>GESTIÓN ACTIVIDADES →</a>
+          <a href="/admin/tournaments" style={{ fontSize: '0.5rem' }}>GESTIÓN TORNEOS →</a>
+        </div>}
+      </div>
 
       <div className="card" style={{ marginTop: '1rem' }}>
         <h2>ACCIONES RÁPIDAS</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
-          <a href="/admin/games" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>JUEGOS</a>
           <a href="/admin/planning" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>ACTIVIDADES</a>
+          <a href="/admin/games" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>JUEGOS</a>
           <a href="/admin/tournaments" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>TORNEOS</a>
+          <a href="/admin/rewards" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>PREMIOS</a>
           <a href="/admin/users" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>USUARIOS</a>
         </div>
       </div>
