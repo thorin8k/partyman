@@ -62,7 +62,8 @@ export function AdminGames() {
     else { const err = await res.json(); setError(err.error || 'Error'); }
   };
 
-  if (loading || !user || user.role !== 'admin') return null;
+  if (loading) return <div className="container"><div className="loading">Cargando…</div></div>;
+  if (!user || user.role !== 'admin') return <div className="container"><div className="loading">Redirigiendo…</div></div>;
 
   return (
     <div className="container">

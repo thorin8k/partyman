@@ -50,7 +50,8 @@ export function AdminDashboard() {
     finally { setCreating(false); }
   };
 
-  if (loading || !user || user.role !== 'admin') return null;
+  if (loading) return <div className="container"><div className="loading">Cargando…</div></div>;
+  if (!user || user.role !== 'admin') return <div className="container"><div className="loading">Redirigiendo…</div></div>;
 
   const statusColors: Record<string, string> = { planned: 'var(--neon-cyan)', active: 'var(--neon-green)', finished: 'var(--muted)', archived: 'var(--neon-magenta)' };
   const statusLabels: Record<string, string> = { planned: 'PLANIFICADA', active: 'ACTIVA', finished: 'FINALIZADA', archived: 'ARCHIVADA' };

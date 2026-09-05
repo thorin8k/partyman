@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { getLeaderboard } from "../scoring/service";
 
 export function createPublicRoutes(db: Database) {
   return {
@@ -94,7 +95,11 @@ export function createPublicRoutes(db: Database) {
             return { id: r.id, name: r.name, gameTitle: r.game_title_snapshot, winner };
           })
       : [];
-    const leaderboard: unknown[] = [];
+    // ponytail: leaderboard público reutiliza scoring; si el dominio no existe aún, array vacío (spec 004).
+    let leaderboard: Array<{ participantId: number; displayName: string; avatarUrl: string | null; points: number; wins: number }> = [];
+    if (party) {
+      try { leaderboard = getLeaderboard(db, party.id).slice(0, 10); } catch { leaderboard = []; }
+    }
     const schedule: unknown[] = [];
     const activity: unknown[] = [];
 

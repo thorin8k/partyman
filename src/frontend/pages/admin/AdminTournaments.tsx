@@ -97,7 +97,8 @@ export function AdminTournaments() {
     if (partyId) fetchTournaments(partyId);
   };
 
-  if (loading || !user || user.role !== 'admin') return null;
+  if (loading) return <div className="container"><div className="loading">Cargando…</div></div>;
+  if (!user || user.role !== 'admin') return <div className="container"><div className="loading">Redirigiendo…</div></div>;
 
   const statusColors: Record<string, string> = { draft: 'var(--neon-cyan)', upcoming: 'var(--neon-green)', in_progress: 'var(--neon-orange)', finished: 'var(--muted)', cancelled: 'var(--error)' };
   const statusLabels: Record<string, string> = { draft: 'BORRADOR', upcoming: 'PRÓXIMAMENTE', in_progress: 'EN CURSO', finished: 'FINALIZADO', cancelled: 'CANCELADO' };

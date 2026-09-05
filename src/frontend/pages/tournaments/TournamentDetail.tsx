@@ -39,18 +39,30 @@ export function ParticipantTournamentDetail() {
   };
 
   const handleReport = async () => {
-    if (!reportMatch || !reportWinner) return;
+    if (!reportMatch || !reportWinner) { setError('Elige el ganador del partido.'); return; }
+    const a = parseInt(scoreA); const b = parseInt(scoreB);
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || a > 99 || b < 0 || b > 99) { setError('Los puntos deben ser enteros de 0 a 99.'); return; }
+    if (a === b) { setError('No hay empates: los puntos deben ser distintos.'); return; }
+    const m = tournament?.matches.find(x => x.id === reportMatch);
+    if (m) {
+      const winnerIsA = parseInt(reportWinner) === m.participantAId;
+      const winnerScore = winnerIsA ? a : b; const loserScore = winnerIsA ? b : a;
+      if (winnerScore <= loserScore) { setError('El ganador debe tener más puntos.'); return; }
+    }
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch(`/api/matches/${reportMatch}/report`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
-      body: JSON.stringify({ winnerId: parseInt(reportWinner), score: { a: parseInt(scoreA), b: parseInt(scoreB) } }),
+      body: JSON.stringify({ winnerId: parseInt(reportWinner), score: { a, b } }),
     });
-    if (!res.ok) { const err = await res.json(); setError(err.error || 'Error al reportar'); }
-    else { setReportMatch(null); setReportWinner(''); setScoreA(''); setScoreB(''); fetchTournament(); }
+    if (!res.ok) { const err = await res.json().catch(() => ({})); setError(typeof err.error === 'string' ? err.error.replace(/_/g, ' ').toLowerCase() : 'Error al reportar'); }
+    else { setReportMatch(null); setReportWinner(''); setScoreA(''); setScoreB(''); setError(null); fetchTournament(); }
   };
 
-  if (loading || !user) return null;
+  const STATUS_ES: Record<string, string> = { draft: 'Borrador', upcoming: 'Inscripción abierta', in_progress: 'En curso', finished: 'Finalizado', cancelled: 'Cancelado' };
+
+  if (loading) return <div className="container"><div className="loading">Cargando torneo…</div></div>;
+  if (!user) return <div className="container"><div className="loading">Redirigiendo al login…</div></div>;
   if (error && !tournament) {
     return (
       <div className="container">
@@ -65,7 +77,15 @@ export function ParticipantTournamentDetail() {
   if (!tournament) return <div className="container"><div className="loading">Cargando torneo...</div></div>;
 
   const rounds = [...new Set(tournament.matches.map(m => m.round))].sort((a, b) => a - b);
-  const roundLabels: Record<number, string> = { 1: 'RONDA 1', 2: 'SEMIFINAL', 3: 'FINAL' };
+  // ponytail: etiquetas relativas a la final (funciona con 2-16 jugadores).
+  const roundLabel = (round: number) => {
+    const max = Math.max(...rounds);
+    const fromEnd = max - round;
+    if (fromEnd === 0) return 'FINAL';
+    if (fromEnd === 1) return 'SEMIFINAL';
+    if (fromEnd === 2) return 'CUARTOS';
+    return `RONDA ${round}`;
+  };
 
   const isMyMatch = (m: { participantAId: number | null; participantBId: number | null }) => {
     return user.id === m.participantAId || user.id === m.participantBId;
@@ -86,10 +106,11 @@ export function ParticipantTournamentDetail() {
       <div className="card">
         <h2>{tournament.name}</h2>
         <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-          {tournament.gameTitleSnapshot} · {tournament.status} · {tournament.participants.length}/{tournament.maxParticipants}
+          {tournament.gameTitleSnapshot} · {STATUS_ES[tournament.status] || tournament.status} · {tournament.participants.length}/{tournament.maxParticipants}
         </p>
         {tournament.status === 'finished' && (() => {
-          const final = tournament.matches.filter(m => m.status === 'confirmed').sort((a,b) => b.round - a.round)[0];
+          const maxRound = Math.max(...tournament.matches.map(m => m.round));
+          const final = tournament.matches.find(m => m.round === maxRound && m.status === 'confirmed' && m.winner);
           return final?.winner ? (
             <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(0,255,136,0.1)', border: '1px solid var(--neon-green)', borderRadius: 'var(--radius)', textAlign: 'center' }}>
               <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.625rem', color: 'var(--neon-green)' }}>CAMPEÓN</span>
@@ -107,7 +128,7 @@ export function ParticipantTournamentDetail() {
             {rounds.map(round => (
               <div key={round} style={{ minWidth: '220px', display: 'flex', flexDirection: 'column' }}>
                 <h3 style={{ fontSize: '0.625rem', color: 'var(--neon-cyan)', marginBottom: '1rem', textAlign: 'center', fontFamily: 'var(--font-display)' }}>
-                  {roundLabels[round] || `RONDA ${round}`}
+                  {roundLabel(round)}
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, gap: '1rem' }}>
                   {tournament.matches.filter(m => m.round === round).map(m => (

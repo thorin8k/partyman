@@ -73,7 +73,8 @@ export function TournamentDetail() {
     fetchTournament();
   };
 
-  if (loading || !user || user.role !== 'admin') return null;
+  if (loading) return <div className="container"><div className="loading">Cargando…</div></div>;
+  if (!user || user.role !== 'admin') return <div className="container"><div className="loading">Redirigiendo…</div></div>;
   if (!tournament) return <div className="container"><div className="loading">Cargando torneo...</div></div>;
 
   const rounds = [...new Set(tournament.matches.map(m => m.round))].sort((a, b) => a - b);

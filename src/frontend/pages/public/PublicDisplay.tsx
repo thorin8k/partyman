@@ -16,7 +16,7 @@ interface PublicState {
   activities: Array<{ id: number; title: string; gameTitle: string | null; gameImage: string | null; startsAt: string; endsAt: string; capacity: number | null; notes: string | null; status: string; participantCount: number; participants: Array<{ id: number; displayName: string }> }>;
   tournaments: Tournament[];
   recentTournaments: Array<{ id: number; name: string; gameTitle: string; winner: string | null }>;
-  leaderboard: unknown[];
+  leaderboard: Array<{ participantId: number; displayName: string; avatarUrl: string | null; points: number; wins: number }>;
   activity: unknown[];
   generatedAt: string;
 }
@@ -102,7 +102,7 @@ export function PublicDisplay() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {error && (
             <span style={{ color: 'var(--error)', fontSize: '0.75rem', fontFamily: 'var(--font-display)' }}>
-              SIN CONEXIÓN
+              SIN CONEXIÓN · DATOS ANTERIORES
             </span>
           )}
           {lastUpdated && (
@@ -161,7 +161,7 @@ export function PublicDisplay() {
                         {a.displayName.charAt(0).toUpperCase()}
                       </div>
                     )}
-                    <span style={{ fontSize: '0.875rem' }}>{a.displayName}</span>
+                    <span style={{ fontSize: '1rem' }}>{a.displayName}</span>
                   </div>
                 ))}
               </div>
@@ -236,6 +236,52 @@ export function PublicDisplay() {
             </div>
           )}
 
+          {(() => {
+            const now = new Date().getTime();
+            const sorted = [...state.activities].sort((a, b) => +new Date(a.startsAt) - +new Date(b.startsAt));
+            const live = sorted.filter(a => +new Date(a.startsAt) <= now && now <= +new Date(a.endsAt));
+            const next = sorted.find(a => +new Date(a.startsAt) > now);
+            if (!live.length && !next) return null;
+            return (
+              <div className="card" style={{ gridColumn: '1 / -1', borderColor: 'var(--neon-green)' }}>
+                {live.length > 0 && (
+                  <div style={{ marginBottom: next ? '1rem' : 0 }}>
+                    <h2 style={{ marginBottom: '0.5rem' }}>AHORA</h2>
+                    {live.map(a => (
+                      <p key={a.id} style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>{a.title} <span style={{ fontSize: '1rem', color: 'var(--text-dim)', fontWeight: 'normal' }}>· hasta {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span></p>
+                    ))}
+                  </div>
+                )}
+                {next && (
+                  <div>
+                    <h2 style={{ marginBottom: '0.5rem' }}>SIGUIENTE</h2>
+                    <p style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>{next.title} <span style={{ fontSize: '1rem', color: 'var(--text-dim)', fontWeight: 'normal' }}>· {new Date(next.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span></p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {state.leaderboard && state.leaderboard.length > 0 && (
+            <div className="card">
+              <h2 style={{ marginBottom: '1rem' }}>RANKING</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {state.leaderboard.slice(0, 5).map((p, i) => (
+                  <div key={p.participantId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '1rem' }}>
+                    <span>#{i + 1} {p.displayName}</span>
+                    <span style={{ color: 'var(--neon-green)', fontFamily: 'var(--font-display)', fontSize: '0.625rem' }}>{p.points} PTS</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="card" style={{ borderColor: 'var(--neon-cyan)' }}>
+            <h2 style={{ marginBottom: '0.5rem' }}>ÚNETE</h2>
+            <p style={{ fontSize: '1.25rem', fontWeight: 'bold', wordBreak: 'break-all' }}>{typeof window !== 'undefined' ? window.location.origin : ''}</p>
+            <p style={{ fontSize: '1rem', color: 'var(--text-dim)' }}>Entra con Steam desde la red local</p>
+          </div>
+
           <div className="card">
             <h2 style={{ marginBottom: '1rem' }}>ACTIVIDADES</h2>
             {state.activities.length === 0 ? (
@@ -249,10 +295,10 @@ export function PublicDisplay() {
                     {a.gameImage && <img src={a.gameImage} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <h3 style={{ fontSize: '0.875rem' }}>{a.title}</h3>
+                        <h3 style={{ fontSize: '1rem' }}>{a.title}</h3>
                         {isLive && <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--neon-green)', border: '1px solid var(--neon-green)', padding: '0.125rem 0.375rem' }}>EN CURSO</span>}
                       </div>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', margin: '0.25rem 0 0' }}>
+                      <p style={{ fontSize: '1rem', color: 'var(--text-dim)', margin: '0.25rem 0 0' }}>
                         {a.gameTitle ? `${a.gameTitle} · ` : ''}
                         {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                         {a.capacity ? ` · ${a.participantCount || 0}/${a.capacity}` : ''}
