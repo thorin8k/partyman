@@ -19,6 +19,8 @@ export function AdminTournaments() {
   const [games, setGames] = useState<Game[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [proposals, setProposals] = useState<any[]>([]);
+  const [parties, setParties] = useState<any[]>([]);
+  const [partyId, setPartyId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', gameId: '', maxParticipants: '16' });
 
@@ -28,8 +30,19 @@ export function AdminTournaments() {
   }, [user, loading, navigate]);
 
   useEffect(() => {
-    if (user?.role === 'admin') { fetchTournaments(); fetchGames(); fetchProposals(); }
+    if (user?.role === 'admin') { fetchParties(); fetchGames(); fetchProposals(); }
   }, [user]);
+  useEffect(() => { if (user?.role === 'admin' && partyId) fetchTournaments(partyId); }, [partyId]);
+
+  const fetchParties = async () => {
+    const res = await fetch('/api/parties').catch(() => null);
+    if (res && res.ok) {
+      const list = (await res.json()).parties || [];
+      setParties(list);
+      const active = list.find((p: any) => p.status === 'active');
+      setPartyId(active ? String(active.id) : (list[0] ? String(list[0].id) : ''));
+    }
+  };
 
   const fetchProposals = async () => {
     const res = await fetch('/api/tournament-proposals');
@@ -39,14 +52,19 @@ export function AdminTournaments() {
   const handleApproveProposal = async (id: number) => {
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch(`/api/admin/tournament-proposals/${id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
-    if (res.ok) { fetchProposals(); fetchTournaments(); }
+    if (res.ok) { fetchProposals(); if (partyId) fetchTournaments(partyId); }
   };
 
-  const fetchTournaments = async () => {
-    const partyRes = await fetch('/api/parties/active');
-    const partyData = await partyRes.json();
-    if (!partyData.party) return;
-    const res = await fetch(`/api/tournaments`);
+  const handleRejectProposal = async (id: number) => {
+    if (!confirm('¿Rechazar esta propuesta?')) return;
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    await fetch(`/api/tournament-proposals/${id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } });
+    fetchProposals();
+  };
+
+  const fetchTournaments = async (pid?: string) => {
+    const id = pid || partyId;
+    const res = await fetch(id ? `/api/tournaments?partyId=${id}` : `/api/tournaments`);
     if (res.ok) setTournaments((await res.json()).tournaments);
   };
 
@@ -58,25 +76,25 @@ export function AdminTournaments() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const partyRes = await fetch('/api/parties/active');
-    const partyData = await partyRes.json();
-    if (!partyData.party) { setError('No hay party activa'); return; }
+    if (!partyId) { setError('Selecciona una party'); return; }
+    if (!form.gameId) { setError('Selecciona un juego'); return; }
 
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch('/api/admin/tournaments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
-      body: JSON.stringify({ partyId: partyData.party.id, gameId: parseInt(form.gameId), name: form.name, maxParticipants: parseInt(form.maxParticipants) }),
+      body: JSON.stringify({ partyId: parseInt(partyId), gameId: parseInt(form.gameId), name: form.name, maxParticipants: parseInt(form.maxParticipants) }),
     });
-    if (res.ok) { setShowForm(false); setForm({ name: '', gameId: '', maxParticipants: '16' }); fetchTournaments(); }
+    if (res.ok) { setShowForm(false); setForm({ name: '', gameId: '', maxParticipants: '16' }); fetchTournaments(partyId); }
     else { const err = await res.json(); setError(err.error || 'Error'); }
   };
 
   const handleAction = async (id: number, action: string) => {
+    if ((action === 'cancel' || action === 'delete') && !confirm(action === 'delete' ? '¿Eliminar este torneo?' : '¿Cancelar este torneo?')) return;
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch(`/api/admin/tournaments/${id}/${action}`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
     if (!res.ok) { const err = await res.json(); setError(err.error || 'Error'); }
-    fetchTournaments();
+    if (partyId) fetchTournaments(partyId);
   };
 
   if (loading || !user || user.role !== 'admin') return null;
@@ -96,6 +114,16 @@ export function AdminTournaments() {
 
       {error && <div className="alert error">{error}</div>}
 
+      <div className="card" style={{ borderColor: 'var(--neon-cyan)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <h2>PARTY</h2>
+          <select value={partyId} onChange={e => setPartyId(e.target.value)} style={{ minWidth: '200px', flex: '1 1 auto', maxWidth: '320px' }}>
+            <option value="">Seleccionar party…</option>
+            {parties.map((p: any) => <option key={p.id} value={String(p.id)}>{p.name} ({p.status})</option>)}
+          </select>
+        </div>
+      </div>
+
       {proposals.length > 0 && (
         <div className="card" style={{ borderColor: 'var(--neon-cyan)' }}>
           <h2>PROPUESTAS DE TORNEOS ({proposals.length})</h2>
@@ -106,7 +134,10 @@ export function AdminTournaments() {
                   <h3 style={{ fontSize: '0.875rem' }}>{p.name}</h3>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle} · Max {p.maxParticipants}</p>
                 </div>
-                <button onClick={() => handleApproveProposal(p.id)} className="primary" style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>APROBAR</button>
+                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                  <button onClick={() => handleApproveProposal(p.id)} className="primary" style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>APROBAR</button>
+                  <button onClick={() => handleRejectProposal(p.id)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>RECHAZAR</button>
+                </div>
               </div>
             ))}
           </div>

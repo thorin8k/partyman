@@ -101,11 +101,11 @@ export function AdminDashboard() {
         </div>
       )}
 
-      <div className="card" style={{ marginTop: '1rem', borderColor: 'var(--neon-cyan)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <details className="card" style={{ marginTop: '1rem', borderColor: 'var(--neon-cyan)' }} open={activityProposals.length + tournamentProposals.length > 0}>
+        <summary style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', minHeight: '44px' }}>
           <h2>PROPUESTAS PENDIENTES</h2>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.5rem', color: 'var(--neon-cyan)', border: '1px solid var(--neon-cyan)', padding: '0.25rem 0.5rem' }}>{activityProposals.length + tournamentProposals.length} TOTAL</span>
-        </div>
+        </summary>
         <div style={{ marginTop: '1rem' }}>
           <h3 style={{ fontSize: '0.75rem', color: 'var(--neon-cyan)', marginBottom: '0.5rem' }}>ACTIVIDADES ({activityProposals.length})</h3>
           {activityProposals.length === 0 ? <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Sin propuestas de actividades</p> : (
@@ -148,7 +148,7 @@ export function AdminDashboard() {
           <a href="/admin/planning" style={{ fontSize: '0.5rem' }}>GESTIÓN ACTIVIDADES →</a>
           <a href="/admin/tournaments" style={{ fontSize: '0.5rem' }}>GESTIÓN TORNEOS →</a>
         </div>}
-      </div>
+      </details>
 
       <div className="card" style={{ marginTop: '1rem' }}>
         <h2>ACCIONES RÁPIDAS</h2>

@@ -85,6 +85,9 @@ export function PartyDetail() {
   };
 
   const handleAction = async (action: string) => {
+    if (action === 'activate' && !confirm('¿Activar esta party? Solo puede haber una activa.')) return;
+    if (action === 'finish' && !confirm('¿Finalizar esta party? Se calculan puntos, se bloquea la edición y no se puede deshacer desde aquí.')) return;
+    if (action === 'archive' && !confirm('¿Archivar esta party?')) return;
     setActionLoading(true);
     setError(null);
     try {

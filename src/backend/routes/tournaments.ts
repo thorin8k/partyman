@@ -279,22 +279,32 @@ export function createTournamentRoutes(db: Database) {
     const ctx = requireParticipant(db, request);
     if (ctx instanceof Response) return ctx;
 
-    const activeParty = findActiveParty(db);
-    if (!activeParty) return Response.json({ tournaments: [] });
-
     // Admin sees all, participants see upcoming/in_progress
     const isAdmin = ctx.session.subjectType === "admin" || (() => {
       const p = db.query<{ role: string }, [number]>("SELECT role FROM participants WHERE id = ?").get(ctx.session.subjectId);
       return p?.role === "admin";
     })();
 
+    // ponytail: admin puede pedir ?partyId= para gestionar planificadas; participantes siempre van a la activa.
+    const url = new URL(request.url);
+    const partyIdParam = url.searchParams.get("partyId");
+    let partyId: number | null = null;
+    if (isAdmin && partyIdParam) {
+      partyId = parseInt(partyIdParam, 10);
+      if (isNaN(partyId) || partyId <= 0) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    } else {
+      const activeParty = findActiveParty(db);
+      if (!activeParty) return Response.json({ tournaments: [] });
+      partyId = activeParty.id;
+    }
+
     const tournaments = isAdmin
       ? db.query<TournamentRow, [number]>(
           "SELECT * FROM tournaments WHERE party_id = ? ORDER BY name"
-        ).all(activeParty.id)
+        ).all(partyId)
       : db.query<TournamentRow, [number]>(
           "SELECT * FROM tournaments WHERE party_id = ? AND status IN ('upcoming', 'in_progress') ORDER BY name"
-        ).all(activeParty.id);
+        ).all(partyId);
 
     // Enrich with participant counts and lists (map snake→camel)
     const enriched = tournaments.map(t => {

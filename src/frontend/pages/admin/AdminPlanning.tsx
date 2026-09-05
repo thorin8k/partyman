@@ -28,6 +28,8 @@ export function AdminPlanning() {
   const [showForm, setShowForm] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [proposals, setProposals] = useState<any[]>([]);
+  const [parties, setParties] = useState<any[]>([]);
+  const [partyId, setPartyId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ title: '', gameId: '', startsAt: '', endsAt: '', capacity: '', notes: '' });
 
@@ -36,7 +38,18 @@ export function AdminPlanning() {
     else if (!loading && user?.role !== 'admin') navigate('/');
   }, [user, loading, navigate]);
 
-  useEffect(() => { if (user?.role === 'admin') { fetchActivities(); fetchGames(); fetchProposals(); } }, [user]);
+  useEffect(() => { if (user?.role === 'admin') { fetchParties(); fetchGames(); fetchProposals(); } }, [user]);
+  useEffect(() => { if (user?.role === 'admin' && partyId) fetchActivities(partyId); }, [partyId]);
+
+  const fetchParties = async () => {
+    const res = await fetch('/api/parties').catch(() => null);
+    if (res && res.ok) {
+      const list = (await res.json()).parties || [];
+      setParties(list);
+      const active = list.find((p: any) => p.status === 'active');
+      setPartyId(active ? String(active.id) : (list[0] ? String(list[0].id) : ''));
+    }
+  };
 
   const fetchProposals = async () => {
     const res = await fetch('/api/activity-proposals');
@@ -46,14 +59,28 @@ export function AdminPlanning() {
   const handleApprove = async (id: number) => {
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch(`/api/admin/activity-proposals/${id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
-    if (res.ok) { fetchProposals(); fetchActivities(); }
+    if (res.ok) { fetchProposals(); if (partyId) fetchActivities(partyId); }
   };
 
-  const fetchActivities = async () => {
-    const partyRes = await fetch('/api/parties/active');
-    const partyData = await partyRes.json();
-    if (!partyData.party) return;
-    const res = await fetch(`/api/admin/parties/${partyData.party.id}/activities`);
+  const handleReject = async (id: number) => {
+    if (!confirm('¿Rechazar esta propuesta?')) return;
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    await fetch(`/api/activity-proposals/${id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } });
+    fetchProposals();
+  };
+
+  const fetchActivities = async (pid?: string) => {
+    const id = pid || partyId;
+    if (!id) {
+      const partyRes = await fetch('/api/parties/active');
+      const partyData = await partyRes.json();
+      if (!partyData.party) return;
+      setPartyId(String(partyData.party.id));
+      const res = await fetch(`/api/admin/parties/${partyData.party.id}/activities`);
+      if (res.ok) setActivities((await res.json()).activities);
+      return;
+    }
+    const res = await fetch(`/api/admin/parties/${id}/activities`);
     if (res.ok) setActivities((await res.json()).activities);
   };
 
@@ -93,19 +120,17 @@ export function AdminPlanning() {
       const res = await fetch(`/api/admin/activities/${editingActivity.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify(body),
       });
-      if (res.ok) { setShowForm(false); setEditingActivity(null); setForm({ title: '', gameId: '', startsAt: '', endsAt: '', capacity: '', notes: '' }); fetchActivities(); }
+      if (res.ok) { setShowForm(false); setEditingActivity(null); setForm({ title: '', gameId: '', startsAt: '', endsAt: '', capacity: '', notes: '' }); if (partyId) fetchActivities(partyId); }
       else { const err = await res.json(); setError(err.error || 'Error'); }
       return;
     }
 
-    const partyRes = await fetch('/api/parties/active');
-    const partyData = await partyRes.json();
-    if (!partyData.party) { setError('No hay party activa'); return; }
+    if (!partyId) { setError('Selecciona una party'); return; }
 
-    const res = await fetch(`/api/admin/parties/${partyData.party.id}/activities`, {
+    const res = await fetch(`/api/admin/parties/${partyId}/activities`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify(body),
     });
-    if (res.ok) { setShowForm(false); setForm({ title: '', gameId: '', startsAt: '', endsAt: '', capacity: '', notes: '' }); fetchActivities(); }
+    if (res.ok) { setShowForm(false); setForm({ title: '', gameId: '', startsAt: '', endsAt: '', capacity: '', notes: '' }); fetchActivities(partyId); }
     else { const err = await res.json(); setError(err.error || 'Error'); }
   };
 
@@ -113,7 +138,7 @@ export function AdminPlanning() {
     if (!confirm('¿Eliminar esta actividad?')) return;
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     await fetch(`/api/admin/activities/${id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } });
-    fetchActivities();
+    if (partyId) fetchActivities(partyId);
   };
 
   if (loading || !user || user.role !== 'admin') return null;
@@ -131,6 +156,16 @@ export function AdminPlanning() {
 
       {error && <div className="alert error">{error}</div>}
 
+      <div className="card" style={{ borderColor: 'var(--neon-cyan)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <h2>PARTY</h2>
+          <select value={partyId} onChange={e => setPartyId(e.target.value)} style={{ minWidth: '200px', flex: '1 1 auto', maxWidth: '320px' }}>
+            <option value="">Seleccionar party…</option>
+            {parties.map((p: any) => <option key={p.id} value={String(p.id)}>{p.name} ({p.status})</option>)}
+          </select>
+        </div>
+      </div>
+
       {proposals.length > 0 && (
         <div className="card" style={{ borderColor: 'var(--neon-cyan)' }}>
           <h2>PROPUESTAS DE ACTIVIDADES ({proposals.length})</h2>
@@ -141,7 +176,10 @@ export function AdminPlanning() {
                   <h3 style={{ fontSize: '0.875rem' }}>{p.title}</h3>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle || 'Sin juego'} · {new Date(p.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
                 </div>
-                <button onClick={() => handleApprove(p.id)} className="primary" style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>APROBAR</button>
+                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                  <button onClick={() => handleApprove(p.id)} className="primary" style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>APROBAR</button>
+                  <button onClick={() => handleReject(p.id)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>RECHAZAR</button>
+                </div>
               </div>
             ))}
           </div>
@@ -200,8 +238,8 @@ export function AdminPlanning() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '0.25rem' }}>
-                      <button onClick={() => handleEdit(a)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>EDITAR</button>
-                      <button className="danger" onClick={() => handleDelete(a.id)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>ELIMINAR</button>
+                      <button onClick={() => handleEdit(a)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>EDITAR</button>
+                      <button className="danger" onClick={() => handleDelete(a.id)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>ELIMINAR</button>
                     </div>
                   </div>
                   {a.participants && a.participants.length > 0 && (
