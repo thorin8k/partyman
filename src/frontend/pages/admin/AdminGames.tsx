@@ -36,10 +36,18 @@ export function AdminGames() {
     fetchGames();
   };
 
+  const [notice, setNotice] = useState<string | null>(null);
+
   const handleDelete = async (id: number) => {
     if (!confirm('¿Borrar este juego del catálogo?')) return;
+    setNotice(null);
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    await fetch(`/api/admin/games/${id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } });
+    const res = await fetch(`/api/admin/games/${id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }).catch(() => null);
+    if (res && res.ok) {
+      const body = await res.json().catch(() => ({}));
+      if (body.disabled) setNotice('Está en uso: desactivado en vez de borrar. Reactívalo con INACTIVO → ACTIVO.');
+      else setNotice('Juego borrado.');
+    }
     fetchGames();
   };
 
@@ -77,6 +85,7 @@ export function AdminGames() {
       </div>
 
       {error && <div className="alert error">{error}</div>}
+      {notice && <div className="alert success">{notice}</div>}
 
       <div className="card">
         <h2>JUEGOS ({games.length})</h2>

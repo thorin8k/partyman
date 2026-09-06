@@ -23,7 +23,7 @@ export function createAuthRoutes(db: Database) {
       POST: handleLogout,
     },
     "/api/auth/config": {
-      GET: (_req: Request) => Response.json({ steamEnabled: config.steam.enabled }),
+      GET: (_req: Request) => Response.json({ steamEnabled: config.steam.enabled, devTools: process.env.NODE_ENV !== "production" }),
     },
     "/api/me": {
       GET: handleGetMe,

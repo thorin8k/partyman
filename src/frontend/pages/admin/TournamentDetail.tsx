@@ -23,13 +23,14 @@ export function TournamentDetail() {
   const [reportWinner, setReportWinner] = useState<string>('');
   const [scoreA, setScoreA] = useState('');
   const [scoreB, setScoreB] = useState('');
+  const [devTools, setDevTools] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate('/admin/login');
     else if (!loading && user?.role !== 'admin') navigate('/');
   }, [user, loading, navigate]);
 
-  useEffect(() => { if (user?.role === 'admin' && tournamentId) fetchTournament(); }, [user, tournamentId]);
+  useEffect(() => { if (user?.role === 'admin' && tournamentId) { fetchTournament(); fetch('/api/auth/config').then(r => r.json()).then(c => setDevTools(!!c.devTools)).catch(() => {}); } }, [user, tournamentId]);
 
   const fetchTournament = async () => {
     const res = await fetch(`/api/tournaments/${tournamentId}`);
@@ -128,7 +129,7 @@ export function TournamentDetail() {
             ))}
           </div>
         )}
-        {tournament.status === 'draft' && (
+        {devTools && tournament.status === 'draft' && (
           <button onClick={handleFillBots} style={{ marginTop: '1rem', fontSize: '0.5rem', borderColor: 'var(--neon-magenta)', color: 'var(--neon-magenta)' }}>
             + RELLENAR CON BOTS (DEV)
           </button>

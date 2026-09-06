@@ -156,6 +156,6 @@ describe("authentication and attendance", () => {
 
   it("exposes auth configuration without leaking secrets", async () => {
     const res = await authRoutes["/api/auth/config"].GET(new Request("http://localhost:8400/api/auth/config"));
-    expect(await res.json()).toEqual({ steamEnabled: true });
+    expect(await res.json()).toEqual({ steamEnabled: true, devTools: true });
   });
 });

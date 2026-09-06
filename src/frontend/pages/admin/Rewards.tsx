@@ -4,174 +4,135 @@ import { useEffect, useState } from 'react';
 
 const touchBtn: React.CSSProperties = { minHeight: '44px', fontSize: '0.625rem', padding: '0.75rem 1rem' };
 
+// ponytail: etiquetas humanas para el ledger; el resto de códigos se muestra tal cual.
+const REASON_ES: Record<string, string> = {
+  party_participation: 'Participación',
+  tournament_win: 'Victoria',
+  tournament_runner_up: 'Subcampeón',
+  activity_participation: 'Actividad',
+  tournament_participation: 'Torneo jugado',
+};
+
+const reasonLabel = (l: any) => l.correction_of ? `Corrección (${l.reason})` : (REASON_ES[l.reason] || l.reason);
+const fmtDate = (iso: string) => { const d = new Date(iso); return isNaN(+d) ? '' : new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit' }).format(d); };
+const slug = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60) || 'logro';
+
 export function Rewards() {
   const { user, loading } = useAuth();
   const [, navigate] = useLocation();
   const [achievements, setAchievements] = useState<any[]>([]);
-  const [form, setForm] = useState({ code: '', name: '', description: '' });
   const [participants, setParticipants] = useState<any[]>([]);
-  const [participantQuery, setParticipantQuery] = useState('');
-  const [awardForm, setAwardForm] = useState({ participantId: '', achievementId: '', title: '', note: '' });
-  const [rules, setRules] = useState<any[]>([]);
-  const [history, setHistory] = useState<{ ledger: any[]; awards: any[] } | null>(null);
-  const [correction, setCorrection] = useState({ ledgerId: '', points: '', reason: '' });
-  const [editingAch, setEditingAch] = useState<any | null>(null);
+  const [query, setQuery] = useState('');
+  const [award, setAward] = useState({ participantId: '', achievementId: '', note: '' });
+  const [newAch, setNewAch] = useState('');
+  const [correctPid, setCorrectPid] = useState('');
+  const [ledger, setLedger] = useState<any[]>([]);
+  const [motive, setMotive] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => { if (!loading && !user) navigate('/admin/login'); else if (!loading && user?.role !== 'admin') navigate('/'); }, [user, loading, navigate]);
-  useEffect(() => { if (user?.role === 'admin') { fetchAchievements(); fetchRules(); fetchParticipants(); } }, [user]);
-  useEffect(() => { if (awardForm.participantId) fetchHistory(awardForm.participantId); else setHistory(null); }, [awardForm.participantId]);
+  useEffect(() => { if (user?.role === 'admin') { fetchAchievements(); fetchParticipants(); } }, [user]);
+  useEffect(() => {
+    if (!correctPid) { setLedger([]); return; }
+    fetch(`/api/participants/${correctPid}/history`).then(async r => { if (r.ok) setLedger((await r.json()).ledger || []); }).catch(() => {});
+  }, [correctPid]);
 
   const fetchAchievements = async () => { const r = await fetch('/api/admin/achievements'); if (r.ok) setAchievements((await r.json()).achievements); };
-  const fetchRules = async () => { const r = await fetch('/api/admin/point-rules'); if (r.ok) setRules((await r.json()).rules); };
   const fetchParticipants = async () => { const r = await fetch('/api/admin/participants'); if (r.ok) setParticipants((await r.json()).participants || []); };
-  const fetchHistory = async (pid: string) => {
-    const r = await fetch(`/api/participants/${pid}/history`).catch(() => null);
-    if (r && r.ok) setHistory(await r.json());
-    else setHistory(null);
-  };
-
   const showOk = (m: string) => { setMsg(m); setErr(null); };
   const showErr = (m: string) => { setErr(m); setMsg(null); };
+  const csrf = () => document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1] || '';
 
-  const handleCreateAchievement = async (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    const res = await fetch('/api/admin/achievements', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify(form) });
-    if (res.ok) { setForm({ code: '', name: '', description: '' }); fetchAchievements(); showOk('Logro creado.'); }
-    else { const d = await res.json().catch(() => ({})); showErr(d.error?.message || 'Error al crear el logro.'); }
-  };
-
-  const handleSaveAchievement = async () => {
-    if (!editingAch) return;
-    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    const res = await fetch(`/api/admin/achievements/${editingAch.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify({ name: editingAch.name, description: editingAch.description || null }) });
-    if (res.ok) { setEditingAch(null); fetchAchievements(); showOk('Logro actualizado.'); }
-    else showErr('Error al actualizar el logro.');
+    if (!newAch.trim()) return;
+    const res = await fetch('/api/admin/achievements', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf() }, body: JSON.stringify({ code: slug(newAch), name: newAch.trim() }) });
+    if (res.ok) { setNewAch(''); fetchAchievements(); showOk('Logro creado.'); }
+    else showErr('Ese logro ya existe o no es válido.');
   };
 
   const handleAward = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!awardForm.participantId) { showErr('Elige un participante.'); return; }
-    if (!awardForm.achievementId && !awardForm.title.trim()) { showErr('Indica un título o elige un logro.'); return; }
-    if (awardForm.note.length > 500) { showErr('La nota no puede superar 500 caracteres.'); return; }
-    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    const body: any = { participantId: parseInt(awardForm.participantId), note: awardForm.note || undefined };
-    if (awardForm.achievementId) body.achievementId = parseInt(awardForm.achievementId);
-    if (awardForm.title.trim()) body.title = awardForm.title.trim();
-    const res = await fetch('/api/admin/awards', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify(body) });
-    if (res.ok) { showOk('Premio otorgado.'); setAwardForm({ participantId: '', achievementId: '', title: '', note: '' }); setHistory(null); }
-    else { const d = await res.json().catch(() => ({})); showErr(d.error?.message || 'Error al otorgar el premio.'); }
+    if (!award.participantId || !award.achievementId) { showErr('Elige participante y logro.'); return; }
+    const ach = achievements.find(a => String(a.id) === award.achievementId);
+    const res = await fetch('/api/admin/awards', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf() }, body: JSON.stringify({ participantId: parseInt(award.participantId), achievementId: parseInt(award.achievementId), title: ach?.name, note: award.note || undefined }) });
+    if (res.ok) { showOk(`«${ach?.name}» otorgado.`); setAward({ participantId: '', achievementId: '', note: '' }); }
+    else showErr('No se pudo otorgar.');
   };
 
-  const handleToggleRule = async (r: any) => {
-    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    await fetch(`/api/admin/point-rules/${r.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify({ enabled: !r.enabled }) });
-    fetchRules();
+  const handleUndo = async (l: any) => {
+    if (!confirm(`¿Anular ${reasonLabel(l)} (${l.points} pts)?`)) return;
+    const res = await fetch('/api/admin/point-corrections', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf() }, body: JSON.stringify({ ledgerId: l.id, points: -l.points, reason: motive.trim() || 'Anulación por admin' }) });
+    if (res.ok) {
+      showOk('Puntos anulados.');
+      const r = await fetch(`/api/participants/${correctPid}/history`);
+      if (r.ok) setLedger((await r.json()).ledger || []);
+    } else showErr('No se pudo anular (quizá ya lo está).');
   };
 
-  const handleCorrection = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!correction.ledgerId) { showErr('Elige el apunte a corregir.'); return; }
-    const pts = parseInt(correction.points);
-    if (!Number.isInteger(pts) || pts === 0) { showErr('Los puntos deben ser un entero distinto de cero.'); return; }
-    if (!correction.reason.trim()) { showErr('Indica el motivo de la corrección.'); return; }
-    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    const res = await fetch('/api/admin/point-corrections', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify({ ledgerId: parseInt(correction.ledgerId), points: pts, reason: correction.reason.trim() }) });
-    if (res.ok) { showOk('Corrección aplicada.'); setCorrection({ ledgerId: '', points: '', reason: '' }); if (awardForm.participantId) fetchHistory(awardForm.participantId); }
-    else { const d = await res.json().catch(() => ({})); showErr(d.error?.message || d.error?.code || 'Error al corregir.'); }
-  };
+  if (loading) return <div className="container"><div className="loading">Cargando…</div></div>;
+  if (!user || user.role !== 'admin') return <div className="container"><div className="loading">Redirigiendo…</div></div>;
 
-  if (loading || !user || user.role !== 'admin') return <div className="container"><div className="loading">Cargando…</div></div>;
-
-  const filtered = participants.filter(p => !participantQuery.trim() || p.displayName.toLowerCase().includes(participantQuery.toLowerCase()));
+  const filtered = participants.filter(p => !query.trim() || p.displayName.toLowerCase().includes(query.toLowerCase()));
+  const correctedIds = new Set(ledger.filter(l => l.correction_of).map(l => l.correction_of));
+  const visible = ledger.filter(l => !l.correction_of);
 
   return (
     <div className="container">
-      <div className="header"><h1>RECOMPENSAS</h1><div className="nav"><a href="/admin">VOLVER →</a></div></div>
-      {msg && <div className="alert success">{msg} <button onClick={() => setMsg(null)} style={{ ...touchBtn, marginLeft: '0.5rem' }}>X</button></div>}
-      {err && <div className="alert error">{err} <button onClick={() => setErr(null)} style={{ ...touchBtn, marginLeft: '0.5rem' }}>X</button></div>}
+      <div className="header"><h1>PREMIOS</h1><div className="nav"><a href="/admin">VOLVER →</a></div></div>
+      {msg && <div className="alert success">{msg}</div>}
+      {err && <div className="alert error">{err}</div>}
+
       <div className="card">
-        <h2>REGLAS DE PUNTOS</h2>
-        <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Afectan solo a futuros premios. No recalculan historial.</p>
-        <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {rules.map((r: any) => (
-            <div key={r.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div><h3 style={{ fontSize: '0.875rem' }}>{r.label} ({r.code})</h3><p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{r.points} pts {r.enabled ? '· activo' : '· desactivado'}</p></div>
-              <button onClick={() => handleToggleRule(r)} style={{ ...touchBtn, borderColor: r.enabled ? 'var(--neon-green)' : 'var(--muted)', color: r.enabled ? 'var(--neon-green)' : 'var(--muted)' }}>{r.enabled ? 'DESACTIVAR' : 'ACTIVAR'}</button>
-            </div>
-          ))}
-          {rules.length === 0 && <p style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>Sin reglas</p>}
-        </div>
-      </div>
-      <div className="card" style={{ marginTop: '1rem' }}>
-        <h2>LOGROS</h2>
-        <form onSubmit={handleCreateAchievement} style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
-          <input placeholder="Código" value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} required style={{ flex: 1 }} />
-          <input placeholder="Nombre" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required style={{ flex: 1 }} />
-          <input placeholder="Descripción" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} style={{ flex: 1 }} />
-          <button type="submit" className="primary" style={touchBtn}>CREAR</button>
-        </form>
-        <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {achievements.map((a: any) => (
-            <div key={a.id} className="list-item">
-              {editingAch?.id === a.id ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <input value={editingAch.name} onChange={e => setEditingAch({ ...editingAch, name: e.target.value })} maxLength={120} />
-                  <input value={editingAch.description || ''} onChange={e => setEditingAch({ ...editingAch, description: e.target.value })} placeholder="Descripción" maxLength={500} />
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button className="primary" onClick={handleSaveAchievement} style={touchBtn}>GUARDAR</button>
-                    <button onClick={() => setEditingAch(null)} style={touchBtn}>CANCELAR</button>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div><h3>{a.name}</h3><p style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>{a.code} — {a.description}</p></div>
-                  <button onClick={() => setEditingAch({ id: a.id, name: a.name, description: a.description || '' })} style={touchBtn}>EDITAR</button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="card" style={{ marginTop: '1rem' }}>
-        <h2>OTORGAR PREMIO</h2>
+        <h2>OTORGAR LOGRO</h2>
         <form onSubmit={handleAward} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
-          <label>PARTICIPANTE *</label>
-          <input placeholder="Buscar participante…" value={participantQuery} onChange={e => setParticipantQuery(e.target.value)} />
-          <select value={awardForm.participantId} onChange={e => setAwardForm({ ...awardForm, participantId: e.target.value })} required>
-            <option value="">Seleccionar participante…</option>
+          <input placeholder="Buscar participante…" value={query} onChange={e => setQuery(e.target.value)} />
+          <select value={award.participantId} onChange={e => setAward({ ...award, participantId: e.target.value })} required style={{ minHeight: '44px' }}>
+            <option value="">Participante…</option>
             {filtered.map((p: any) => <option key={p.id} value={String(p.id)}>{p.displayName}</option>)}
           </select>
-          <label>LOGRO (OPCIONAL)</label>
-          <select value={awardForm.achievementId} onChange={e => setAwardForm({ ...awardForm, achievementId: e.target.value })}>
-            <option value="">Sin logro (título manual)…</option>
+          <select value={award.achievementId} onChange={e => setAward({ ...award, achievementId: e.target.value })} required style={{ minHeight: '44px' }}>
+            <option value="">Logro…</option>
             {achievements.map((a: any) => <option key={a.id} value={String(a.id)}>{a.name}</option>)}
           </select>
-          <input placeholder="Título (requerido si no hay logro)" value={awardForm.title} onChange={e => setAwardForm({ ...awardForm, title: e.target.value })} maxLength={120} />
-          <input placeholder="Nota (opcional, máx 500)" value={awardForm.note} onChange={e => setAwardForm({ ...awardForm, note: e.target.value })} maxLength={500} />
+          <input placeholder="Nota (opcional)" value={award.note} onChange={e => setAward({ ...award, note: e.target.value })} maxLength={500} />
           <button type="submit" className="primary" style={touchBtn}>OTORGAR</button>
         </form>
-        {history && history.awards.length > 0 && (
-          <div style={{ marginTop: '1rem' }}>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Premios recientes de este participante:</p>
-            {history.awards.slice(0, 5).map((a: any) => <div key={a.id} className="list-item"><h3 style={{ fontSize: '0.875rem' }}>{a.title}</h3><p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{a.note || ''}</p></div>)}
-          </div>
-        )}
       </div>
+
       <div className="card" style={{ marginTop: '1rem' }}>
-        <h2>CORRECCIÓN DE PUNTOS</h2>
-        <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Elige participante y apunte. Inserta entrada compensatoria, no borra el original.</p>
-        <form onSubmit={handleCorrection} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
-          <select value={correction.ledgerId} onChange={e => setCorrection({ ...correction, ledgerId: e.target.value })} required>
-            <option value="">{history ? `Apuntes de ${history.ledger.length} disponibles…` : 'Primero elige participante arriba…'}</option>
-            {(history?.ledger || []).map((l: any) => <option key={l.id} value={String(l.id)}>#{l.id} · {l.reason} · {l.points} pts · {String(l.created_at).slice(0, 10)}</option>)}
+        <h2>CORREGIR PUNTOS</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
+          <select value={correctPid} onChange={e => setCorrectPid(e.target.value)} style={{ minHeight: '44px' }}>
+            <option value="">Participante…</option>
+            {participants.map((p: any) => <option key={p.id} value={String(p.id)}>{p.displayName}</option>)}
           </select>
-          <input placeholder="Puntos (ej. -10)" type="number" value={correction.points} onChange={e => setCorrection({ ...correction, points: e.target.value })} required />
-          <input placeholder="Motivo" value={correction.reason} onChange={e => setCorrection({ ...correction, reason: e.target.value })} required maxLength={500} />
-          <button type="submit" className="primary" style={touchBtn}>CORREGIR</button>
+          {correctPid && visible.length === 0 && <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>Sin movimientos.</p>}
+          {visible.map((l: any) => (
+            <div key={l.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{reasonLabel(l)} <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>· {fmtDate(l.created_at)}</span></span>
+              <span style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <span style={{ color: l.points < 0 ? 'var(--error)' : 'var(--neon-green)' }}>{l.points > 0 ? `+${l.points}` : l.points}</span>
+                {correctedIds.has(l.id)
+                  ? <span style={{ fontSize: '0.625rem', color: 'var(--text-dim)' }}>ANULADO</span>
+                  : <button onClick={() => handleUndo(l)} style={{ ...touchBtn, borderColor: 'var(--error)', color: 'var(--error)' }}>ANULAR</button>}
+              </span>
+            </div>
+          ))}
+          {visible.length > 0 && <input placeholder="Motivo (opcional)" value={motive} onChange={e => setMotive(e.target.value)} maxLength={500} />}
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: '1rem' }}>
+        <h2>LOGROS ({achievements.length})</h2>
+        <form onSubmit={handleCreate} style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+          <input placeholder="Nombre del nuevo logro…" value={newAch} onChange={e => setNewAch(e.target.value)} maxLength={120} style={{ flex: 1 }} />
+          <button type="submit" className="primary" style={touchBtn}>CREAR</button>
         </form>
+        <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+          {achievements.map((a: any) => <span key={a.id} style={{ fontSize: '0.875rem', padding: '0.25rem 0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>{a.name}</span>)}
+        </div>
       </div>
     </div>
   );

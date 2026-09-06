@@ -2,8 +2,18 @@ import type { Database } from "bun:sqlite";
 
 export function seedPointRules(db: Database) {
   db.run("INSERT OR IGNORE INTO point_rules (code, label, points) VALUES ('party_participation', 'Participación en party', 1)");
+  db.run("INSERT OR IGNORE INTO point_rules (code, label, points) VALUES ('activity_participation', 'Participación en actividad', 1)");
+  db.run("INSERT OR IGNORE INTO point_rules (code, label, points) VALUES ('tournament_participation', 'Participación en torneo', 2)");
   db.run("INSERT OR IGNORE INTO point_rules (code, label, points) VALUES ('tournament_win', 'Victoria en torneo', 10)");
   db.run("INSERT OR IGNORE INTO point_rules (code, label, points) VALUES ('tournament_runner_up', 'Subcampeón', 5)");
+}
+
+// ponytail: unirse es la participación; salir nunca resta (ledger inmutable, idempotente).
+export function awardActivityJoin(db: Database, activityId: number, partyId: number, participantId: number) {
+  const rule = db.query<{ points: number }, [string]>("SELECT points FROM point_rules WHERE code = 'activity_participation' AND enabled = 1").get("activity_participation");
+  if (!rule) return;
+  (db as any).run("INSERT OR IGNORE INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points) VALUES (?, ?, 'activity', ?, 'activity_participation', ?)",
+    [participantId, partyId, `activity:${activityId}:${participantId}`, rule.points]);
 }
 
 export function scoreTournamentFinished(db: Database, tournamentId: number, partyId: number) {

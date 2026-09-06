@@ -5,6 +5,8 @@ import { useParams } from 'wouter';
 // ponytail: mapa central razón técnica -> ES humano.
 const REASON_ES: Record<string, string> = {
   party_participation: 'Participación en party',
+  activity_participation: 'Participación en actividad',
+  tournament_participation: 'Torneo jugado',
   tournament_win: 'Victoria en torneo',
   tournament_runner_up: 'Subcampeón de torneo',
 };
