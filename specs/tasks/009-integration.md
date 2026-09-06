@@ -50,7 +50,7 @@ Prove the independently developed domains work as one vertical slice and that th
 
 ### Release Checklist
 
-- Run `bun run format:check`, `bun run typecheck`, `bun test`, `bun run build`, `docker build`, container smoke test.
+- Run `bun run typecheck`, `bun test`, `bun run build`, `docker build`, container smoke test. (`format:check` is not wired to any formatter in this repo — no formatter dependency by design — so it is excluded until one is adopted.)
 - Smoke: `docker run --rm --network host -v "$PWD/data:/data" -v "$PWD/uploads:/uploads" -e PUBLIC_ORIGIN=http://127.0.0.1:8400 -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD_HASH="$TEST_ADMIN_PASSWORD_HASH" partyman`.
 - `GET /api/health` 200 when listening; `GET /api/ready` 200 only with SQLite + migrations + writable dirs, else 503.
 - No secrets, database files, or uploads in the image or in Git.

@@ -61,10 +61,10 @@ docker build -t partyman .
 # Ejecutar con volúmenes persistentes
 docker run -d \
   --name partyman \
-  -p 8400:8400 \
-  -v partyman-data:/data \
-  -v partyman-uploads:/uploads \
-  -e PUBLIC_ORIGIN=http://localhost:8400 \
+  --network host \
+  -v "$PWD/data:/data" \
+  -v "$PWD/uploads:/uploads" \
+  -e PUBLIC_ORIGIN=http://127.0.0.1:8400 \
   -e ADMIN_USERNAME=admin \
   -e ADMIN_PASSWORD_HASH=<bcrypt-hash> \
   partyman
@@ -86,7 +86,7 @@ docker run -d \
 |----------|-------------|---------|
 | `PORT` | Puerto del servidor | `8400` |
 | `HOST` | Host de escucha | `0.0.0.0` |
-| `DATABASE_PATH` | Ruta de la base de datos | `/data/partyman.db` |
+| `DATABASE_PATH` | Ruta de la base de datos | `/data/partyman.sqlite3` |
 | `UPLOADS_PATH` | Ruta de archivos subidos | `/uploads` |
 | `BACKUP_DIR` | Directorio de backups | `/data/backups` |
 | `STEAM_API_KEY` | API key de Steam (opcional) | - |
@@ -231,6 +231,24 @@ Cada tarea puede implementarse en paralelo siguiendo su especificación.
 - **Local**: Diseñado para red local
 - **Simple**: Una sola imagen Docker, una sola base de datos
 - **Seguro**: Validación en servidor, protección CSRF, sesiones con hash
+
+## Release checklist
+
+Antes de una party con gente real:
+
+```bash
+bun run typecheck && bun test && bun run build
+docker build -t partyman .
+docker run --rm --network host \
+  -v "$PWD/data:/data" -v "$PWD/uploads:/uploads" \
+  -e PUBLIC_ORIGIN=http://127.0.0.1:8400 \
+  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD_HASH="$ADMIN_PASSWORD_HASH" \
+  partyman
+```
+
+- `GET /api/health` → 200 con el proceso escuchando; `GET /api/ready` → 200 solo con SQLite, migraciones y directorios escribibles.
+- Gates manuales: login Steam con 2 cuentas reales, `/display` en proyector 16:9 y móvil, restore ensayado sobre una copia (ver `docs/operations.md`).
+- Nada de secretos, DBs ni uploads en la imagen ni en Git.
 
 ## Licencia
 
