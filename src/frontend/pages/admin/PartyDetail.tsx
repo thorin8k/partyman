@@ -301,14 +301,7 @@ export function PartyDetail() {
                     disabled={actionLoading}
                     style={{ width: '100%' }}
                   >
-                    {actionLoading ? 'PROCESANDO...' : 'CERRAR FIESTA (ASISTENTE)'}
-                  </button>
-                  <button
-                    onClick={() => handleAction('finish')}
-                    disabled={actionLoading}
-                    style={{ width: '100%', borderColor: 'var(--neon-orange)', color: 'var(--neon-orange)' }}
-                  >
-                    {actionLoading ? 'PROCESANDO...' : 'FINALIZAR PARTY'}
+                    {actionLoading ? 'PROCESANDO...' : 'CERRAR FIESTA'}
                   </button>
                   <button
                     onClick={() => setEditing(true)}
