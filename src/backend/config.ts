@@ -7,6 +7,8 @@ export interface Config {
   backupKeep: number;
   publicOrigin: string;
   cookieSecure: boolean;
+  wifiSsid: string | null;
+  wifiPassword: string | null;
   steam: {
     enabled: boolean;
     realm: string;
@@ -51,6 +53,8 @@ export function loadConfig(): Config {
     backupKeep: integer("BACKUP_KEEP", 20),
     publicOrigin,
     cookieSecure: process.env.COOKIE_SECURE === "true",
+    wifiSsid: optionalString("WIFI_SSID"),
+    wifiPassword: optionalString("WIFI_PASSWORD"),
     steam: {
       enabled: true,
       realm: publicOrigin,

@@ -1,4 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
+import { QrCode } from '../../components/QrCode';
+import { wifiQrString } from '../../components/qr';
 
 interface Tournament {
   id: number;
@@ -18,6 +20,7 @@ interface PublicState {
   recentTournaments: Array<{ id: number; name: string; gameTitle: string; winner: string | null }>;
   leaderboard: Array<{ participantId: number; displayName: string; avatarUrl: string | null; points: number; wins: number }>;
   activity: unknown[];
+  wifi: { ssid: string; password: string | null } | null;
   generatedAt: string;
 }
 
@@ -148,22 +151,29 @@ export function PublicDisplay() {
               <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>Sin asistentes aún</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '400px', overflow: 'auto' }}>
-                {state.attendees.map((a) => (
-                  <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    {a.avatarUrl ? (
-                      <img src={a.avatarUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
-                    ) : (
-                      <div style={{
-                        width: '32px', height: '32px', borderRadius: '50%',
-                        background: 'var(--neon-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--bg)', flexShrink: 0,
-                      }}>
-                        {a.displayName.charAt(0).toUpperCase()}
+                {(() => {
+                  const pts = new Map((state.leaderboard || []).map((p: any) => [p.participantId, p]));
+                  return [...state.attendees]
+                    .sort((a, b) => ((pts.get(b.id)?.points) || 0) - ((pts.get(a.id)?.points) || 0))
+                    .map((a, i) => (
+                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.625rem', color: i === 0 ? 'var(--neon-yellow)' : 'var(--text-dim)' }}>#{i + 1}</span>
+                        {a.avatarUrl ? (
+                          <img src={a.avatarUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
+                        ) : (
+                          <div style={{
+                            width: '32px', height: '32px', borderRadius: '50%',
+                            background: 'var(--neon-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--bg)', flexShrink: 0,
+                          }}>
+                            {a.displayName.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <span style={{ fontSize: '1rem', flex: 1 }}>{a.displayName}</span>
+                        <span style={{ color: 'var(--neon-green)', fontFamily: 'var(--font-display)', fontSize: '0.625rem' }}>{pts.get(a.id)?.points || 0} PTS</span>
                       </div>
-                    )}
-                    <span style={{ fontSize: '1rem' }}>{a.displayName}</span>
-                  </div>
-                ))}
+                    ));
+                })()}
               </div>
             )}
           </div>
@@ -262,24 +272,22 @@ export function PublicDisplay() {
             );
           })()}
 
-          {state.leaderboard && state.leaderboard.length > 0 && (
-            <div className="card">
-              <h2 style={{ marginBottom: '1rem' }}>RANKING</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {state.leaderboard.slice(0, 5).map((p, i) => (
-                  <div key={p.participantId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '1rem' }}>
-                    <span>#{i + 1} {p.displayName}</span>
-                    <span style={{ color: 'var(--neon-green)', fontFamily: 'var(--font-display)', fontSize: '0.625rem' }}>{p.points} PTS</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           <div className="card" style={{ borderColor: 'var(--neon-cyan)' }}>
             <h2 style={{ marginBottom: '0.5rem' }}>ÚNETE</h2>
-            <p style={{ fontSize: '1.25rem', fontWeight: 'bold', wordBreak: 'break-all' }}>{typeof window !== 'undefined' ? window.location.origin : ''}</p>
-            <p style={{ fontSize: '1rem', color: 'var(--text-dim)' }}>Entra con Steam desde la red local</p>
+            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              <div style={{ textAlign: 'center' }}>
+                {typeof window !== 'undefined' && <QrCode text={window.location.origin} size={160} />}
+                <p style={{ fontSize: '1rem', fontWeight: 'bold', wordBreak: 'break-all', marginTop: '0.5rem' }}>{typeof window !== 'undefined' ? window.location.origin : ''}</p>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>Escanea y entra con Steam</p>
+              </div>
+              {state.wifi && (
+                <div style={{ textAlign: 'center' }}>
+                  <QrCode text={wifiQrString(state.wifi.ssid, state.wifi.password)} size={160} />
+                  <p style={{ fontSize: '1rem', fontWeight: 'bold', marginTop: '0.5rem' }}>WiFi: {state.wifi.ssid}</p>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>Conecta a la wifi de la party</p>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="card">

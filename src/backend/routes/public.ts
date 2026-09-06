@@ -114,6 +114,8 @@ export function createPublicRoutes(db: Database) {
       ).all(party?.id ?? -1).map(r => ({ id: r.id, message: r.message, createdAt: r.created_at }));
     } catch { activity = []; }
 
+    // WiFi de la party para el QR (solo LAN; null si no está configurada).
+    const wifiSsid = process.env.WIFI_SSID;
     return Response.json({
       party: party
         ? { id: party.id, name: party.name, startsAt: party.starts_at, endsAt: party.ends_at, status: party.status }
@@ -125,6 +127,7 @@ export function createPublicRoutes(db: Database) {
       recentTournaments,
       leaderboard,
       activity,
+      wifi: wifiSsid ? { ssid: wifiSsid, password: process.env.WIFI_PASSWORD ?? null } : null,
       generatedAt: new Date().toISOString(),
     });
   }
