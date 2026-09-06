@@ -7,5 +7,7 @@ const db = new Database(config.databasePath, { create: true });
 // Enable WAL mode for better concurrent access
 db.exec("PRAGMA journal_mode = WAL");
 db.exec("PRAGMA foreign_keys = ON");
+// Bound worst-case lock waits; backup retries busy results with backoff (task 008).
+db.exec("PRAGMA busy_timeout = 5000");
 
 export default db;

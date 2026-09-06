@@ -4,6 +4,7 @@ export interface Config {
   databasePath: string;
   uploadsPath: string;
   backupDir: string;
+  backupKeep: number;
   publicOrigin: string;
   cookieSecure: boolean;
   steam: {
@@ -47,6 +48,7 @@ export function loadConfig(): Config {
     databasePath: process.env.DATABASE_PATH ?? "/data/partyman.sqlite3",
     uploadsPath: process.env.UPLOADS_PATH ?? "/uploads",
     backupDir: process.env.BACKUP_DIR ?? "/data/backups",
+    backupKeep: integer("BACKUP_KEEP", 20),
     publicOrigin,
     cookieSecure: process.env.COOKIE_SECURE === "true",
     steam: {

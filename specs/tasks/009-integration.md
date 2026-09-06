@@ -2,71 +2,63 @@
 
 ## Goal
 
-Join the independently developed domains into one coherent vertical slice and verify that the application is deployable and usable during a real party.
+Prove the independently developed domains work as one vertical slice and that the app is deployable for a real party. Verification only: no refactors, no new features.
 
 ## Scope
 
-- Register all domain routes and migrations through the bootstrap extension points.
-- Reconcile shared DTOs and public-state aggregation.
-- Remove temporary fixtures and adapters used for parallel development.
-- Verify the complete flow: create party, activate party, Steam login, attendance, schedule, tournament, result, points, public screen, finish party, and history.
-- Verify Docker volume layout, host networking documentation, backup/restore, and production build.
-- Add end-to-end tests for the cross-domain flow.
+- Cross-domain end-to-end tests over the real route handlers and a temporary SQLite database.
+- `docs/operations.md` (env vars, volumes, `--network host`, backup/restore, health checks).
+- Release checklist in `README.md` (or docs) and a container smoke test.
+- Remove any leftover temporary fixtures/adapters from parallel development.
+- Explicitly OUT of scope: router refactors. `src/backend.ts` already wires all domains directly through Bun `serve()` `routes` and that stays as is. There is no `createApp`/`register-all` abstraction in this codebase and this task must not introduce one.
 
 ## Requirements
 
 - Integration must not add a second server, database, frontend build system, or runtime process.
-- Domain modules retain ownership of validation and persistence; integration only composes them.
-- Migrations run from a clean database in deterministic order.
-- Public state remains available when there is no active party and when optional Steam settings are absent.
-- The application can be started with a documented `docker run --network host` command using mounted data directories.
+- Domain modules retain ownership of validation and persistence; tests compose them through their existing route factories.
+- Migrations run from a clean database in deterministic filename order via the existing runner (`src/backend/db/migrate.ts`). `migrations/009_integration.sql` stays empty unless a failing cross-domain index/FK requirement is demonstrated.
+- Public state remains available with no active party and without `STEAM_API_KEY`.
+- Steam OpenID is external and is NOT exercised in automated tests. Tests authenticate participants at the service level (`upsertParticipant` + `joinActiveParty`); the manual Steam dry-run (two real logins on the LAN) is a release gate below, not an automated test.
 - All error responses preserve the shared JSON error shape.
 
 ## Acceptance Criteria
 
-- A clean checkout passes formatting, type checks, focused tests, end-to-end tests, and the production build.
-- A test creates and activates a party, authenticates two participants using Steam fixtures, and confirms their membership.
-- A tournament can be created, completed, scored, and rendered on the public display.
-- Finishing the party makes its history visible and prevents accidental edits to finalized results.
-- A generated backup can be restored into a fresh database and retains the party history.
-- The release checklist documents environment variables, persistent volumes, health checks, and host-network deployment.
+- Clean checkout passes `format:check`, `typecheck`, `bun test`, and production `build`.
+- E2E test: provision admin → create + activate party → two participants joined → game + activity + tournament created/started → matches reported/confirmed → tournament `finished`, leaderboard reflects winner points, `/api/public/state` (no cookies) shows tournament + ranking.
+- Finish party: participation points awarded once per member, history visible, finalized party rejects edits.
+- Backup from `008` downloads, passes `integrity_check`, and opens in a fresh SQLite connection with party history intact.
+- Release checklist documents env vars, `/data` + `/uploads` mounts, `BACKUP_DIR`, health checks, and `--network host` deployment.
+- Manual gates (not automated): Steam login dry-run with two accounts, projector check of `/display` at 16:9 and mobile, restore rehearsal on a copy.
 
 ## Implementation
 
 ### Files
 
-- `src/server/routes/register-all.ts`, `src/server/services/index.ts`
-- `src/shared/contracts/index.ts`
-- `migrations/009_integration.sql`
-- `tests/integration/party-flow.test.ts`, `tests/integration/public-display.test.ts`
-- `docs/operations.md`, `README.md`
-
-### Integration Rules
-
-- Bootstrap exports `createApp({ db, config, services })` and accepts a route-registration function. Each domain exports `registerRoutes(router, services)`; `register-all.ts` calls each exactly once. Do not modify bootstrap's router implementation.
-- Bootstrap discovers migration files by filename. Task 009 must not manually execute migrations or reorder them.
-- Do not add cross-domain SQL tables in `009_integration.sql` unless a failing foreign-key/index requirement is demonstrated. Prefer service validation and indexes in the owning migration.
-- The application service container passes `db`, `clock`, auth guards, and domain services explicitly. No domain imports another domain's repository directly.
+- `tests/integration/party-flow.test.ts` (full flow above)
+- `tests/integration/public-display.test.ts` (redaction, empty party, no-Steamp-key mode)
+- `migrations/009_integration.sql` (empty unless proven otherwise)
+- `docs/operations.md` (new), `README.md` (release checklist section)
 
 ### End-to-end Flow
 
-1. Provision an admin from test configuration and create a planned party.
-2. Activate it; use an injected Steam verifier to log in two participants and assert one membership per participant.
-3. Create a game, create an activity, and create/start a tournament with those participants.
-4. Report and confirm matches, assert the final tournament and leaderboard, then fetch `/api/public/state` without cookies.
-5. Finish the party, assert history and one participation award per member, create/download a backup, and open it with a new SQLite connection.
+1. Provision admin from test config; create a planned party; activate it.
+2. `upsertParticipant` × 2 + `joinActiveParty`; assert one membership each.
+3. Create game, activity, tournament with those participants; start tournament.
+4. Report/confirm matches through `POST /api/matches/:id/report` + `POST /api/admin/matches/:id/confirm`; assert `finished`, leaderboard, and cookie-less `/api/public/state`.
+5. Finish party; assert one `party_participation` row per member and visible history.
+6. Create/download backup (008); open with a new SQLite connection; assert history present.
 
 ### Release Checklist
 
-- Run `bun run format:check`, `bun run typecheck`, `bun test`, `bun run build`, `docker build`, and a container smoke test.
-- Smoke test with `docker run --rm --network host -v "$PWD/data:/data" -v "$PWD/uploads:/uploads" -e PUBLIC_ORIGIN=http://127.0.0.1:8400 -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD_HASH="$TEST_ADMIN_PASSWORD_HASH" partyman`.
-- Verify `GET /api/health` is 200 once the process is listening and `GET /api/ready` is 503 until SQLite, migrations, and writable directories are ready; the production process may start listening only after migrations, but must still expose both endpoints consistently.
-- Verify no secrets, database files, or uploads are copied into the image or committed to Git.
+- Run `bun run format:check`, `bun run typecheck`, `bun test`, `bun run build`, `docker build`, container smoke test.
+- Smoke: `docker run --rm --network host -v "$PWD/data:/data" -v "$PWD/uploads:/uploads" -e PUBLIC_ORIGIN=http://127.0.0.1:8400 -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD_HASH="$TEST_ADMIN_PASSWORD_HASH" partyman`.
+- `GET /api/health` 200 when listening; `GET /api/ready` 200 only with SQLite + migrations + writable dirs, else 503.
+- No secrets, database files, or uploads in the image or in Git.
 
 ## Ownership and Parallelism
 
-Owns only integration wiring, cross-domain tests, release checks, and documentation. It must not redesign domain schemas or move ownership from tasks `002`-`008`.
+Owns only cross-domain tests, release checks, and documentation. Must not redesign domain schemas or move ownership from tasks `002`-`008`/`010`.
 
 ## Dependencies
 
-Requires `001`-`008`. This is the final serial task after parallel implementation and review.
+Requires `001`-`008` and `010`. Final serial task after implementation and review.

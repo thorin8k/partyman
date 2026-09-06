@@ -1,0 +1,3 @@
+-- Task 008: Backup and Operational Safety
+-- Intentionally empty: backups are files in BACKUP_DIR, not rows.
+-- The server only lists files matching its own generated naming scheme.

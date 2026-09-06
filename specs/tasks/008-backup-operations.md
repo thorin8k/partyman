@@ -34,9 +34,11 @@ Make the single-container application easy to operate and recover on the garage 
 
 ### Files
 
-- `src/server/ops/backup.ts`, `src/server/ops/readiness.ts`
-- `src/server/routes/operations.ts`
-- `src/client/pages/admin/Backups.tsx`
+- `src/backend/ops/backup.ts`
+- `src/backend/routes/operations.ts`
+- `src/backend/routes/health.ts` (extend `/api/ready`: migrations + writable dirs)
+- `src/backend/db/db.conn.ts` (`PRAGMA busy_timeout`), `src/backend/config.ts` (`BACKUP_KEEP`)
+- `src/frontend/pages/admin/Backups.tsx`
 - `docs/operations.md`
 - `tests/backup.test.ts`, `tests/readiness.test.ts`
 - `migrations/008_operations.sql`

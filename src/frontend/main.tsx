@@ -17,6 +17,7 @@ import { ParticipantTournamentDetail } from './pages/tournaments/TournamentDetai
 import { Leaderboard } from './pages/history/Leaderboard';
 import { Rewards } from './pages/admin/Rewards';
 import { ParticipantHistory } from './pages/history/ParticipantHistory';
+import { Backups } from './pages/admin/Backups';
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
           <Route path="/admin/tournaments/:id" component={TournamentDetail} />
           <Route path="/admin/tournaments" component={AdminTournaments} />
           <Route path="/admin/users" component={AdminUsers} />
+          <Route path="/admin/backups" component={Backups} />
           <Route path="/admin/parties/:id" component={PartyDetail} />
           <Route path="/admin" component={AdminDashboard} />
 
