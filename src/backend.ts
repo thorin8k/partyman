@@ -2,6 +2,7 @@ import { serve } from "bun";
 import index from "./index.html";
 import { executeMigrations } from "./backend/db/migrate";
 import { ensureProvisionedAdmin } from "./backend/auth/password";
+import { seedPointRules } from "./backend/scoring/service";
 import db from "./backend/db/db.conn";
 import { createHealthRoutes } from "./backend/routes/health";
 import { createAuthRoutes } from "./backend/routes/auth";
@@ -18,6 +19,7 @@ import { createScoringRoutes } from "./backend/routes/scoring";
 import serveStatic from "serve-static-bun";
 
 await executeMigrations();
+seedPointRules(db);
 ensureProvisionedAdmin(db, process.env.ADMIN_USERNAME ?? null, process.env.ADMIN_PASSWORD_HASH ?? null);
 console.log("Database migrations complete.");
 
