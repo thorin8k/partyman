@@ -19,6 +19,7 @@ import { createTournamentRoutes } from "./backend/routes/tournaments";
 import { createActivityTournamentProposalRoutes } from "./backend/routes/activity-tournament-proposals";
 import { createScoringRoutes } from "./backend/routes/scoring";
 import { createOperationsRoutes } from "./backend/routes/operations";
+import { hardenRoutes } from "./backend/middleware/harden";
 import serveStatic from "serve-static-bun";
 
 const config = loadConfig();
@@ -47,20 +48,22 @@ const operationsRoutes = createOperationsRoutes(db, { backupDir: config.backupDi
 
 const server = serve({
   routes: {
-    // API Routes
-    ...healthRoutes,
-    ...authRoutes,
-    ...participantRoutes,
-    ...partyRoutes,
-    ...publicRoutes,
-    ...gamesRoutes,
-    ...activitiesRoutes,
-    ...proposalsRoutes,
-    ...gamesSearchRoutes,
-    ...tournamentRoutes,
-    ...proposalRoutes2,
-    ...scoringRoutes,
-    ...operationsRoutes,
+    // API Routes (hardened: body limit + rate limit + security headers)
+    ...hardenRoutes({
+      ...healthRoutes,
+      ...authRoutes,
+      ...participantRoutes,
+      ...partyRoutes,
+      ...publicRoutes,
+      ...gamesRoutes,
+      ...activitiesRoutes,
+      ...proposalsRoutes,
+      ...gamesSearchRoutes,
+      ...tournamentRoutes,
+      ...proposalRoutes2,
+      ...scoringRoutes,
+      ...operationsRoutes,
+    }),
 
     // Static assets
     "/public/:filename{.+\\.(png|ico|txt|woff2|jpg|css)}": {
@@ -76,5 +79,15 @@ const server = serve({
     console: true,
   },
 });
+
+// Graceful shutdown: stop listening, then close SQLite cleanly.
+function shutdown(signal: string) {
+  console.log(`[ops] ${signal} → shutting down`);
+  server.stop();
+  db.close();
+  process.exit(0);
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 console.log(`🚀 Partyman running at ${server.url}`);

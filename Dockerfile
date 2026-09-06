@@ -15,7 +15,9 @@ RUN bun compile
 FROM oven/bun:1-slim
 WORKDIR /usr/src/app
 COPY --from=base /usr/src/app/dist ./
-RUN mkdir -p /data /uploads /backups
+RUN mkdir -p /data /uploads /data/backups
 
 EXPOSE 8400
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD bun -e "if(await fetch('http://127.0.0.1:'+(process.env.PORT||'8400')+'/api/health').then(r=>r.ok).catch(()=>false))process.exit(0);else process.exit(1)"
 CMD ["bun", "backend.js"]

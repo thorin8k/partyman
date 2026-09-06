@@ -31,8 +31,15 @@ docker run --rm --network host \
 
 ## Health
 
-- `GET /api/health` → `{ "ok": true }` when the process is listening.
+- `GET /api/health` → `{ "ok": true }` when the process is listening (also the Docker `HEALTHCHECK`).
 - `GET /api/ready` → `{ "ok": true, "migrations": true }` only with SQLite open, migrations applied, and data/upload dirs writable; otherwise HTTP 503 `{ "error": { "code": "NOT_READY" } }`.
+
+## Hardening
+
+- Responses carry `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, and a restrictive CSP (shell additionally via meta tags).
+- Rate limits: admin login 5/min/IP, Steam entry 10/min/IP, game proposals 10/min/session — excess returns 429 `{ "error": { "code": "RATE_LIMITED" } }`.
+- JSON bodies over 256 KiB are rejected with 413.
+- SIGTERM/SIGINT stop the server and close SQLite cleanly; logs go to stdout (`docker logs`).
 
 ## Backups
 

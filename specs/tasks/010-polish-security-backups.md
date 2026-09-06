@@ -25,7 +25,7 @@ Backups are NOT in scope here: task `008` owns backup endpoints, retention, and 
 
 ## Acceptance Criteria
 
-- Security headers present on API, HTML, and asset responses.
+- Security headers present on all API and asset responses; the SPA shell (served by the Bun HTML runtime, not wrappable via `routes`) carries CSP + referrer + `frame-ancestors 'none'` declaratively via meta tags in `src/index.html`.
 - Rate limiting rejects excess `POST /auth/admin/login` (5/min/IP), Steam entry (10/min/IP), and `POST /api/parties/active/proposals` (10/min/session) with 429.
 - JSON bodies over 256 KiB are rejected.
 - Server shuts down gracefully on SIGTERM (no WAL corruption; restart passes `/api/ready`).
