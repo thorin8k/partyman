@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { PartyService } from "../parties/service";
 import { requireAdmin } from "../auth/guards";
+import { createBackup } from "../ops/backup";
 import { setParticipantRole, getAllParticipants, type ParticipantRole } from "../auth/participants";
 import type { CreatePartyInput, UpdatePartyInput } from "../../shared/contracts/parties";
 
@@ -41,6 +42,9 @@ export function createPartyRoutes(db: Database) {
     },
     "/api/admin/parties/:id/delete": {
       POST: handleDeleteParty,
+    },
+    "/api/admin/parties/:id/close": {
+      POST: handleCloseParty,
     },
     "/api/admin/audit-log": {
       GET: handleGetAuditLog,
@@ -174,6 +178,59 @@ export function createPartyRoutes(db: Database) {
       console.log("[parties] POST /api/admin/parties/" + id + "/archive → error:", err);
       return handleError(err);
     }
+  }
+
+  // Task 014: one-click close — cancel unstarted, finish (+score), backup. Resumable via step states.
+  async function handleCloseParty(request: Request): Promise<Response> {
+    const auth = requireAdmin(db, request);
+    if (auth instanceof Response) return auth;
+    const id = extractId(request.url, "/api/admin/parties/");
+    if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+
+    const steps: Array<{ key: string; status: "done" | "blocked" | "failed"; detail: string }> = [];
+    try {
+      const pending = db.query<{ id: number; name: string }, [number]>(
+        "SELECT id, name FROM tournaments WHERE party_id = ? AND status IN ('draft', 'upcoming')"
+      ).all(id);
+      for (const t of pending) {
+        db.run("UPDATE tournaments SET status = 'cancelled', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [t.id]);
+      }
+      steps.push({ key: "cancel", status: "done", detail: `${pending.length} torneos sin empezar cancelados` });
+
+      const live = db.query<{ name: string }, [number]>(
+        "SELECT name FROM tournaments WHERE party_id = ? AND status = 'in_progress'"
+      ).all(id);
+      if (live.length > 0) {
+        steps.push({ key: "finish", status: "blocked", detail: `En curso: ${live.map(t => t.name).join(", ")}` });
+        return Response.json({ error: "WIZARD_BLOCKED", steps }, { status: 409 });
+      }
+
+      try {
+        service.finish(id, auth.session.subjectId);
+        steps.push({ key: "finish", status: "done", detail: "Party finalizada y puntos asignados" });
+      } catch (err) {
+        return handleErrorWithSteps(err, steps);
+      }
+
+      try {
+        const meta = await createBackup(db, process.env.BACKUP_DIR ?? "/data/backups");
+        steps.push({ key: "backup", status: "done", detail: `Copia ${meta.filename} verificada` });
+      } catch {
+        steps.push({ key: "backup", status: "failed", detail: "No se pudo crear la copia; reintenta" });
+      }
+      console.log("[parties] POST /api/admin/parties/" + id + "/close → wizard done");
+      return Response.json({ ok: true, steps });
+    } catch (err) {
+      return handleErrorWithSteps(err, steps);
+    }
+  }
+
+  function handleErrorWithSteps(err: any, steps: Array<{ key: string; status: string; detail: string }>): Response {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message === "PARTY_NOT_FOUND") return Response.json({ error: "PARTY_NOT_FOUND", steps }, { status: 404 });
+    if (message === "UNFINISHED_TOURNAMENTS") return Response.json({ error: "WIZARD_BLOCKED", steps }, { status: 409 });
+    if (message === "INVALID_STATUS_TRANSITION") return Response.json({ error: "INVALID_STATUS_TRANSITION", steps }, { status: 400 });
+    return Response.json({ error: "INTERNAL_ERROR", steps }, { status: 500 });
   }
 
   async function handleDeleteParty(request: Request): Promise<Response> {

@@ -12,8 +12,11 @@ function makeTempDb(): { db: Database; close: () => void } {
   db.exec("CREATE TABLE participants (id INTEGER PRIMARY KEY AUTOINCREMENT, steam_id TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL, avatar_url TEXT, role TEXT NOT NULL DEFAULT 'participant')");
   db.exec("CREATE TABLE parties (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, starts_at TEXT NOT NULL, ends_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'planned')");
   db.exec("CREATE TABLE party_memberships (party_id INTEGER NOT NULL, participant_id INTEGER NOT NULL, display_name_snapshot TEXT NOT NULL, PRIMARY KEY (party_id, participant_id))");
-  db.exec("CREATE TABLE tournaments (id INTEGER PRIMARY KEY AUTOINCREMENT, party_id INTEGER NOT NULL, name TEXT NOT NULL)");
+  db.exec("CREATE TABLE tournaments (id INTEGER PRIMARY KEY AUTOINCREMENT, party_id INTEGER NOT NULL, name TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft')");
+  db.exec("CREATE TABLE tournament_participants (tournament_id INTEGER NOT NULL, participant_id INTEGER NOT NULL, display_name_snapshot TEXT NOT NULL DEFAULT '', seed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(tournament_id, participant_id))");
   db.exec("CREATE TABLE matches (id INTEGER PRIMARY KEY AUTOINCREMENT, tournament_id INTEGER NOT NULL, round INTEGER NOT NULL, position INTEGER NOT NULL DEFAULT 0, participant_a_id INTEGER, participant_b_id INTEGER, winner_id INTEGER, status TEXT NOT NULL DEFAULT 'pending')");
+  db.exec("CREATE TABLE activities (id INTEGER PRIMARY KEY AUTOINCREMENT, party_id INTEGER NOT NULL, title TEXT NOT NULL DEFAULT '')");
+  db.exec("CREATE TABLE activity_participants (activity_id INTEGER NOT NULL, participant_id INTEGER NOT NULL, PRIMARY KEY(activity_id, participant_id))");
   db.exec("CREATE TABLE point_rules (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, label TEXT NOT NULL, points INTEGER NOT NULL, enabled INTEGER NOT NULL DEFAULT 1)");
   db.exec("CREATE TABLE point_ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, participant_id INTEGER NOT NULL, party_id INTEGER, source_type TEXT NOT NULL, source_key TEXT NOT NULL, reason TEXT NOT NULL, points INTEGER NOT NULL, correction_of INTEGER, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))");
   db.exec("CREATE UNIQUE INDEX point_ledger_once ON point_ledger(source_type, source_key, participant_id, reason) WHERE correction_of IS NULL");

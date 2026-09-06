@@ -26,6 +26,7 @@ export function PartyDetail() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [wizardSteps, setWizardSteps] = useState<Array<{ key: string; status: string; detail: string }> | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -124,6 +125,25 @@ export function PartyDetail() {
   const handleDelete = async () => {
     if (!confirm('¿Estás seguro de que quieres eliminar esta party? Esta acción no se puede deshacer.')) return;
     await handleAction('delete');
+  };
+
+  const handleCloseWizard = async () => {
+    if (!confirm('¿Cerrar la fiesta? Cancela lo no empezado, puntúa, finaliza y crea copia.')) return;
+    setActionLoading(true);
+    setError(null);
+    setWizardSteps(null);
+    try {
+      const csrfCookie = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+      const res = await fetch(`/api/admin/parties/${partyId}/close`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrfCookie || '' } });
+      const data = await res.json().catch(() => ({}));
+      if (data.steps) setWizardSteps(data.steps);
+      if (res.ok) fetchParty();
+      else setError(data.error === 'WIZARD_BLOCKED' ? 'Hay torneos en curso: termínalos o cancélalos primero.' : (data.error || 'Error al cerrar'));
+    } catch {
+      setError('Error de conexión');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   if (loading) {
@@ -276,6 +296,14 @@ export function PartyDetail() {
               {party.status === 'active' && (
                 <>
                   <button
+                    className="primary"
+                    onClick={handleCloseWizard}
+                    disabled={actionLoading}
+                    style={{ width: '100%' }}
+                  >
+                    {actionLoading ? 'PROCESANDO...' : 'CERRAR FIESTA (ASISTENTE)'}
+                  </button>
+                  <button
                     onClick={() => handleAction('finish')}
                     disabled={actionLoading}
                     style={{ width: '100%', borderColor: 'var(--neon-orange)', color: 'var(--neon-orange)' }}
@@ -288,6 +316,15 @@ export function PartyDetail() {
                   >
                     EDITAR PARTY
                   </button>
+                  {wizardSteps && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.5rem' }}>
+                      {wizardSteps.map(s => (
+                        <p key={s.key} style={{ fontSize: '0.75rem', color: s.status === 'done' ? 'var(--neon-green)' : s.status === 'blocked' ? 'var(--neon-orange)' : 'var(--error)' }}>
+                          {s.status === 'done' ? '✓' : s.status === 'blocked' ? '■' : '✗'} {s.detail}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
 

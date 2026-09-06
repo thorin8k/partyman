@@ -9,7 +9,7 @@ interface Tournament {
   status: string;
   maxParticipants: number;
   participants: Array<{ id: number; displayName: string; seed: number }>;
-  matches: Array<{ id: number; round: number; position: number; participantAId: number | null; participantBId: number | null; participantA: string | null; participantB: string | null; winnerId: number | null; winner: string | null; score: { a: number; b: number } | null; status: string }>;
+  matches: Array<{ id: number; round: number; position: number; participantAId: number | null; participantBId: number | null; participantA: string | null; participantB: string | null; winnerId: number | null; winner: string | null; score: { a: number; b: number } | null; status: string; disputed?: boolean; reportCount?: number; disputeVotes?: Array<{ participantId: number; displayName: string; winnerId: number }> }>;
 }
 
 export function ParticipantTournamentDetail() {
@@ -91,6 +91,21 @@ export function ParticipantTournamentDetail() {
     return user.id === m.participantAId || user.id === m.participantBId;
   };
 
+  const isOutsider = (m: { participantAId: number | null; participantBId: number | null }) => {
+    return !isMyMatch(m) && tournament?.participants.some(p => p.id === user.id);
+  };
+
+  const handleDisputeVote = async (matchId: number, winnerId: number) => {
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    const res = await fetch(`/api/disputes/${matchId}/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
+      body: JSON.stringify({ winnerId }),
+    });
+    if (!res.ok) { const err = await res.json().catch(() => ({})); setError(typeof err.error === 'string' ? err.error : 'Error al votar'); }
+    else fetchTournament();
+  };
+
   return (
     <div className="container">
       <div className="header">
@@ -153,11 +168,20 @@ export function ParticipantTournamentDetail() {
                         </span>
                         {m.score && <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 'bold' }}>{m.score.b}</span>}
                       </div>
-                      {m.status === 'pending' && isMyMatch(m) && (
+                      {(m.status === 'pending' || m.status === 'reported') && isMyMatch(m) && (
                         <button onClick={() => setReportMatch(m.id)} style={{ width: '100%', marginTop: '0.75rem', fontSize: '0.625rem', padding: '0.375rem' }}>REPORTAR</button>
                       )}
-                      {m.status === 'reported' && (
+                      {m.status === 'reported' && !m.disputed && (
                         <span style={{ display: 'block', textAlign: 'center', marginTop: '0.5rem', fontSize: '0.5rem', color: 'var(--neon-orange)', fontFamily: 'var(--font-display)' }}>ESPERANDO CONFIRMACIÓN</span>
+                      )}
+                      {m.status === 'reported' && m.disputed && (
+                        <span style={{ display: 'block', textAlign: 'center', marginTop: '0.5rem', fontSize: '0.5rem', color: 'var(--error)', fontFamily: 'var(--font-display)' }}>EN DISPUTA ({m.disputeVotes?.length || 0} votos)</span>
+                      )}
+                      {m.status === 'reported' && m.disputed && isOutsider(m) && (
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                          {m.participantAId && <button onClick={() => handleDisputeVote(m.id, m.participantAId!)} style={{ flex: 1, fontSize: '0.5rem', padding: '0.375rem' }}>A GANA</button>}
+                          {m.participantBId && <button onClick={() => handleDisputeVote(m.id, m.participantBId!)} style={{ flex: 1, fontSize: '0.5rem', padding: '0.375rem' }}>B GANA</button>}
+                        </div>
                       )}
                       {m.status === 'confirmed' && m.winner && (
                         <span style={{ display: 'block', textAlign: 'center', marginTop: '0.5rem', fontSize: '0.5rem', color: 'var(--neon-green)', fontFamily: 'var(--font-display)' }}>GANADOR: {m.winner}</span>

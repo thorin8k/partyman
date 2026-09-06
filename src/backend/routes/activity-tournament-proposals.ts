@@ -1,6 +1,39 @@
 import type { Database } from "bun:sqlite";
 import { requireAdmin, requireParticipant } from "../auth/guards";
 import { findActiveParty } from "../auth/participants";
+import { AUTO_APPROVE_VOTES, logEvent } from "../scoring/service";
+import { maybeAutoStartTournament } from "./tournaments";
+
+// Task 014: shared approve paths (admin button and vote-threshold auto-approve create the same rows).
+export function approveActivityProposal(db: Database, id: number): number | null {
+  const proposal = db.query<any, [number]>("SELECT * FROM activity_proposals WHERE id = ?").get(id);
+  if (!proposal) return null;
+  const gameTitle = proposal.game_id ? db.query<{ title: string }, [number]>("SELECT title FROM games WHERE id = ?").get(proposal.game_id)?.title ?? null : null;
+  let activityId: number | null = null;
+  db.transaction(() => {
+    const res = db.run("INSERT INTO activities (party_id, game_id, game_title_snapshot, title, starts_at, ends_at, capacity, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [proposal.party_id, proposal.game_id, gameTitle, proposal.title, proposal.starts_at, proposal.ends_at, proposal.capacity, proposal.notes]);
+    activityId = Number(res.lastInsertRowid);
+    try { db.run("DELETE FROM activity_proposal_votes WHERE proposal_id = ?", [id]); } catch { /* pre-014 DBs */ }
+    db.run("DELETE FROM activity_proposals WHERE id = ?", [id]);
+  })();
+  return activityId;
+}
+
+export function approveTournamentProposal(db: Database, id: number): number | null {
+  const proposal = db.query<any, [number]>("SELECT * FROM tournament_proposals WHERE id = ?").get(id);
+  if (!proposal) return null;
+  const game = db.query<{ title: string }, [number]>("SELECT title FROM games WHERE id = ?").get(proposal.game_id)!;
+  let tournamentId: number | null = null;
+  db.transaction(() => {
+    const res = db.run("INSERT INTO tournaments (party_id, game_id, game_title_snapshot, name, max_participants, status) VALUES (?, ?, ?, ?, ?, 'upcoming')",
+      [proposal.party_id, proposal.game_id, game.title, proposal.name, proposal.max_participants]);
+    tournamentId = Number(res.lastInsertRowid);
+    try { db.run("DELETE FROM tournament_proposal_votes WHERE proposal_id = ?", [id]); } catch { /* pre-014 DBs */ }
+    db.run("DELETE FROM tournament_proposals WHERE id = ?", [id]);
+  })();
+  return tournamentId;
+}
 
 export function createActivityTournamentProposalRoutes(db: Database) {
   return {
@@ -11,6 +44,10 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     "/api/activity-proposals/:id": {
       DELETE: handleDeleteActivityProposal,
     },
+    "/api/activity-proposals/:id/vote": {
+      PUT: handleVoteActivityProposal,
+      DELETE: handleUnvoteActivityProposal,
+    },
     "/api/admin/activity-proposals/:id/approve": {
       POST: handleApproveActivityProposal,
     },
@@ -20,6 +57,10 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     },
     "/api/tournament-proposals/:id": {
       DELETE: handleDeleteTournamentProposal,
+    },
+    "/api/tournament-proposals/:id/vote": {
+      PUT: handleVoteTournamentProposal,
+      DELETE: handleUnvoteTournamentProposal,
     },
     "/api/admin/tournament-proposals/:id/approve": {
       POST: handleApproveTournamentProposal,
@@ -68,7 +109,13 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     const activeParty = findActiveParty(db);
     if (!activeParty) return Response.json({ proposals: [] });
     const rows = db.query<any, [number]>("SELECT ap.*, g.title as game_title, g.image_url FROM activity_proposals ap LEFT JOIN games g ON g.id = ap.game_id WHERE ap.party_id = ? ORDER BY ap.created_at DESC").all(activeParty.id);
-    return Response.json({ proposals: rows.map((r: any) => ({ id: r.id, gameId: r.game_id, gameTitle: r.game_title, gameImage: r.image_url, title: r.title, startsAt: r.starts_at, endsAt: r.ends_at, capacity: r.capacity, notes: r.notes, createdBy: r.created_by_participant_id })) });
+    return Response.json({
+      proposals: rows.map((r: any) => ({
+        id: r.id, gameId: r.game_id, gameTitle: r.game_title, gameImage: r.image_url, title: r.title,
+        startsAt: r.starts_at, endsAt: r.ends_at, capacity: r.capacity, notes: r.notes, createdBy: r.created_by_participant_id,
+        voteCount: voteCount("activity_proposal_votes", r.id), voted: hasVoted("activity_proposal_votes", r.id, ctx.session.subjectId),
+      })),
+    });
   }
 
   async function handleDeleteActivityProposal(request: Request): Promise<Response> {
@@ -80,9 +127,27 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     if (!proposal) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
     const isAdmin = ctx.session.subjectType === "admin" || db.query<{ role: string }, [number]>("SELECT role FROM participants WHERE id = ?").get(ctx.session.subjectId)?.role === "admin";
     if (proposal.created_by_participant_id !== ctx.session.subjectId && !isAdmin) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+    try { db.run("DELETE FROM activity_proposal_votes WHERE proposal_id = ?", [id]); } catch { /* pre-014 DBs */ }
     db.run("DELETE FROM activity_proposals WHERE id = ?", [id]);
     console.log("[proposals] DELETE /api/activity-proposals/" + id);
     return Response.json({ ok: true });
+  }
+
+  function voteCount(table: string, proposalId: number): number {
+    try {
+      return db.query<{ n: number }, [number]>(`SELECT COUNT(*) AS n FROM ${table} WHERE proposal_id = ?`).get(proposalId)?.n ?? 0;
+    } catch { return 0; }
+  }
+
+  function hasVoted(table: string, proposalId: number, participantId: number): boolean {
+    try {
+      return (db.query<{ n: number }, [number, number]>(`SELECT COUNT(*) AS n FROM ${table} WHERE proposal_id = ? AND participant_id = ?`).get(proposalId, participantId)?.n ?? 0) > 0;
+    } catch { return false; }
+  }
+
+  function requireMembership(partyId: number, participantId: number): boolean {
+    const m = db.query<{ count: number }, [number, number]>("SELECT COUNT(*) AS count FROM party_memberships WHERE party_id = ? AND participant_id = ?").get(partyId, participantId);
+    return !!m && m.count > 0;
   }
 
   async function handleApproveActivityProposal(request: Request): Promise<Response> {
@@ -90,14 +155,42 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     if (auth instanceof Response) return auth;
     const id = extractId(request.url, "/api/admin/activity-proposals/");
     if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
-    const proposal = db.query<any, [number]>("SELECT * FROM activity_proposals WHERE id = ?").get(id);
-    if (!proposal) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
-    const gameTitle = proposal.game_id ? db.query<{ title: string }, [number]>("SELECT title FROM games WHERE id = ?").get(proposal.game_id)?.title ?? null : null;
-    db.run("INSERT INTO activities (party_id, game_id, game_title_snapshot, title, starts_at, ends_at, capacity, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      [proposal.party_id, proposal.game_id, gameTitle, proposal.title, proposal.starts_at, proposal.ends_at, proposal.capacity, proposal.notes]);
-    db.run("DELETE FROM activity_proposals WHERE id = ?", [id]);
+    const created = approveActivityProposal(db, id);
+    if (!created) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
     console.log("[proposals] POST /api/admin/activity-proposals/" + id + "/approve → activity created");
     return Response.json({ ok: true });
+  }
+
+  async function handleVoteActivityProposal(request: Request): Promise<Response> {
+    const ctx = requireParticipant(db, request);
+    if (ctx instanceof Response) return ctx;
+    const id = extractId(request.url, "/api/activity-proposals/");
+    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    const proposal = db.query<any, [number]>("SELECT * FROM activity_proposals WHERE id = ?").get(id);
+    if (!proposal) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
+    if (!requireMembership(proposal.party_id, ctx.session.subjectId)) return Response.json({ error: "NOT_PARTY_MEMBER" }, { status: 403 });
+    db.run("INSERT OR IGNORE INTO activity_proposal_votes (proposal_id, participant_id) VALUES (?, ?)", [id, ctx.session.subjectId]);
+    const count = voteCount("activity_proposal_votes", id);
+    // Task 014: threshold reached → same rows as the admin approve path, no admin click.
+    if (count >= AUTO_APPROVE_VOTES) {
+      const created = approveActivityProposal(db, id);
+      if (created) {
+        logEvent(db, proposal.party_id, ctx.session.subjectId, "proposal_approved", `Actividad aprobada por votos: ${proposal.title}`);
+        console.log("[proposals] PUT /api/activity-proposals/" + id + "/vote → auto-approved");
+        return Response.json({ voted: true, voteCount: count, approved: true });
+      }
+    }
+    console.log("[proposals] PUT /api/activity-proposals/" + id + "/vote → participant#" + ctx.session.subjectId);
+    return Response.json({ voted: true, voteCount: count });
+  }
+
+  async function handleUnvoteActivityProposal(request: Request): Promise<Response> {
+    const ctx = requireParticipant(db, request);
+    if (ctx instanceof Response) return ctx;
+    const id = extractId(request.url, "/api/activity-proposals/");
+    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    try { db.run("DELETE FROM activity_proposal_votes WHERE proposal_id = ? AND participant_id = ?", [id, ctx.session.subjectId]); } catch { /* pre-014 DBs */ }
+    return Response.json({ voted: false, voteCount: voteCount("activity_proposal_votes", id) });
   }
 
   async function handleCreateTournamentProposal(request: Request): Promise<Response> {
@@ -130,7 +223,13 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     const activeParty = findActiveParty(db);
     if (!activeParty) return Response.json({ proposals: [] });
     const rows = db.query<any, [number]>("SELECT tp.*, g.title as game_title, g.image_url FROM tournament_proposals tp JOIN games g ON g.id = tp.game_id WHERE tp.party_id = ? ORDER BY tp.created_at DESC").all(activeParty.id);
-    return Response.json({ proposals: rows.map((r: any) => ({ id: r.id, gameId: r.game_id, gameTitle: r.game_title, gameImage: r.image_url, name: r.name, maxParticipants: r.max_participants, createdBy: r.created_by_participant_id })) });
+    return Response.json({
+      proposals: rows.map((r: any) => ({
+        id: r.id, gameId: r.game_id, gameTitle: r.game_title, gameImage: r.image_url, name: r.name,
+        maxParticipants: r.max_participants, createdBy: r.created_by_participant_id,
+        voteCount: voteCount("tournament_proposal_votes", r.id), voted: hasVoted("tournament_proposal_votes", r.id, ctx.session.subjectId),
+      })),
+    });
   }
 
   async function handleDeleteTournamentProposal(request: Request): Promise<Response> {
@@ -142,6 +241,7 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     if (!proposal) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
     const isAdmin = ctx.session.subjectType === "admin" || db.query<{ role: string }, [number]>("SELECT role FROM participants WHERE id = ?").get(ctx.session.subjectId)?.role === "admin";
     if (proposal.created_by_participant_id !== ctx.session.subjectId && !isAdmin) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+    try { db.run("DELETE FROM tournament_proposal_votes WHERE proposal_id = ?", [id]); } catch { /* pre-014 DBs */ }
     db.run("DELETE FROM tournament_proposals WHERE id = ?", [id]);
     console.log("[proposals] DELETE /api/tournament-proposals/" + id);
     return Response.json({ ok: true });
@@ -152,13 +252,42 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     if (auth instanceof Response) return auth;
     const id = extractId(request.url, "/api/admin/tournament-proposals/");
     if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    const created = approveTournamentProposal(db, id);
+    if (!created) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
+    const started = maybeAutoStartTournament(db, created);
+    console.log("[proposals] POST /api/admin/tournament-proposals/" + id + "/approve → tournament#" + created);
+    return Response.json({ ok: true, tournamentId: created, started });
+  }
+
+  async function handleVoteTournamentProposal(request: Request): Promise<Response> {
+    const ctx = requireParticipant(db, request);
+    if (ctx instanceof Response) return ctx;
+    const id = extractId(request.url, "/api/tournament-proposals/");
+    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
     const proposal = db.query<any, [number]>("SELECT * FROM tournament_proposals WHERE id = ?").get(id);
     if (!proposal) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
-    const game = db.query<{ title: string }, [number]>("SELECT title FROM games WHERE id = ?").get(proposal.game_id)!;
-    const res = db.run("INSERT INTO tournaments (party_id, game_id, game_title_snapshot, name, max_participants) VALUES (?, ?, ?, ?, ?)",
-      [proposal.party_id, proposal.game_id, game.title, proposal.name, proposal.max_participants]);
-    db.run("DELETE FROM tournament_proposals WHERE id = ?", [id]);
-    console.log("[proposals] POST /api/admin/tournament-proposals/" + id + "/approve → tournament#" + Number(res.lastInsertRowid));
-    return Response.json({ ok: true, tournamentId: Number(res.lastInsertRowid) });
+    if (!requireMembership(proposal.party_id, ctx.session.subjectId)) return Response.json({ error: "NOT_PARTY_MEMBER" }, { status: 403 });
+    db.run("INSERT OR IGNORE INTO tournament_proposal_votes (proposal_id, participant_id) VALUES (?, ?)", [id, ctx.session.subjectId]);
+    const count = voteCount("tournament_proposal_votes", id);
+    if (count >= AUTO_APPROVE_VOTES) {
+      const created = approveTournamentProposal(db, id);
+      if (created) {
+        const started = maybeAutoStartTournament(db, created);
+        logEvent(db, proposal.party_id, ctx.session.subjectId, "proposal_approved", `Torneo aprobado por votos: ${proposal.name}`);
+        console.log("[proposals] PUT /api/tournament-proposals/" + id + "/vote → auto-approved");
+        return Response.json({ voted: true, voteCount: count, approved: true, started });
+      }
+    }
+    console.log("[proposals] PUT /api/tournament-proposals/" + id + "/vote → participant#" + ctx.session.subjectId);
+    return Response.json({ voted: true, voteCount: count });
+  }
+
+  async function handleUnvoteTournamentProposal(request: Request): Promise<Response> {
+    const ctx = requireParticipant(db, request);
+    if (ctx instanceof Response) return ctx;
+    const id = extractId(request.url, "/api/tournament-proposals/");
+    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    try { db.run("DELETE FROM tournament_proposal_votes WHERE proposal_id = ? AND participant_id = ?", [id, ctx.session.subjectId]); } catch { /* pre-014 DBs */ }
+    return Response.json({ voted: false, voteCount: voteCount("tournament_proposal_votes", id) });
   }
 }

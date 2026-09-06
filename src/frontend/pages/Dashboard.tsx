@@ -266,6 +266,18 @@ export function Dashboard() {
     fetchPlanning();
   };
 
+  const handleVoteProposal = async (kind: 'activity' | 'tournament', id: number, voted: boolean) => {
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    const url = kind === 'activity' ? `/api/activity-proposals/${id}/vote` : `/api/tournament-proposals/${id}/vote`;
+    const res = await fetch(url, { method: voted ? 'DELETE' : 'PUT', headers: { 'X-Partyman-CSRF': csrf || '' } }).catch(() => null);
+    if (res && res.ok) {
+      const d = await res.json().catch(() => ({}));
+      if (d.approved) ok('¡Aprobada por votos!');
+      else if (!voted) ok('Voto registrado.');
+    }
+    fetchPlanning();
+  };
+
   if (loading) return <div className="container"><div className="loading">Cargando…</div></div>;
   if (!user) return <div className="container"><div className="loading">Redirigiendo al login…</div></div>;
 
@@ -383,8 +395,11 @@ export function Dashboard() {
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Tus propuestas pendientes ({activityProposals.length}):</p>
                 {activityProposals.map((p: any) => (
                   <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.875rem' }}>{p.title} {p.gameTitle ? `· ${p.gameTitle}` : ''} · <span style={{ color: 'var(--neon-cyan)' }}>pendiente</span></span>
-                    <button onClick={() => handleWithdraw('activity', p.id)} style={{ ...touchBtn, borderColor: 'var(--error)', color: 'var(--error)' }}>RETIRAR</button>
+                    <span style={{ fontSize: '0.875rem' }}>{p.title} {p.gameTitle ? `· ${p.gameTitle}` : ''} · <span style={{ color: 'var(--neon-cyan)' }}>pendiente ({p.voteCount || 0}/3)</span></span>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <button onClick={() => handleVoteProposal('activity', p.id, !!p.voted)} style={{ ...touchBtn, borderColor: p.voted ? 'var(--neon-green)' : undefined, color: p.voted ? 'var(--neon-green)' : undefined }}>{p.voted ? 'VOTADO ✓' : 'VOTAR'}</button>
+                      <button onClick={() => handleWithdraw('activity', p.id)} style={{ ...touchBtn, borderColor: 'var(--error)', color: 'var(--error)' }}>RETIRAR</button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -462,8 +477,11 @@ export function Dashboard() {
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Tus propuestas pendientes ({tournamentProposals.length}):</p>
                 {tournamentProposals.map((p: any) => (
                   <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.875rem' }}>{p.name} · {p.gameTitle} · <span style={{ color: 'var(--neon-cyan)' }}>pendiente</span></span>
-                    <button onClick={() => handleWithdraw('tournament', p.id)} style={{ ...touchBtn, borderColor: 'var(--error)', color: 'var(--error)' }}>RETIRAR</button>
+                    <span style={{ fontSize: '0.875rem' }}>{p.name} · {p.gameTitle} · <span style={{ color: 'var(--neon-cyan)' }}>pendiente ({p.voteCount || 0}/3)</span></span>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <button onClick={() => handleVoteProposal('tournament', p.id, !!p.voted)} style={{ ...touchBtn, borderColor: p.voted ? 'var(--neon-green)' : undefined, color: p.voted ? 'var(--neon-green)' : undefined }}>{p.voted ? 'VOTADO ✓' : 'VOTAR'}</button>
+                      <button onClick={() => handleWithdraw('tournament', p.id)} style={{ ...touchBtn, borderColor: 'var(--error)', color: 'var(--error)' }}>RETIRAR</button>
+                    </div>
                   </div>
                 ))}
               </div>

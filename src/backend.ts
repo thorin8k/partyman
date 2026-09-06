@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import index from "./index.html";
 import { executeMigrations } from "./backend/db/migrate";
 import { ensureProvisionedAdmin } from "./backend/auth/password";
-import { seedPointRules } from "./backend/scoring/service";
+import { seedAchievements, seedPointRules } from "./backend/scoring/service";
 import { loadConfig } from "./backend/config";
 import db from "./backend/db/db.conn";
 import { createHealthRoutes } from "./backend/routes/health";
@@ -29,6 +29,7 @@ mkdirSync(config.backupDir, { recursive: true });
 
 await executeMigrations();
 seedPointRules(db);
+seedAchievements(db);
 ensureProvisionedAdmin(db, process.env.ADMIN_USERNAME ?? null, process.env.ADMIN_PASSWORD_HASH ?? null);
 console.log("Database migrations complete.");
 

@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { getLeaderboard } from "../scoring/service";
+import { sweepDueReports } from "./tournaments";
 
 export function createPublicRoutes(db: Database) {
   return {
@@ -12,6 +13,7 @@ export function createPublicRoutes(db: Database) {
   };
 
   function handleGetPublicState(): Response {
+    try { sweepDueReports(db); } catch { /* display polling drives timeouts; never break it */ }
     const party = db
       .query<{ id: number; name: string; starts_at: string; ends_at: string; status: string }, []>(
         "SELECT id, name, starts_at, ends_at, status FROM parties WHERE status = 'active' LIMIT 1"

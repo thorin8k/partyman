@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import { requireAdmin, requireParticipant } from "../auth/guards";
 import { findActiveParty } from "../auth/participants";
 import { generateBracket, getNextMatchPosition, isBye } from "../tournaments/single-elimination";
-import { scoreTournamentFinished } from "../scoring/service";
+import { REPORT_TIMEOUT_MIN, logEvent, scoreTournamentFinished } from "../scoring/service";
 
 interface TournamentRow {
   id: number; party_id: number; game_id: number; game_title_snapshot: string;
@@ -41,6 +41,7 @@ export function createTournamentRoutes(db: Database) {
     "/api/tournaments/:id/leave": { DELETE: handleLeaveTournament },
     "/api/matches/:id/report": { POST: handleReportMatch },
     "/api/admin/matches/:id/confirm": { POST: handleConfirmMatch },
+    "/api/disputes/:id/vote": { POST: handleDisputeVote },
   };
 
   function getTournamentId(url: string): number | null {
@@ -73,8 +74,9 @@ export function createTournamentRoutes(db: Database) {
     const game = db.query<{ id: number; title: string; enabled: number }, [number]>("SELECT id, title, enabled FROM games WHERE id = ?").get(body.gameId);
     if (!game || !game.enabled) return Response.json({ error: "GAME_NOT_FOUND" }, { status: 404 });
 
+    // Task 014: creation publishes directly (no draft state for new tournaments).
     const result = db.run(
-      "INSERT INTO tournaments (party_id, game_id, game_title_snapshot, activity_id, name, max_participants) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO tournaments (party_id, game_id, game_title_snapshot, activity_id, name, max_participants, status) VALUES (?, ?, ?, ?, ?, ?, 'upcoming')",
       [body.partyId, body.gameId, game.title, body.activityId ?? null, body.name.trim(), body.maxParticipants ?? 16]
     );
     const tournament = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(Number(result.lastInsertRowid))!;
@@ -133,36 +135,12 @@ export function createTournamentRoutes(db: Database) {
     const id = getTournamentId(request.url);
     if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
 
-    const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
-    if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
-    if (t.status !== "upcoming") return Response.json({ error: "INVALID_TOURNAMENT_STATE" }, { status: 409 });
-
-    const activeParty = findActiveParty(db);
-    if (!activeParty || t.party_id !== activeParty.id) return Response.json({ error: "NO_ACTIVE_PARTY" }, { status: 400 });
-
-    const participants = db.query<{ participant_id: number }, [number]>(
-      "SELECT participant_id FROM tournament_participants WHERE tournament_id = ? ORDER BY seed"
-    ).all(id);
-
-    if (participants.length < 2 || participants.length > 16) {
-      return Response.json({ error: "INVALID_PARTICIPANT_COUNT" }, { status: 400 });
+    const r = startTournamentNow(db, id);
+    if (!r.ok) {
+      const status = r.error === "TOURNAMENT_NOT_FOUND" ? 404 : r.error === "INVALID_TOURNAMENT_STATE" ? 409 : 400;
+      return Response.json({ error: r.error }, { status });
     }
-
-    const bracket = generateBracket(participants.map(p => p.participant_id));
-
-    db.transaction(() => {
-      for (const match of bracket) {
-        const winner = isBye(match) ? (match.participantAId ?? match.participantBId) : null;
-        const status = isBye(match) ? "confirmed" : "pending";
-        db.run(
-          "INSERT INTO matches (tournament_id, round, position, participant_a_id, participant_b_id, winner_id, status, confirmed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-          [id, match.round, match.position, match.participantAId, match.participantBId, winner, status, isBye(match) ? new Date().toISOString() : null]
-        );
-      }
-      db.run("UPDATE tournaments SET status = 'in_progress', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [id]);
-    })();
-
-    console.log("[tournaments] POST /api/admin/tournaments/" + id + "/start → " + participants.length + " participants, " + bracket.length + " matches");
+    console.log("[tournaments] POST /api/admin/tournaments/" + id + "/start");
     return Response.json({ tournament: db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id) });
   }
 
@@ -204,7 +182,7 @@ export function createTournamentRoutes(db: Database) {
 
     const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
     if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
-    if (t.status !== "draft") return Response.json({ error: "INVALID_TOURNAMENT_STATE" }, { status: 409 });
+    if (t.status !== "draft" && t.status !== "upcoming") return Response.json({ error: "INVALID_TOURNAMENT_STATE" }, { status: 409 });
 
     const body = await request.json().catch(() => null);
     if (!body || !body.participantId) return Response.json({ error: "VALIDATION_ERROR" }, { status: 400 });
@@ -220,8 +198,9 @@ export function createTournamentRoutes(db: Database) {
       "INSERT OR IGNORE INTO tournament_participants (tournament_id, participant_id, display_name_snapshot, seed) VALUES (?, ?, ?, ?)",
       [id, body.participantId, participant.display_name, maxSeed.max_seed + 1]
     );
-    console.log("[tournaments] POST /api/admin/tournaments/" + id + "/participants → participant#" + body.participantId);
-    return Response.json({ ok: true });
+    const started = maybeAutoStartTournament(db, id);
+    console.log("[tournaments] POST /api/admin/tournaments/" + id + "/participants → participant#" + body.participantId + (started ? " (auto-started)" : ""));
+    return Response.json({ ok: true, started });
   }
 
   // ponytail: utilidades de demo; fuera de producción para no ensuciar datos reales.
@@ -351,6 +330,8 @@ export function createTournamentRoutes(db: Database) {
     const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
     if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
 
+    sweepDueReports(db);
+
     const participants = db.query<{ participant_id: number; display_name_snapshot: string; seed: number }, [number]>(
       "SELECT participant_id, display_name_snapshot, seed FROM tournament_participants WHERE tournament_id = ? ORDER BY seed"
     ).all(id);
@@ -362,6 +343,14 @@ export function createTournamentRoutes(db: Database) {
     const enrichedMatches = matches.map(m => {
       const pA = m.participant_a_id ? db.query<{ display_name_snapshot: string }, [number, number]>("SELECT display_name_snapshot FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?").get(id, m.participant_a_id) : null;
       const pB = m.participant_b_id ? db.query<{ display_name_snapshot: string }, [number, number]>("SELECT display_name_snapshot FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?").get(id, m.participant_b_id) : null;
+      const reps = m.status === "reported"
+        ? db.query<{ reporter_participant_id: number; winner_id: number }, [number]>("SELECT reporter_participant_id, winner_id FROM match_reports WHERE match_id = ?").all(m.id)
+        : [];
+      const votes = m.status === "reported"
+        ? db.query<{ participant_id: number; display_name_snapshot: string; winner_id: number }, [number, number]>(
+            "SELECT dv.participant_id, tp.display_name_snapshot, dv.winner_id FROM dispute_votes dv JOIN tournament_participants tp ON tp.tournament_id = ? AND tp.participant_id = dv.participant_id WHERE dv.match_id = ?"
+          ).all(id, m.id).map(v => ({ participantId: v.participant_id, displayName: v.display_name_snapshot, winnerId: v.winner_id }))
+        : [];
       return {
         id: m.id, round: m.round, position: m.position,
         participantAId: m.participant_a_id, participantBId: m.participant_b_id,
@@ -371,6 +360,9 @@ export function createTournamentRoutes(db: Database) {
         winner: m.winner_id ? db.query<{ display_name_snapshot: string }, [number, number]>("SELECT display_name_snapshot FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?").get(id, m.winner_id)?.display_name_snapshot ?? null : null,
         score: m.score_json ? JSON.parse(m.score_json) : null,
         status: m.status,
+        disputed: m.status === "reported" && new Set(reps.map(r => `${r.winner_id}`)).size > 1,
+        reportCount: reps.length,
+        disputeVotes: votes,
       };
     });
 
@@ -417,8 +409,9 @@ export function createTournamentRoutes(db: Database) {
       "INSERT INTO tournament_participants (tournament_id, participant_id, display_name_snapshot, seed) VALUES (?, ?, ?, ?)",
       [id, auth.session.subjectId, participant.display_name, maxSeed.max_seed + 1]
     );
-    console.log("[tournaments] POST /api/tournaments/" + id + "/join → participant#" + auth.session.subjectId);
-    return Response.json({ ok: true });
+    const started = maybeAutoStartTournament(db, id);
+    console.log("[tournaments] POST /api/tournaments/" + id + "/join → participant#" + auth.session.subjectId + (started ? " (auto-started)" : ""));
+    return Response.json({ ok: true, started });
   }
 
   async function handleLeaveTournament(request: Request): Promise<Response> {
@@ -444,7 +437,7 @@ export function createTournamentRoutes(db: Database) {
 
     const match = db.query<MatchRow, [number]>("SELECT * FROM matches WHERE id = ?").get(id);
     if (!match) return Response.json({ error: "MATCH_NOT_FOUND" }, { status: 404 });
-    if (match.status !== "pending") return Response.json({ error: "INVALID_MATCH_STATE" }, { status: 409 });
+    if (match.status !== "pending" && match.status !== "reported") return Response.json({ error: "INVALID_MATCH_STATE" }, { status: 409 });
     if (match.participant_a_id !== auth.session.subjectId && match.participant_b_id !== auth.session.subjectId) {
       return Response.json({ error: "NOT_IN_MATCH" }, { status: 403 });
     }
@@ -474,34 +467,77 @@ export function createTournamentRoutes(db: Database) {
       [id, auth.session.subjectId, body.winnerId, JSON.stringify(body.score)]
     );
 
-    // Check for conflicts
-    const reports = db.query<{ winner_id: number; score_json: string }, [number]>(
-      "SELECT winner_id, score_json FROM match_reports WHERE match_id = ?"
+    // Task 014: reports stay pending until both players agree, a timeout passes, or a dispute/admin decides.
+    const reports = db.query<{ reporter_participant_id: number; winner_id: number; score_json: string }, [number]>(
+      "SELECT reporter_participant_id, winner_id, score_json FROM match_reports WHERE match_id = ?"
     ).all(id);
 
-    let confirmed = false;
-    if (reports.length === 1) {
-      // Single report: auto-confirm
-      db.run("UPDATE matches SET winner_id = ?, score_json = ?, status = 'confirmed', reported_by = ?, reported_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), confirmed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), version = version + 1 WHERE id = ?",
-        [body.winnerId, JSON.stringify(body.score), auth.session.subjectId, id]);
-      advanceWinner(db, { ...match, winner_id: body.winnerId });
-      confirmed = true;
+    const allSame = reports.every(r => r.winner_id === reports[0].winner_id && r.score_json === reports[0].score_json);
+    const reporters = new Set(reports.map(r => r.reporter_participant_id));
+    const bothPlayed = match.participant_a_id != null && match.participant_b_id != null &&
+      reporters.has(match.participant_a_id) && reporters.has(match.participant_b_id);
+
+    if (allSame && bothPlayed) {
+      confirmMatchRow(db, match, reports[0].winner_id, reports[0].score_json, auth.session.subjectId);
     } else {
-      // Multiple reports: check for conflict
-      const allSame = reports.every(r => r.winner_id === reports[0].winner_id && r.score_json === reports[0].score_json);
-      if (allSame) {
-        db.run("UPDATE matches SET winner_id = ?, score_json = ?, status = 'confirmed', reported_by = ?, reported_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), confirmed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), version = version + 1 WHERE id = ?",
-          [reports[0].winner_id, reports[0].score_json, auth.session.subjectId, id]);
-        advanceWinner(db, { ...match, winner_id: reports[0].winner_id });
-        confirmed = true;
-      } else {
-        db.run("UPDATE matches SET status = 'reported', reported_by = ?, reported_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [auth.session.subjectId, id]);
+      const wasPending = match.status === "pending";
+      db.run("UPDATE matches SET status = 'reported', reported_by = ?, reported_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [auth.session.subjectId, id]);
+      if (!allSame && wasPending) {
+        const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(match.tournament_id);
+        logEvent(db, match.tournament_id && t ? t.party_id : 0, auth.session.subjectId, "dispute_open", `Disputa en partido del torneo ${t?.name ?? ""}`);
       }
     }
-    if (confirmed) checkTournamentFinished(db, match.tournament_id);
+    sweepDueReports(db);
 
     console.log("[tournaments] POST /api/matches/" + id + "/report");
-    return Response.json({ ok: true });
+    const fresh = db.query<MatchRow, [number]>("SELECT * FROM matches WHERE id = ?").get(id);
+    return Response.json({ ok: true, status: fresh?.status ?? "reported" });
+  }
+
+  async function handleDisputeVote(request: Request): Promise<Response> {
+    const auth = requireParticipant(db, request);
+    if (auth instanceof Response) return auth;
+    const parts = new URL(request.url).pathname.split("/");
+    const id = parseInt(parts[parts.indexOf("disputes") + 1], 10);
+    if (!id || id <= 0) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+
+    const match = db.query<MatchRow, [number]>("SELECT * FROM matches WHERE id = ?").get(id);
+    if (!match) return Response.json({ error: "MATCH_NOT_FOUND" }, { status: 404 });
+    if (match.status !== "reported") return Response.json({ error: "NO_DISPUTE", details: ["match is not under dispute"] }, { status: 409 });
+    if (auth.session.subjectId === match.participant_a_id || auth.session.subjectId === match.participant_b_id) {
+      return Response.json({ error: "IN_MATCH", details: ["players cannot vote on their own dispute"] }, { status: 403 });
+    }
+    const member = db.query<{ count: number }, [number, number]>(
+      "SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?"
+    ).get(match.tournament_id, auth.session.subjectId);
+    if (!member || member.count === 0) return Response.json({ error: "NOT_IN_TOURNAMENT" }, { status: 403 });
+
+    const body = await request.json().catch(() => null);
+    if (!body || !body.winnerId) return Response.json({ error: "VALIDATION_ERROR", details: ["winnerId required"] }, { status: 400 });
+    if (body.winnerId !== match.participant_a_id && body.winnerId !== match.participant_b_id) {
+      return Response.json({ error: "INVALID_WINNER" }, { status: 400 });
+    }
+
+    db.run("INSERT INTO dispute_votes (match_id, participant_id, winner_id) VALUES (?, ?, ?) ON CONFLICT(match_id, participant_id) DO UPDATE SET winner_id = excluded.winner_id",
+      [id, auth.session.subjectId, body.winnerId]);
+
+    // Majority of outsiders wins; without outsiders only the admin can resolve.
+    const outsiders = (db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ?").get(match.tournament_id)?.count ?? 2) - 2;
+    const tally = db.query<{ winner_id: number; n: number }, [number]>(
+      "SELECT winner_id, COUNT(*) AS n FROM dispute_votes WHERE match_id = ? GROUP BY winner_id ORDER BY n DESC"
+    ).all(id);
+    if (outsiders > 0 && tally.length > 0 && tally[0].n > outsiders / 2) {
+      const score = db.query<{ score_json: string }, [number, number]>(
+        "SELECT score_json FROM match_reports WHERE match_id = ? AND winner_id = ? LIMIT 1"
+      ).get(id, tally[0].winner_id)?.score_json ?? JSON.stringify({ a: 1, b: 0 });
+      confirmMatchRow(db, match, tally[0].winner_id, score, auth.session.subjectId);
+      const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(match.tournament_id);
+      if (t) logEvent(db, t.party_id, auth.session.subjectId, "dispute_resolved", `Disputa resuelta en ${t.name}`);
+    }
+
+    console.log("[tournaments] POST /api/disputes/" + id + "/vote");
+    const fresh = db.query<MatchRow, [number]>("SELECT * FROM matches WHERE id = ?").get(id);
+    return Response.json({ ok: true, status: fresh?.status ?? "reported" });
   }
 
   async function handleConfirmMatch(request: Request): Promise<Response> {
@@ -532,6 +568,83 @@ export function createTournamentRoutes(db: Database) {
     console.log("[tournaments] POST /api/admin/matches/" + id + "/confirm");
     return Response.json({ ok: true });
   }
+}
+
+// Task 014: shared start logic (admin button, auto-start when full, proposal approval).
+export function startTournamentNow(db: Database, id: number): { ok: boolean; error?: string } {
+  const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
+  if (!t) return { ok: false, error: "TOURNAMENT_NOT_FOUND" };
+  if (t.status !== "upcoming") return { ok: false, error: "INVALID_TOURNAMENT_STATE" };
+
+  const activeParty = findActiveParty(db);
+  if (!activeParty || t.party_id !== activeParty.id) return { ok: false, error: "NO_ACTIVE_PARTY" };
+
+  const participants = db.query<{ participant_id: number }, [number]>(
+    "SELECT participant_id FROM tournament_participants WHERE tournament_id = ? ORDER BY seed"
+  ).all(id);
+
+  if (participants.length < 2 || participants.length > 16) {
+    return { ok: false, error: "INVALID_PARTICIPANT_COUNT" };
+  }
+
+  const bracket = generateBracket(participants.map(p => p.participant_id));
+
+  db.transaction(() => {
+    for (const match of bracket) {
+      const winner = isBye(match) ? (match.participantAId ?? match.participantBId) : null;
+      const status = isBye(match) ? "confirmed" : "pending";
+      db.run(
+        "INSERT INTO matches (tournament_id, round, position, participant_a_id, participant_b_id, winner_id, status, confirmed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [id, match.round, match.position, match.participantAId, match.participantBId, winner, status, isBye(match) ? new Date().toISOString() : null]
+      );
+    }
+    db.run("UPDATE tournaments SET status = 'in_progress', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [id]);
+  })();
+  logEvent(db, t.party_id, null, "tournament_start", `Torneo ${t.name} iniciado`);
+
+  return { ok: true };
+}
+
+// Task 014: a full upcoming tournament starts by itself (called on join/add/approve).
+export function maybeAutoStartTournament(db: Database, id: number): boolean {
+  try {
+    const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
+    if (!t || t.status !== "upcoming") return false;
+    const count = db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ?").get(id);
+    if (!count || count.count < t.max_participants || count.count < 2) return false;
+    return startTournamentNow(db, id).ok;
+  } catch {
+    return false;
+  }
+}
+
+// Task 014: single confirm path (agreement, timeout, dispute, admin).
+export function confirmMatchRow(db: Database, match: MatchRow, winnerId: number, scoreJson: string, confirmedBy: number | null) {
+  db.run("UPDATE matches SET winner_id = ?, score_json = ?, status = 'confirmed', reported_by = COALESCE(?, reported_by), reported_at = COALESCE(reported_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), confirmed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), version = version + 1 WHERE id = ?",
+    [winnerId, scoreJson, confirmedBy, match.id]);
+  advanceWinner(db, { ...match, winner_id: winnerId });
+  checkTournamentFinished(db, match.tournament_id);
+}
+
+// Task 014: lazy timeout — unanimous reported matches confirm themselves; conflicts never do.
+export function sweepDueReports(db: Database): number {
+  let done = 0;
+  try {
+    const cutoff = new Date(Date.now() - REPORT_TIMEOUT_MIN * 60_000).toISOString();
+    const due = db.query<MatchRow, [string]>("SELECT * FROM matches WHERE status = 'reported' AND reported_at IS NOT NULL AND reported_at < ?").all(cutoff);
+    for (const m of due) {
+      const reps = db.query<{ reporter_participant_id: number; winner_id: number; score_json: string }, [number]>(
+        "SELECT reporter_participant_id, winner_id, score_json FROM match_reports WHERE match_id = ?"
+      ).all(m.id);
+      if (reps.length === 0) continue;
+      if (!reps.every(r => r.winner_id === reps[0].winner_id && r.score_json === reps[0].score_json)) continue;
+      confirmMatchRow(db, m, reps[0].winner_id, reps[0].score_json, reps[0].reporter_participant_id);
+      const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(m.tournament_id);
+      if (t) logEvent(db, t.party_id, reps[0].reporter_participant_id, "match_confirmed", `Resultado confirmado por tiempo en ${t.name}`);
+      done++;
+    }
+  } catch { /* sweep never breaks reads/writes */ }
+  return done;
 }
 
 function advanceWinner(db: Database, match: MatchRow) {
