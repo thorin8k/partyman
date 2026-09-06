@@ -177,4 +177,40 @@ export class PartyService {
   getAuditLog(filter?: { targetType?: string; targetId?: number }) {
     return this.auditRepo.find(filter);
   }
+
+  // ponytail: borrar en transacción con todas las filas hijas; nada de huérfanos.
+  deleteParty(id: number): void {
+    const party = this.partyRepo.findById(id);
+    if (!party) throw new Error('PARTY_NOT_FOUND');
+    // Tolerant with DBs where later domain migrations haven't run yet.
+    const existing = new Set(this.db.query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(r => r.name));
+    this.db.transaction(() => {
+      const run = (table: string, sql: string, params: (number | string)[]) => { if (existing.has(table)) this.db.run(sql, params as any); };
+      let tourIds: { id: number }[] = [];
+      if (existing.has("tournaments")) tourIds = this.db.query<{ id: number }, [number]>("SELECT id FROM tournaments WHERE party_id = ?").all(id);
+      for (const t of tourIds) {
+        if (existing.has("match_reports") && existing.has("matches")) this.db.run("DELETE FROM match_reports WHERE match_id IN (SELECT id FROM matches WHERE tournament_id = ?)", [t.id]);
+        run("matches", "DELETE FROM matches WHERE tournament_id = ?", [t.id]);
+        run("tournament_participants", "DELETE FROM tournament_participants WHERE tournament_id = ?", [t.id]);
+      }
+      run("tournaments", "DELETE FROM tournaments WHERE party_id = ?", [id]);
+      let actIds: { id: number }[] = [];
+      if (existing.has("activities")) actIds = this.db.query<{ id: number }, [number]>("SELECT id FROM activities WHERE party_id = ?").all(id);
+      for (const a of actIds) run("activity_participants", "DELETE FROM activity_participants WHERE activity_id = ?", [a.id]);
+      run("activities", "DELETE FROM activities WHERE party_id = ?", [id]);
+      let propIds: { id: number }[] = [];
+      if (existing.has("party_game_proposals")) propIds = this.db.query<{ id: number }, [number]>("SELECT id FROM party_game_proposals WHERE party_id = ?").all(id);
+      for (const p of propIds) run("proposal_votes", "DELETE FROM proposal_votes WHERE proposal_id = ?", [p.id]);
+      run("party_game_proposals", "DELETE FROM party_game_proposals WHERE party_id = ?", [id]);
+      run("activity_proposals", "DELETE FROM activity_proposals WHERE party_id = ?", [id]);
+      run("tournament_proposals", "DELETE FROM tournament_proposals WHERE party_id = ?", [id]);
+      run("point_ledger", "DELETE FROM point_ledger WHERE party_id = ?", [id]);
+      run("participant_awards", "DELETE FROM participant_awards WHERE party_id = ?", [id]);
+      run("activity_events", "DELETE FROM activity_events WHERE party_id = ?", [id]);
+      run("party_scoring_runs", "DELETE FROM party_scoring_runs WHERE party_id = ?", [id]);
+      run("party_memberships", "DELETE FROM party_memberships WHERE party_id = ?", [id]);
+      run("audit_log", "DELETE FROM audit_log WHERE target_type = 'party' AND target_id = ?", [id]);
+      this.db.run("DELETE FROM parties WHERE id = ?", [id]);
+    })();
+  }
 }

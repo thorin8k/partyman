@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { requireAdmin, requireParticipant } from "../auth/guards";
 import { findActiveParty } from "../auth/participants";
+import { awardActivityJoin } from "../scoring/service";
 
 interface ActivityRow {
   id: number;
@@ -152,7 +153,12 @@ export function createActivitiesRoutes(db: Database) {
     if (body.endsAt !== undefined) { updates.push("ends_at = ?"); values.push(body.endsAt); }
     if (body.capacity !== undefined) { updates.push("capacity = ?"); values.push(body.capacity); }
     if (body.notes !== undefined) { updates.push("notes = ?"); values.push(body.notes || null); }
-    if (body.status !== undefined) { updates.push("status = ?"); values.push(body.status); }
+    if (body.status !== undefined) {
+      if (!["scheduled", "in_progress", "finished", "cancelled"].includes(body.status)) {
+        return Response.json({ error: "VALIDATION_ERROR", details: ["status must be scheduled, in_progress, finished or cancelled"] }, { status: 422 });
+      }
+      updates.push("status = ?"); values.push(body.status);
+    }
 
     if (updates.length === 0) return Response.json({ error: "NO_CHANGES" }, { status: 400 });
 
@@ -202,6 +208,7 @@ export function createActivitiesRoutes(db: Database) {
     }
 
     db.run("INSERT OR IGNORE INTO activity_participants (activity_id, participant_id) VALUES (?, ?)", [id, ctx.session.subjectId]);
+    try { awardActivityJoin(db, id, activity.party_id, ctx.session.subjectId); } catch { /* scoring never blocks joining */ }
     console.log("[activities] PUT /api/activities/" + id + "/join → participant#" + ctx.session.subjectId);
     return Response.json({ joined: true });
   }

@@ -151,6 +151,18 @@ export function createGamesRoutes(db: Database) {
     if (isNaN(id) || id <= 0) return Response.json({ error: "INVALID_ID" }, { status: 400 });
     const existing = db.query<GameRow, [number]>("SELECT * FROM games WHERE id = ?").get(id);
     if (!existing) return Response.json({ error: "GAME_NOT_FOUND" }, { status: 404 });
+    // ponytail: referenciado → desactivar en vez de borrar (el histórico usa snapshots).
+    let referenced = false;
+    try {
+      referenced = (["activities", "tournaments", "party_game_proposals", "activity_proposals", "tournament_proposals"] as const)
+        .some(t => (db.query<{ n: number }, [number]>(`SELECT COUNT(*) AS n FROM ${t} WHERE game_id = ?`).get(id)?.n ?? 0) > 0);
+    } catch { referenced = false; }
+    if (referenced) {
+      db.run("UPDATE games SET enabled = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [id]);
+      const game = db.query<GameRow, [number]>("SELECT * FROM games WHERE id = ?").get(id);
+      console.log("[games] DELETE /api/admin/games/" + id + " → referenced, disabled instead");
+      return Response.json({ game: rowToGame(game!), disabled: true });
+    }
     db.run("DELETE FROM games WHERE id = ?", [id]);
     console.log("[games] DELETE /api/admin/games/" + id);
     return Response.json({ ok: true });

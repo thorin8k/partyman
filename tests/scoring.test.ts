@@ -69,8 +69,11 @@ describe("task 007 scoring", () => {
     seedPointRules(ctx.db);
     seedPointRules(ctx.db);
     const rows = ctx.db.query<{ code: string; points: number }, []>("SELECT code, points FROM point_rules").all();
-    expect(rows.length).toBe(3);
-    expect(new Map(rows.map(r => [r.code, r.points])).get("tournament_win")).toBe(10);
+    expect(rows.length).toBe(5);
+    const byCode = new Map(rows.map(r => [r.code, r.points]));
+    expect(byCode.get("tournament_win")).toBe(10);
+    expect(byCode.get("activity_participation")).toBe(1);
+    expect(byCode.get("tournament_participation")).toBe(2);
   });
 
   it("scores a finished tournament exactly once", () => {

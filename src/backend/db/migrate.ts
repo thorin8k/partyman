@@ -31,8 +31,16 @@ export async function executeMigrations() {
     
     if (!executed) {
       const sql = await Bun.file(join(migrationsDir, file)).text();
-      db.exec(sql);
-      db.query("INSERT INTO migrations (name) VALUES (?)").run(name);
+      // ponytail: cada migración en transacción; si falla, rollback y arranque denegado.
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        db.exec(sql);
+        db.query("INSERT INTO migrations (name) VALUES (?)").run(name);
+        db.exec("COMMIT");
+      } catch (e) {
+        try { db.exec("ROLLBACK"); } catch { /* already out of txn */ }
+        throw new Error(`Migration ${name} failed and was rolled back: ${e instanceof Error ? e.message : String(e)}`);
+      }
       console.log(`✓ Migration ${name} executed`);
     } else {
       console.log(`- Migration ${name} already executed`);

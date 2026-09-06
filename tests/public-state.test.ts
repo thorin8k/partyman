@@ -51,6 +51,23 @@ describe("public state", () => {
     expect(body.attendees[1].displayName).toBe("Player2");
   });
 
+  it("exposes schedule statuses and the activity feed", async () => {
+    const db = makeDb();
+    db.run("INSERT INTO parties (name, starts_at, ends_at, status, created_at, updated_at) VALUES ('P', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z', 'active', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')");
+    const past = new Date(Date.now() - 7200_000).toISOString();
+    const future = new Date(Date.now() + 7200_000).toISOString();
+    db.run("INSERT INTO activities (party_id, title, starts_at, ends_at, status, created_at, updated_at) VALUES (1, 'Live', ?, ?, 'scheduled', ?, ?)", [past, future, past, past]);
+    db.run("INSERT INTO activities (party_id, title, starts_at, ends_at, status, created_at, updated_at) VALUES (1, 'Old', '2020-01-01T00:00:00Z', '2020-01-01T01:00:00Z', 'finished', ?, ?)", [past, past]);
+    db.exec("CREATE TABLE activity_events (id INTEGER PRIMARY KEY, party_id INTEGER, participant_id INTEGER, event_type TEXT NOT NULL, message TEXT NOT NULL, created_at TEXT NOT NULL)");
+    db.run("INSERT INTO activity_events (party_id, event_type, message, created_at) VALUES (1, 'tournament_win', 'Ganó torneo Cup', ?)", [past]);
+
+    const body = await (await createPublicRoutes(db)["/api/public/state"].GET()).json();
+    const byTitle = Object.fromEntries(body.schedule.map((s: any) => [s.title, s.status]));
+    expect(byTitle).toEqual({ Live: "current", Old: "finished" });
+    expect(body.activity).toHaveLength(1);
+    expect(body.activity[0].message).toBe("Ganó torneo Cup");
+  });
+
   it("exposes no admin data or sessions", async () => {
     const db = makeDb();
     db.run("INSERT INTO parties (name, starts_at, ends_at, status, created_at, updated_at) VALUES ('P', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z', 'active', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')");

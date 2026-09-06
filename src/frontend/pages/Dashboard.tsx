@@ -168,6 +168,7 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loadingData, setLoadingData] = useState(true);
+  const [myPoints, setMyPoints] = useState<{ party: { points: number; rank: number } | null; all: { points: number; rank: number } | null }>({ party: null, all: null });
   const fetchingRef = useRef(false);
 
   useEffect(() => {
@@ -192,10 +193,26 @@ export function Dashboard() {
     try {
       const pa = await fetch('/api/parties/active', { signal }).catch(() => null);
       if (pa && pa.ok) setActiveParty((await pa.json()).party);
-      await fetch('/api/participants/join', { method: 'POST', signal }).catch(() => {});
+      const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+      await fetch('/api/participants/join', { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' }, signal }).catch(() => {});
       await Promise.all([fetchPlanning(signal), fetchTournaments(signal)]);
     } finally { fetchingRef.current = false; setLoadingData(false); }
   };
+
+  const fetchMyPoints = async (partyId?: number) => {
+    if (!user) return;
+    const pick = (board: any[]) => {
+      const i = board.findIndex((p: any) => p.participantId === user.id);
+      return i < 0 ? { points: 0, rank: board.length + 1 } : { points: board[i].points, rank: i + 1 };
+    };
+    const [a, b] = await Promise.all([
+      partyId ? fetch(`/api/leaderboard?partyId=${partyId}`).then(r => r.ok ? r.json() : null).catch(() => null) : null,
+      fetch('/api/leaderboard/all-time').then(r => r.ok ? r.json() : null).catch(() => null),
+    ]);
+    setMyPoints({ party: a ? pick(a.leaderboard || []) : null, all: b ? pick(b.leaderboard || []) : null });
+  };
+
+  useEffect(() => { if (user) fetchMyPoints(activeParty?.id); }, [user, activeParty]);
 
   useEffect(() => {
     if (!user) return;
@@ -270,7 +287,7 @@ export function Dashboard() {
 
       <div className="card">
         <h2>PERFIL</h2>
-        <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           {user.avatarUrl ? (
             <img src={user.avatarUrl} alt={`Avatar de ${user.displayName}`} style={{ width: '64px', height: '64px', borderRadius: '50%', border: '2px solid var(--neon-cyan)' }} />
           ) : (
@@ -278,7 +295,11 @@ export function Dashboard() {
               {user.displayName.charAt(0).toUpperCase()}
             </div>
           )}
-          <div><p style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>{user.displayName}</p><a href={`/history/${user.id}`} style={{ fontSize: '0.7rem' }}>Ver historial →</a></div>
+          <div style={{ flex: '1 1 auto' }}><p style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>{user.displayName}</p><a href={`/history/${user.id}`} style={{ fontSize: '0.7rem' }}>Ver historial →</a></div>
+          <div style={{ textAlign: 'right', marginLeft: 'auto' }}>
+            {myPoints.party && <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: '0.625rem', color: 'var(--neon-green)' }}>{myPoints.party.points} PTS · #{myPoints.party.rank} PARTY</p>}
+            {myPoints.all && <p style={{ margin: '0.25rem 0 0', fontFamily: 'var(--font-display)', fontSize: '0.625rem', color: 'var(--neon-cyan)' }}>{myPoints.all.points} PTS · #{myPoints.all.rank} TOTAL</p>}
+          </div>
         </div>
       </div>
 
@@ -309,7 +330,7 @@ export function Dashboard() {
                 {activities.map(a => {
                   const isJoined = a.participants?.some(p => p.id === user?.id);
                   const isFull = a.capacity != null && (a.participantCount || 0) >= a.capacity;
-                  const now = new Date(); const isLive = new Date(a.startsAt) <= now && now <= new Date(a.endsAt);
+                  const now = new Date(); const isLive = a.status !== 'finished' && a.status !== 'cancelled' && new Date(a.startsAt) <= now && now <= new Date(a.endsAt);
                   return (
                     <div key={a.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', borderColor: isLive ? 'var(--neon-green)' : undefined, background: isLive ? 'rgba(0,255,136,0.05)' : undefined }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

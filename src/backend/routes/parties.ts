@@ -183,12 +183,11 @@ export function createPartyRoutes(db: Database) {
     const id = extractId(request.url, "/api/admin/parties/");
     if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
 
-    const party = service.getById(id);
-    if (!party) return Response.json({ error: "PARTY_NOT_FOUND" }, { status: 404 });
-
-    db.run("DELETE FROM party_memberships WHERE party_id = ?", [id]);
-    db.run("DELETE FROM audit_log WHERE target_type = 'party' AND target_id = ?", [id]);
-    db.run("DELETE FROM parties WHERE id = ?", [id]);
+    try {
+      service.deleteParty(id);
+    } catch (err) {
+      return handleError(err);
+    }
     console.log("[parties] POST /api/admin/parties/" + id + "/delete → deleted");
     return Response.json({ ok: true });
   }

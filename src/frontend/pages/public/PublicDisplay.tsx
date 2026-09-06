@@ -239,8 +239,8 @@ export function PublicDisplay() {
           {(() => {
             const now = new Date().getTime();
             const sorted = [...state.activities].sort((a, b) => +new Date(a.startsAt) - +new Date(b.startsAt));
-            const live = sorted.filter(a => +new Date(a.startsAt) <= now && now <= +new Date(a.endsAt));
-            const next = sorted.find(a => +new Date(a.startsAt) > now);
+            const live = sorted.filter(a => a.status !== 'finished' && +new Date(a.startsAt) <= now && now <= +new Date(a.endsAt));
+            const next = sorted.find(a => a.status !== 'finished' && +new Date(a.startsAt) > now);
             if (!live.length && !next) return null;
             return (
               <div className="card" style={{ gridColumn: '1 / -1', borderColor: 'var(--neon-green)' }}>
@@ -289,7 +289,7 @@ export function PublicDisplay() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {state.activities.map((a) => {
-                  const isLive = new Date(a.startsAt) <= new Date() && new Date() <= new Date(a.endsAt);
+                  const isLive = a.status !== 'finished' && new Date(a.startsAt) <= new Date() && new Date() <= new Date(a.endsAt);
                   return (
                   <div key={a.id} style={{ padding: '0.5rem', background: isLive ? 'rgba(0,255,136,0.05)' : 'var(--bg-secondary)', border: `1px solid ${isLive ? 'var(--neon-green)' : 'var(--border)'}`, borderRadius: 'var(--radius)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     {a.gameImage && <img src={a.gameImage} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}

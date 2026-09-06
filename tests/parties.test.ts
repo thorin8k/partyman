@@ -367,6 +367,32 @@ describe('Task 003: Party Lifecycle', () => {
       expect(actions).toContain('finished');
     });
 
+    it('should delete a party with memberships and leave no orphans', () => {
+      const party = service.create(
+        {
+          name: 'Doomed Party',
+          startsAt: '2024-12-01T10:00:00Z',
+          endsAt: '2024-12-01T18:00:00Z',
+        },
+        adminId
+      );
+      db.run("INSERT INTO participants (steam_id, display_name) VALUES ('s1', 'P1')");
+      db.run("INSERT INTO party_memberships (party_id, participant_id, display_name_snapshot) VALUES (?, 1, 'P1')", [party.id]);
+      // Child tables from later domains (tolerated when absent, cleaned when present).
+      db.exec("CREATE TABLE activities (id INTEGER PRIMARY KEY, party_id INTEGER NOT NULL, title TEXT NOT NULL)");
+      db.exec("CREATE TABLE activity_participants (activity_id INTEGER NOT NULL, participant_id INTEGER NOT NULL, PRIMARY KEY(activity_id, participant_id))");
+      db.run("INSERT INTO activities (id, party_id, title) VALUES (1, ?, 'A')", [party.id]);
+      db.run("INSERT INTO activity_participants (activity_id, participant_id) VALUES (1, 1)");
+
+      service.deleteParty(party.id);
+
+      expect(service.getById(party.id)).toBeNull();
+      expect(db.query<{ n: number }, [number]>("SELECT COUNT(*) AS n FROM party_memberships WHERE party_id = ?").get(party.id)?.n).toBe(0);
+      expect(db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM activities").get()?.n).toBe(0);
+      expect(db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM activity_participants").get()?.n).toBe(0);
+      expect(() => service.deleteParty(9999)).toThrow("PARTY_NOT_FOUND");
+    });
+
     it('should filter audit log by target', () => {
       const party1 = service.create(
         {

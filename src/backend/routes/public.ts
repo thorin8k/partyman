@@ -100,8 +100,17 @@ export function createPublicRoutes(db: Database) {
     if (party) {
       try { leaderboard = getLeaderboard(db, party.id).slice(0, 10); } catch { leaderboard = []; }
     }
-    const schedule: unknown[] = [];
-    const activity: unknown[] = [];
+    const now = Date.now();
+    const schedule = (activities as Array<{ id: number; title: string; gameTitle: string | null; startsAt: string; endsAt: string; status: string }>).map(a => {
+      const s = +new Date(a.startsAt); const e = +new Date(a.endsAt);
+      return { id: a.id, title: a.title, gameTitle: a.gameTitle, startsAt: a.startsAt, endsAt: a.endsAt, status: a.status === "finished" ? "finished" : s <= now && now <= e ? "current" : e < now ? "finished" : "upcoming" };
+    });
+    let activity: unknown[] = [];
+    try {
+      activity = db.query<{ id: number; message: string; created_at: string }, [number]>(
+        "SELECT id, message, created_at FROM activity_events WHERE party_id = ? ORDER BY id DESC LIMIT 20"
+      ).all(party?.id ?? -1).map(r => ({ id: r.id, message: r.message, createdAt: r.created_at }));
+    } catch { activity = []; }
 
     return Response.json({
       party: party

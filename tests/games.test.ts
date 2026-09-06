@@ -75,6 +75,43 @@ describe("games CRUD", () => {
     expect(body.game.enabled).toBe(false);
   });
 
+  it("disables instead of deleting a referenced game", async () => {
+    const created = await routes["/api/admin/games"].POST(
+      new Request("http://localhost/api/admin/games", {
+        method: "POST",
+        headers: { ...authHeaders(adminToken), "content-type": "application/json" },
+        body: JSON.stringify({ title: "Referenced" }),
+      })
+    );
+    const gameId = (await created.json()).game.id;
+    ctx.db.exec("CREATE TABLE activities (id INTEGER PRIMARY KEY, party_id INTEGER NOT NULL, game_id INTEGER, title TEXT NOT NULL)");
+    ctx.db.run("INSERT INTO activities (party_id, game_id, title) VALUES (1, ?, 'A')", [gameId]);
+
+    const res = await routes["/api/admin/games/:id"].DELETE(
+      new Request(`http://localhost/api/admin/games/${gameId}`, { method: "DELETE", headers: authHeaders(adminToken) })
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.disabled).toBe(true);
+    expect(body.game.enabled).toBe(false);
+    expect(ctx.db.query<{ n: number }, [number]>("SELECT COUNT(*) AS n FROM games WHERE id = ?").get(gameId)?.n).toBe(1);
+  });
+
+  it("deletes an unreferenced game", async () => {
+    const created = await routes["/api/admin/games"].POST(
+      new Request("http://localhost/api/admin/games", {
+        method: "POST",
+        headers: { ...authHeaders(adminToken), "content-type": "application/json" },
+        body: JSON.stringify({ title: "Disposable" }),
+      })
+    );
+    const gameId = (await created.json()).game.id;
+    const res = await routes["/api/admin/games/:id"].DELETE(
+      new Request(`http://localhost/api/admin/games/${gameId}`, { method: "DELETE", headers: authHeaders(adminToken) })
+    );
+    expect((await res.json()).ok).toBe(true);
+  });
+
   it("rejects unauthorized access", async () => {
     const res = await routes["/api/admin/games"].GET(
       new Request("http://localhost/api/admin/games")

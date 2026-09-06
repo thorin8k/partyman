@@ -52,4 +52,19 @@ describe("hardenRoutes", () => {
     expect(big.status).toBe(413);
     expect((await big.json()).error.code).toBe("BODY_TOO_LARGE");
   });
+
+  it("rejects writes without CSRF and passes them with it", async () => {
+    const routes = hardenRoutes({ "/api/admin/games": { POST: ok } }, { dev: false });
+    const bare = new Request("http://h/api/admin/games", { method: "POST" });
+    expect((await routes["/api/admin/games"].POST(bare, {})).status).toBe(403);
+    const good = new Request("http://h/api/admin/games", {
+      method: "POST",
+      headers: { cookie: "partyman_session=x; partyman_csrf=csrf", "x-partyman-csrf": "csrf", origin: "http://h" },
+    });
+    expect((await routes["/api/admin/games"].POST(good, {})).status).toBe(200);
+    const get = await routes["/api/admin/games"].POST(
+      new Request("http://h/api/admin/games", { method: "POST", headers: { cookie: "partyman_session=x; partyman_csrf=csrf", "x-partyman-csrf": "wrong", origin: "http://h" } }), {}
+    );
+    expect(get.status).toBe(403);
+  });
 });

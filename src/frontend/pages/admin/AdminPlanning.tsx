@@ -141,6 +141,14 @@ export function AdminPlanning() {
     if (partyId) fetchActivities(partyId);
   };
 
+  // ponytail: vía de escape manual fuera del automatismo (errores, cambios de plan).
+  const handleStatus = async (id: number, status: string, label: string) => {
+    if (!confirm(`¿Marcar como ${label}?`)) return;
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    await fetch(`/api/admin/activities/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify({ status }) });
+    if (partyId) fetchActivities(partyId);
+  };
+
   if (loading) return <div className="container"><div className="loading">Cargando…</div></div>;
   if (!user || user.role !== 'admin') return <div className="container"><div className="loading">Redirigiendo…</div></div>;
 
@@ -228,7 +236,12 @@ export function AdminPlanning() {
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <h3 style={{ marginBottom: '0.25rem' }}>{a.title}</h3>
-                          {(() => { const now = new Date(); const live = new Date(a.startsAt) <= now && now <= new Date(a.endsAt); return live ? <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--neon-green)', border: '1px solid var(--neon-green)', padding: '0.125rem 0.375rem' }}>EN CURSO</span> : null; })()}
+                          {(() => {
+                            if (a.status === 'cancelled') return <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--error)', border: '1px solid var(--error)', padding: '0.125rem 0.375rem' }}>CANCELADA</span>;
+                            if (a.status === 'finished') return <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--muted)', border: '1px solid var(--muted)', padding: '0.125rem 0.375rem' }}>FINALIZADA</span>;
+                            const now = new Date(); const live = new Date(a.startsAt) <= now && now <= new Date(a.endsAt);
+                            return live ? <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--neon-green)', border: '1px solid var(--neon-green)', padding: '0.125rem 0.375rem' }}>EN CURSO</span> : null;
+                          })()}
                         </div>
                         <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
                           {a.gameTitleSnapshot ? `${a.gameTitleSnapshot} · ` : ''}
@@ -238,7 +251,16 @@ export function AdminPlanning() {
                         {a.notes && <p style={{ margin: '0.25rem 0 0', color: 'var(--text-dim)', fontSize: '0.7rem', fontStyle: 'italic' }}>{a.notes}</p>}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                    <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                      {(a.status === 'scheduled' || a.status === 'in_progress') && (
+                        <>
+                          <button onClick={() => handleStatus(a.id, 'finished', 'FINALIZADA')} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem', borderColor: 'var(--neon-green)', color: 'var(--neon-green)' }}>TERMINAR</button>
+                          <button onClick={() => handleStatus(a.id, 'cancelled', 'CANCELADA')} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>CANCELAR</button>
+                        </>
+                      )}
+                      {(a.status === 'finished' || a.status === 'cancelled') && (
+                        <button onClick={() => handleStatus(a.id, 'scheduled', 'REABIERTA')} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>REABRIR</button>
+                      )}
                       <button onClick={() => handleEdit(a)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>EDITAR</button>
                       <button className="danger" onClick={() => handleDelete(a.id)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>ELIMINAR</button>
                     </div>

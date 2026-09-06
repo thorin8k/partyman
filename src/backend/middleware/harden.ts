@@ -1,5 +1,6 @@
 import { applySecurityHeaders } from "./security-headers";
 import { createRateLimiter, rateLimitRule } from "./rate-limit";
+import { checkCsrf } from "../auth/guards";
 
 // 256 KiB per shared HTTP conventions.
 export const MAX_JSON_BYTES = 256 * 1024;
@@ -29,6 +30,13 @@ export function hardenRoutes<T extends RouteMap>(routes: T, opts?: { dev?: boole
         if (rule && !limiter.check(rule.key, rule.rule)) {
           return applySecurityHeaders(
             Response.json({ error: { code: "RATE_LIMITED", message: "Too many requests" } }, { status: 429 }),
+            dev
+          );
+        }
+        // ponytail: un solo guard CSRF para todos los writes (el login inicial se exime solo).
+        if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS" && !checkCsrf(req)) {
+          return applySecurityHeaders(
+            Response.json({ error: { code: "FORBIDDEN", message: "CSRF check failed" } }, { status: 403 }),
             dev
           );
         }

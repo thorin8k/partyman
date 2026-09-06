@@ -224,7 +224,15 @@ export function createTournamentRoutes(db: Database) {
     return Response.json({ ok: true });
   }
 
+  // ponytail: utilidades de demo; fuera de producción para no ensuciar datos reales.
+  function devOnly(): Response | null {
+    if (process.env.NODE_ENV === "production") return Response.json({ error: "NOT_FOUND" }, { status: 404 });
+    return null;
+  }
+
   async function handleFillBots(request: Request): Promise<Response> {
+    const dev = devOnly();
+    if (dev) return dev;
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = getTournamentId(request.url);
@@ -257,6 +265,8 @@ export function createTournamentRoutes(db: Database) {
   }
 
   async function handleSeedParticipants(request: Request): Promise<Response> {
+    const dev = devOnly();
+    if (dev) return dev;
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const body = await request.json().catch(() => ({}));
