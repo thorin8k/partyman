@@ -8,7 +8,7 @@
     "dev": "bun --hot src/backend.ts",
     "dev:proxy": "NODE_ENV=production bun src/backend.ts",
     "build": "bun build --sourcemap --outdir=dist --target=bun --production src/backend.ts",
-    "copy": "cp -r src/public dist/",
+    "copy": "cp -r src/public dist/ && cp -r migrations dist/",
     "compile": "rm -rf dist && bun run build && bun run copy",
     "start": "NODE_ENV=production bun src/backend.ts",
     "prod": "cd dist && NODE_ENV=production bun backend.js",
@@ -18,7 +18,6 @@
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "serve-static-bun": "^0.5.3",
     "wouter": "^3.10.0"
   },
   "devDependencies": {

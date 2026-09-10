@@ -25,8 +25,6 @@ function extractId(url: string, prefix: string): number | null {
 export function createTournamentRoutes(db: Database) {
   return {
     "/api/admin/tournaments": { POST: handleCreateTournament },
-    "/api/admin/tournaments/:id": { PATCH: handleUpdateTournament },
-    "/api/admin/tournaments/:id/publish": { POST: handlePublish },
     "/api/admin/tournaments/:id/start": { POST: handleStart },
     "/api/admin/tournaments/:id/cancel": { POST: handleCancel },
     "/api/admin/tournaments/:id/participants": { POST: handleAddParticipant },
@@ -72,6 +70,12 @@ export function createTournamentRoutes(db: Database) {
     const game = db.query<{ id: number; title: string; enabled: number }, [number]>("SELECT id, title, enabled FROM games WHERE id = ?").get(body.gameId);
     if (!game || !game.enabled) return Response.json({ error: { code: "GAME_NOT_FOUND", message: "GAME_NOT_FOUND" } }, { status: 404 });
 
+    const party = db.query<{ id: number; status: string }, [number]>("SELECT id, status FROM parties WHERE id = ?").get(body.partyId);
+    if (!party) return Response.json({ error: { code: "PARTY_NOT_FOUND", message: "PARTY_NOT_FOUND" } }, { status: 404 });
+    if (party.status === "finished" || party.status === "archived") {
+      return Response.json({ error: { code: "PARTY_NOT_EDITABLE", message: "PARTY_NOT_EDITABLE" } }, { status: 409 });
+    }
+
     // Task 014: creation publishes directly (no draft state for new tournaments).
     const result = db.run(
       "INSERT INTO tournaments (party_id, game_id, game_title_snapshot, activity_id, name, max_participants, status) VALUES (?, ?, ?, ?, ?, ?, 'upcoming')",
@@ -80,51 +84,6 @@ export function createTournamentRoutes(db: Database) {
     const tournament = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(Number(result.lastInsertRowid))!;
     console.log("[tournaments] POST /api/admin/tournaments → created #" + tournament.id);
     return Response.json({ tournament }, { status: 201 });
-  }
-
-  async function handleUpdateTournament(request: Request): Promise<Response> {
-    const auth = requireAdmin(db, request);
-    if (auth instanceof Response) return auth;
-    const id = getTournamentId(request.url);
-    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
-
-    const existing = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
-    if (!existing) return Response.json({ error: { code: "TOURNAMENT_NOT_FOUND", message: "TOURNAMENT_NOT_FOUND" } }, { status: 404 });
-    if (existing.status !== "draft") return Response.json({ error: { code: "INVALID_TOURNAMENT_STATE", message: "INVALID_TOURNAMENT_STATE" } }, { status: 409 });
-
-    const body = await request.json().catch(() => null);
-    if (!body) return Response.json({ error: { code: "INVALID_REQUEST", message: "INVALID_REQUEST" } }, { status: 400 });
-
-    const updates: string[] = [];
-    const values: unknown[] = [];
-    if (body.name) { updates.push("name = ?"); values.push(body.name.trim()); }
-    if (body.maxParticipants) { updates.push("max_participants = ?"); values.push(body.maxParticipants); }
-    if (body.activityId !== undefined) { updates.push("activity_id = ?"); values.push(body.activityId); }
-    if (updates.length === 0) return Response.json({ error: { code: "NO_CHANGES", message: "NO_CHANGES" } }, { status: 400 });
-
-    updates.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
-    values.push(id);
-    db.run(`UPDATE tournaments SET ${updates.join(", ")} WHERE id = ?`, values as (string | number | null)[]);
-    console.log("[tournaments] PATCH /api/admin/tournaments/" + id);
-    return Response.json({ tournament: db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id) });
-  }
-
-  async function handlePublish(request: Request): Promise<Response> {
-    const auth = requireAdmin(db, request);
-    if (auth instanceof Response) return auth;
-    const id = getTournamentId(request.url);
-    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
-
-    const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
-    if (!t) return Response.json({ error: { code: "TOURNAMENT_NOT_FOUND", message: "TOURNAMENT_NOT_FOUND" } }, { status: 404 });
-    if (t.status !== "draft") return Response.json({ error: { code: "INVALID_TOURNAMENT_STATE", message: "INVALID_TOURNAMENT_STATE" } }, { status: 409 });
-
-    const count = db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ?").get(id)!;
-    if (count.count < 2) return Response.json({ error: { code: "NEED_MIN_PARTICIPANTS", message: "NEED_MIN_PARTICIPANTS" }, details: ["Need at least 2 participants"] }, { status: 400 });
-
-    db.run("UPDATE tournaments SET status = 'upcoming', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [id]);
-    console.log("[tournaments] POST /api/admin/tournaments/" + id + "/publish");
-    return Response.json({ tournament: db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id) });
   }
 
   async function handleStart(request: Request): Promise<Response> {
@@ -392,6 +351,11 @@ export function createTournamentRoutes(db: Database) {
     const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
     if (!t) return Response.json({ error: { code: "TOURNAMENT_NOT_FOUND", message: "TOURNAMENT_NOT_FOUND" } }, { status: 404 });
     if (t.status !== "upcoming" && t.status !== "draft") return Response.json({ error: { code: "TOURNAMENT_NOT_JOINABLE", message: "TOURNAMENT_NOT_JOINABLE" } }, { status: 409 });
+
+    const activeParty = findActiveParty(db);
+    if (!activeParty || t.party_id !== activeParty.id) {
+      return Response.json({ error: { code: "NOT_ACTIVE_PARTY", message: "NOT_ACTIVE_PARTY" } }, { status: 400 });
+    }
 
     const participant = db.query<{ id: number; display_name: string }, [number]>("SELECT id, display_name FROM participants WHERE id = ?").get(auth.session.subjectId);
     if (!participant) return Response.json({ error: { code: "PARTICIPANT_NOT_FOUND", message: "PARTICIPANT_NOT_FOUND" } }, { status: 404 });

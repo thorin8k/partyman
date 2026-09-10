@@ -49,6 +49,8 @@ export function createScoringRoutes(db: Database) {
       const isAdmin = ctx.session.subjectType === "admin" || db.query<{ role: string }, [number]>("SELECT role FROM participants WHERE id = ?").get(ctx.session.subjectId)?.role === "admin";
       if (!isAdmin) return Response.json({ error: { code: "FORBIDDEN", message: "FORBIDDEN" } }, { status: 403 });
     }
+    const participant = db.query<{ id: number }, [number]>("SELECT id FROM participants WHERE id = ?").get(id);
+    if (!participant) return Response.json({ error: { code: "PARTICIPANT_NOT_FOUND", message: "PARTICIPANT_NOT_FOUND" } }, { status: 404 });
     const ledger = db.query<any, [number]>("SELECT * FROM point_ledger WHERE participant_id = ? ORDER BY created_at DESC").all(id);
     const awards = db.query<any, [number]>("SELECT * FROM participant_awards WHERE participant_id = ? ORDER BY created_at DESC").all(id);
     return Response.json({ ledger, awards });

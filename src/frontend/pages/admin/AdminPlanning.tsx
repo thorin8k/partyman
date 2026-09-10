@@ -1,5 +1,6 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
+import { confirmDialog } from '../../components/ConfirmDialog';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -64,7 +65,7 @@ export function AdminPlanning() {
   };
 
   const handleReject = async (id: number) => {
-    if (!confirm('¿Rechazar esta propuesta?')) return;
+    if (!(await confirmDialog('¿Rechazar esta propuesta?', { confirmLabel: 'RECHAZAR', danger: true }))) return;
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     await fetch(`/api/activity-proposals/${id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } });
     fetchProposals();
@@ -136,7 +137,7 @@ export function AdminPlanning() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('¿Eliminar esta actividad?')) return;
+    if (!(await confirmDialog('¿Eliminar esta actividad?', { confirmLabel: 'ELIMINAR', danger: true }))) return;
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     await fetch(`/api/admin/activities/${id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } });
     if (partyId) fetchActivities(partyId);
@@ -144,7 +145,7 @@ export function AdminPlanning() {
 
   // ponytail: vía de escape manual fuera del automatismo (errores, cambios de plan).
   const handleStatus = async (id: number, status: string, label: string) => {
-    if (!confirm(`¿Marcar como ${label}?`)) return;
+    if (!(await confirmDialog(`¿Marcar como ${label}?`))) return;
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     await fetch(`/api/admin/activities/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify({ status }) });
     if (partyId) fetchActivities(partyId);

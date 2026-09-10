@@ -69,6 +69,7 @@ export function hardenRoutes<T extends RouteMap>(routes: T, opts?: { dev?: boole
 
 // Spec: los writes devuelven { error: { code, message } }.
 // Red de seguridad: si algún handler devuelve el antiguo { error: <string> }, se normaliza aquí.
+// Además: JSON válido con campos inválidos es 422 (no 400) según HTTP conventions.
 async function shapeError(res: Response): Promise<Response> {
   const ct = res.headers.get("content-type") ?? "";
   if (!ct.includes("application/json")) return res;
@@ -78,10 +79,13 @@ async function shapeError(res: Response): Promise<Response> {
   } catch {
     return res;
   }
-  if (!data || typeof data.error !== "string") return res;
-  const { error: code, message, ...rest } = data;
-  return new Response(JSON.stringify({ error: { code, message: typeof message === "string" ? message : code }, ...rest }), {
-    status: res.status,
-    headers: res.headers,
-  });
+  if (!data || typeof data !== "object") return res;
+  let payload: Record<string, any> = data;
+  if (typeof data.error === "string") {
+    const { error: code, message, ...rest } = data;
+    payload = { error: { code, message: typeof message === "string" ? message : code }, ...rest };
+  }
+  const status = payload.error?.code === "VALIDATION_ERROR" && res.status === 400 ? 422 : res.status;
+  if (payload === data && status === res.status) return res;
+  return new Response(JSON.stringify(payload), { status, headers: res.headers });
 }

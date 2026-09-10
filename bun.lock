@@ -7,7 +7,6 @@
       "dependencies": {
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
-        "serve-static-bun": "^0.5.3",
         "wouter": "^3.10.0",
       },
       "devDependencies": {
@@ -46,8 +45,6 @@
     "regexparam": ["regexparam@3.0.0", "", {}, "sha512-RSYAtP31mvYLkAHrOlh25pCNQ5hWnT106VukGaaFfuJrZFkGRX5GhUAdPqpSDXxOhA2c4akmRuplv1mRqnBn6Q=="],
 
     "scheduler": ["scheduler@0.23.2", "", { "dependencies": { "loose-envify": "^1.1.0" } }, "sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ=="],
-
-    "serve-static-bun": ["serve-static-bun@0.5.3", "", {}, "sha512-QlfA/Z30MwZl4XXWM9KevfinJRJjzJMRK8sXABbaY06Y7KTuXtbT1n0e8qdf1PgM59mpgSh/JTUM9Jjsh0E58Q=="],
 
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 

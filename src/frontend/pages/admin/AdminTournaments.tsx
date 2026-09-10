@@ -1,5 +1,6 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
+import { confirmDialog } from '../../components/ConfirmDialog';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -57,7 +58,7 @@ export function AdminTournaments() {
   };
 
   const handleRejectProposal = async (id: number) => {
-    if (!confirm('¿Rechazar esta propuesta?')) return;
+    if (!(await confirmDialog('¿Rechazar esta propuesta?', { confirmLabel: 'RECHAZAR', danger: true }))) return;
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     await fetch(`/api/tournament-proposals/${id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } });
     fetchProposals();
@@ -91,7 +92,7 @@ export function AdminTournaments() {
   };
 
   const handleAction = async (id: number, action: string) => {
-    if ((action === 'cancel' || action === 'delete') && !confirm(action === 'delete' ? '¿Eliminar este torneo?' : '¿Cancelar este torneo?')) return;
+    if ((action === 'cancel' || action === 'delete') && !(await confirmDialog(action === 'delete' ? '¿Eliminar este torneo?' : '¿Cancelar este torneo?', { danger: true }))) return;
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch(`/api/admin/tournaments/${id}/${action}`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
     if (!res.ok) { const err = await res.json(); setError(apiError(err)); }
@@ -184,7 +185,6 @@ export function AdminTournaments() {
                     <span style={{ padding: '0.25rem 0.75rem', border: `1px solid ${statusColors[t.status]}`, color: statusColors[t.status], fontFamily: 'var(--font-display)', fontSize: '0.4rem' }}>
                       {statusLabels[t.status]}
                     </span>
-                    {t.status === 'draft' && <button onClick={() => handleAction(t.id, 'publish')} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>PUBLICAR</button>}
                     {t.status === 'upcoming' && <button onClick={() => handleAction(t.id, 'start')} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>INICIAR</button>}
                     {t.status !== 'finished' && t.status !== 'cancelled' && <button onClick={() => handleAction(t.id, 'cancel')} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem', borderColor: 'var(--error)', color: 'var(--error)' }}>CANCELAR</button>}
                     <a href={`/admin/tournaments/${t.id}`} style={{ fontSize: '0.75rem' }}>VER →</a>

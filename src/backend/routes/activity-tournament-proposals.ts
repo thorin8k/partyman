@@ -81,7 +81,13 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     if (!membership || membership.count === 0) return Response.json({ error: { code: "NOT_PARTY_MEMBER", message: "NOT_PARTY_MEMBER" } }, { status: 403 });
 
     const body = await request.json().catch(() => null);
-    if (!body || !body.title || !body.startsAt || !body.endsAt) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["title, startsAt, endsAt required"] }, { status: 400 });
+    if (!body || !body.title || !body.startsAt || !body.endsAt) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["title, startsAt, endsAt required"] }, { status: 422 });
+    if (String(body.title).trim().length === 0 || String(body.title).length > 120) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["title must be 1-120 characters"] }, { status: 422 });
+    const start = Date.parse(body.startsAt);
+    const end = Date.parse(body.endsAt);
+    if (Number.isNaN(start) || Number.isNaN(end)) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["startsAt and endsAt must be valid ISO dates"] }, { status: 422 });
+    if (start >= end) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["startsAt must be before endsAt"] }, { status: 422 });
+    if (body.capacity != null && (!Number.isInteger(body.capacity) || body.capacity < 1 || body.capacity > 100)) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["capacity must be 1-100"] }, { status: 422 });
 
     let gameId: number | null = null;
     if (body.gameName) {
@@ -199,7 +205,10 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     const membership = db.query<{ count: number }, [number, number]>("SELECT COUNT(*) AS count FROM party_memberships WHERE party_id = ? AND participant_id = ?").get(activeParty.id, ctx.session.subjectId);
     if (!membership || membership.count === 0) return Response.json({ error: { code: "NOT_PARTY_MEMBER", message: "NOT_PARTY_MEMBER" } }, { status: 403 });
     const body = await request.json().catch(() => null);
-    if (!body || !body.gameName || !body.name) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["gameName, name required"] }, { status: 400 });
+    if (!body || !body.gameName || !body.name) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["gameName, name required"] }, { status: 422 });
+    if (String(body.name).trim().length === 0 || String(body.name).length > 120) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["name must be 1-120 characters"] }, { status: 422 });
+    const maxParticipants = body.maxParticipants ?? 16;
+    if (!Number.isInteger(maxParticipants) || maxParticipants < 2 || maxParticipants > 16) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["maxParticipants must be 2-16"] }, { status: 422 });
     const title = body.gameName.trim().slice(0, 120);
     let gameId: number;
     const existing = db.query<{ id: number }, [string]>("SELECT id FROM games WHERE LOWER(title) = LOWER(?) LIMIT 1").get(title);
@@ -209,7 +218,7 @@ export function createActivityTournamentProposalRoutes(db: Database) {
       gameId = Number(res.lastInsertRowid);
     }
     const res = db.run("INSERT INTO tournament_proposals (party_id, game_id, name, max_participants, created_by_participant_id) VALUES (?, ?, ?, ?, ?)",
-      [activeParty.id, gameId, body.name.trim(), body.maxParticipants ?? 16, ctx.session.subjectId]);
+      [activeParty.id, gameId, body.name.trim(), maxParticipants, ctx.session.subjectId]);
     const proposal = db.query<any, [number]>("SELECT * FROM tournament_proposals WHERE id = ?").get(Number(res.lastInsertRowid));
     console.log("[proposals] POST /api/tournament-proposals → #" + proposal.id);
     return Response.json({ proposal }, { status: 201 });

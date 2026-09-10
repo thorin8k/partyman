@@ -21,7 +21,7 @@ import { createActivityTournamentProposalRoutes } from "./backend/routes/activit
 import { createScoringRoutes } from "./backend/routes/scoring";
 import { createOperationsRoutes } from "./backend/routes/operations";
 import { hardenRoutes } from "./backend/middleware/harden";
-import serveStatic from "serve-static-bun";
+import { applySecurityHeaders } from "./backend/middleware/security-headers";
 
 const config = loadConfig();
 // La app arranca con uploads vacío y dirs persistentes garantizados (task 008).
@@ -52,6 +52,13 @@ const proposalRoutes2 = createActivityTournamentProposalRoutes(db);
 const scoringRoutes = createScoringRoutes(db);
 const operationsRoutes = createOperationsRoutes(db, { backupDir: config.backupDir, backupKeep: config.backupKeep, publicOrigin: config.publicOrigin });
 
+function apiNotFound(): Response {
+  return applySecurityHeaders(
+    Response.json({ error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 }),
+    process.env.NODE_ENV !== "production"
+  );
+}
+
 const server = serve({
   routes: {
     // API Routes (hardened: body limit + rate limit + security headers)
@@ -71,10 +78,9 @@ const server = serve({
       ...operationsRoutes,
     }),
 
-    // Static assets
-    "/public/:filename{.+\\.(png|ico|txt|woff2|jpg|css)}": {
-      GET: serveStatic("public", { stripFromPathname: "/public" }),
-    },
+    // Contrato API: una ruta /api desconocida es 404 JSON, nunca el shell del SPA.
+    // Fuera de hardenRoutes para no exigir CSRF a un 404.
+    "/api/*": { GET: apiNotFound, POST: apiNotFound, PUT: apiNotFound, PATCH: apiNotFound, DELETE: apiNotFound, HEAD: apiNotFound },
 
     // SPA fallback - serve index.html for all unmatched routes
     "/*": index,

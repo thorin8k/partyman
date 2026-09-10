@@ -1,5 +1,6 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
+import { confirmDialog } from '../../components/ConfirmDialog';
 import { useLocation, useParams } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -56,7 +57,7 @@ export function TournamentDetail() {
   };
 
   const handleDeleteTournament = async () => {
-    if (!confirm('¿Eliminar este torneo?')) return;
+    if (!(await confirmDialog('¿Eliminar este torneo?', { confirmLabel: 'ELIMINAR', danger: true }))) return;
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch(`/api/admin/tournaments/${tournamentId}/delete`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
     if (res.ok) navigate('/admin/tournaments');

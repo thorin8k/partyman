@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { requireParticipant } from "../auth/guards";
 
 const STEAMGRIDDB_API = "https://www.steamgriddb.com/api/v2";
 
@@ -10,6 +11,9 @@ export function createGamesSearchRoutes(db: Database) {
   };
 
   async function handleSearchGames(request: Request): Promise<Response> {
+    // La búsqueda consume la API key de SteamGridDB: solo sesiones autenticadas.
+    const auth = requireParticipant(db, request);
+    if (auth instanceof Response) return auth;
     const url = new URL(request.url);
     const query = url.searchParams.get("q");
     if (!query || query.trim().length === 0) {

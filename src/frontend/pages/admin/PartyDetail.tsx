@@ -1,5 +1,6 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
+import { confirmDialog } from '../../components/ConfirmDialog';
 import { useLocation, useParams } from 'wouter';
 import { useEffect, useState } from 'react';
 import { PartyForm } from '../../components/PartyForm';
@@ -87,9 +88,9 @@ export function PartyDetail() {
   };
 
   const handleAction = async (action: string) => {
-    if (action === 'activate' && !confirm('¿Activar esta party? Solo puede haber una activa.')) return;
-    if (action === 'finish' && !confirm('¿Finalizar esta party? Se calculan puntos, se bloquea la edición y no se puede deshacer desde aquí.')) return;
-    if (action === 'archive' && !confirm('¿Archivar esta party?')) return;
+    if (action === 'activate' && !(await confirmDialog('¿Activar esta party? Solo puede haber una activa.'))) return;
+    if (action === 'finish' && !(await confirmDialog('¿Finalizar esta party? Se calculan puntos, se bloquea la edición y no se puede deshacer desde aquí.', { danger: true }))) return;
+    if (action === 'archive' && !(await confirmDialog('¿Archivar esta party?'))) return;
     setActionLoading(true);
     setError(null);
     try {
@@ -125,12 +126,12 @@ export function PartyDetail() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('¿Estás seguro de que quieres eliminar esta party? Esta acción no se puede deshacer.')) return;
+    if (!(await confirmDialog('¿Estás seguro de que quieres eliminar esta party? Esta acción no se puede deshacer.', { confirmLabel: 'ELIMINAR', danger: true }))) return;
     await handleAction('delete');
   };
 
   const handleCloseWizard = async () => {
-    if (!confirm('¿Cerrar la fiesta? Cancela lo no empezado, puntúa, finaliza y crea copia.')) return;
+    if (!(await confirmDialog('¿Cerrar la fiesta? Cancela lo no empezado, puntúa, finaliza y crea copia.'))) return;
     setActionLoading(true);
     setError(null);
     setWizardSteps(null);

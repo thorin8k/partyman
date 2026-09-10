@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Router, Route, Switch } from 'wouter';
 import { AuthProvider } from './components/AuthContext';
+import { ConfirmHost } from './components/ConfirmDialog';
 import { Dashboard } from './pages/Dashboard';
 import { ParticipantLogin } from './pages/login/ParticipantLogin';
 import { AdminLogin } from './pages/login/AdminLogin';
@@ -22,6 +23,7 @@ import { Backups } from './pages/admin/Backups';
 function App() {
   return (
     <AuthProvider>
+      <ConfirmHost />
       <Router>
         <Switch>
           {/* Public routes */}

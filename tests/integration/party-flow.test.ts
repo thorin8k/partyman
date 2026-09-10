@@ -95,7 +95,7 @@ describe("integration: full party flow", () => {
     await activities["/api/activities/:id/join"].PUT(new Request(`http://localhost/api/activities/${actId}/join`, { method: "PUT", headers: cookie(aliceToken) }));
     expect(db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM point_ledger WHERE reason = 'activity_participation'").get()?.n).toBe(1);
 
-    // 4. Tournament: create → add → publish → start → report → finished + scored
+    // 4. Tournament: create (publishes directly) → add → start → report → finished + scored
     const tourId = (await (await tournaments["/api/admin/tournaments"].POST(
       new Request("http://localhost/api/admin/tournaments", json(adminToken, { partyId: party.id, gameId, name: "E2E Cup", maxParticipants: 4 }))
     )).json()).tournament.id;
@@ -104,7 +104,6 @@ describe("integration: full party flow", () => {
         new Request(`http://localhost/api/admin/tournaments/${tourId}/participants`, json(adminToken, { participantId: p.id }))
       );
     }
-    await tournaments["/api/admin/tournaments/:id/publish"].POST(new Request(`http://localhost/api/admin/tournaments/${tourId}/publish`, { method: "POST", headers: cookie(adminToken) }));
     await tournaments["/api/admin/tournaments/:id/start"].POST(new Request(`http://localhost/api/admin/tournaments/${tourId}/start`, { method: "POST", headers: cookie(adminToken) }));
     const match = db.query<{ id: number }, [number]>("SELECT id FROM matches WHERE tournament_id = ?").get(tourId)!;
     const bobToken = session(db, "participant", bob.id);

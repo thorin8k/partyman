@@ -147,14 +147,14 @@ export function getLeaderboard(db: Database, partyId?: number) {
     ? db.query<{ participant_id: number; display_name: string; avatar_url: string | null; total_points: number; wins: number }, [number]>(
         `SELECT p.id as participant_id, p.display_name, p.avatar_url,
          COALESCE(SUM(pl.points),0) as total_points,
-         COALESCE(SUM(CASE WHEN pl.reason='tournament_win' THEN 1 ELSE 0 END),0) as wins
+         COALESCE(SUM(CASE WHEN pl.reason='tournament_win' AND NOT EXISTS (SELECT 1 FROM point_ledger c WHERE c.correction_of = pl.id) THEN 1 ELSE 0 END),0) as wins
          FROM participants p LEFT JOIN point_ledger pl ON pl.participant_id = p.id AND pl.party_id = ?
          GROUP BY p.id ORDER BY total_points DESC, wins DESC, p.display_name COLLATE NOCASE ASC, p.id ASC`
       ).all(partyId)
     : db.query<{ participant_id: number; display_name: string; avatar_url: string | null; total_points: number; wins: number }, []>(
         `SELECT p.id as participant_id, p.display_name, p.avatar_url,
          COALESCE(SUM(pl.points),0) as total_points,
-         COALESCE(SUM(CASE WHEN pl.reason='tournament_win' THEN 1 ELSE 0 END),0) as wins
+         COALESCE(SUM(CASE WHEN pl.reason='tournament_win' AND NOT EXISTS (SELECT 1 FROM point_ledger c WHERE c.correction_of = pl.id) THEN 1 ELSE 0 END),0) as wins
          FROM participants p LEFT JOIN point_ledger pl ON pl.participant_id = p.id
          GROUP BY p.id ORDER BY total_points DESC, wins DESC, p.display_name COLLATE NOCASE ASC, p.id ASC`
       ).all();

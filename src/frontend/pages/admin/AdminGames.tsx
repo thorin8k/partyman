@@ -1,5 +1,6 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
+import { confirmDialog } from '../../components/ConfirmDialog';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -40,7 +41,7 @@ export function AdminGames() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const handleDelete = async (id: number) => {
-    if (!confirm('¿Borrar este juego del catálogo?')) return;
+    if (!(await confirmDialog('¿Borrar este juego del catálogo?', { confirmLabel: 'BORRAR', danger: true }))) return;
     setNotice(null);
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch(`/api/admin/games/${id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }).catch(() => null);

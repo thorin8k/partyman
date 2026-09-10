@@ -1,4 +1,5 @@
 import { useAuth } from '../components/AuthContext';
+import { confirmDialog } from '../components/ConfirmDialog';
 import { useLocation } from 'wouter';
 import { useEffect, useRef, useState } from 'react';
 
@@ -259,7 +260,7 @@ export function Dashboard() {
   };
 
   const handleWithdraw = async (kind: 'activity' | 'tournament', id: number) => {
-    if (!confirm('¿Retirar tu propuesta?')) return;
+    if (!(await confirmDialog('¿Retirar tu propuesta?', { confirmLabel: 'RETIRAR', danger: true }))) return;
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const url = kind === 'activity' ? `/api/activity-proposals/${id}` : `/api/tournament-proposals/${id}`;
     const res = await fetch(url, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }).catch(() => null);
