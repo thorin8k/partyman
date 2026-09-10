@@ -35,7 +35,7 @@ export function AdminUsers() {
       body: JSON.stringify({ role: newRole }),
     });
     if (res.ok) fetchParticipants();
-    else { const err = await res.json(); setError(err.error || 'Error'); }
+    else { const err = await res.json(); setError(err.error?.code || err.error || 'Error'); }
   };
 
   if (loading) return <div className="container"><div className="loading">Cargando…</div></div>;

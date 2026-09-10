@@ -3,6 +3,7 @@ import { requireAdmin, requireParticipant } from "../auth/guards";
 import { findActiveParty } from "../auth/participants";
 import { AUTO_APPROVE_VOTES, logEvent } from "../scoring/service";
 import { maybeAutoStartTournament } from "./tournaments";
+import { pathId } from "../http/ids";
 
 // Task 014: shared approve paths (admin button and vote-threshold auto-approve create the same rows).
 export function approveActivityProposal(db: Database, id: number): number | null {
@@ -68,22 +69,19 @@ export function createActivityTournamentProposalRoutes(db: Database) {
   };
 
   function extractId(url: string, prefix: string): number | null {
-    const path = new URL(url).pathname;
-    const suffix = path.slice(prefix.length);
-    const id = parseInt(suffix.split("/")[0], 10);
-    return isNaN(id) || id <= 0 ? null : id;
+    return pathId(url, prefix);
   }
 
   async function handleCreateActivityProposal(request: Request): Promise<Response> {
     const ctx = requireParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const activeParty = findActiveParty(db);
-    if (!activeParty) return Response.json({ error: "NOT_ACTIVE_PARTY" }, { status: 400 });
+    if (!activeParty) return Response.json({ error: { code: "NOT_ACTIVE_PARTY", message: "NOT_ACTIVE_PARTY" } }, { status: 400 });
     const membership = db.query<{ count: number }, [number, number]>("SELECT COUNT(*) AS count FROM party_memberships WHERE party_id = ? AND participant_id = ?").get(activeParty.id, ctx.session.subjectId);
-    if (!membership || membership.count === 0) return Response.json({ error: "NOT_PARTY_MEMBER" }, { status: 403 });
+    if (!membership || membership.count === 0) return Response.json({ error: { code: "NOT_PARTY_MEMBER", message: "NOT_PARTY_MEMBER" } }, { status: 403 });
 
     const body = await request.json().catch(() => null);
-    if (!body || !body.title || !body.startsAt || !body.endsAt) return Response.json({ error: "VALIDATION_ERROR", details: ["title, startsAt, endsAt required"] }, { status: 400 });
+    if (!body || !body.title || !body.startsAt || !body.endsAt) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["title, startsAt, endsAt required"] }, { status: 400 });
 
     let gameId: number | null = null;
     if (body.gameName) {
@@ -122,11 +120,11 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     const ctx = requireParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const id = extractId(request.url, "/api/activity-proposals/");
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     const proposal = db.query<any, [number]>("SELECT * FROM activity_proposals WHERE id = ?").get(id);
-    if (!proposal) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
+    if (!proposal) return Response.json({ error: { code: "NOT_FOUND", message: "NOT_FOUND" } }, { status: 404 });
     const isAdmin = ctx.session.subjectType === "admin" || db.query<{ role: string }, [number]>("SELECT role FROM participants WHERE id = ?").get(ctx.session.subjectId)?.role === "admin";
-    if (proposal.created_by_participant_id !== ctx.session.subjectId && !isAdmin) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+    if (proposal.created_by_participant_id !== ctx.session.subjectId && !isAdmin) return Response.json({ error: { code: "FORBIDDEN", message: "FORBIDDEN" } }, { status: 403 });
     try { db.run("DELETE FROM activity_proposal_votes WHERE proposal_id = ?", [id]); } catch { /* pre-014 DBs */ }
     db.run("DELETE FROM activity_proposals WHERE id = ?", [id]);
     console.log("[proposals] DELETE /api/activity-proposals/" + id);
@@ -154,9 +152,9 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = extractId(request.url, "/api/admin/activity-proposals/");
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     const created = approveActivityProposal(db, id);
-    if (!created) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
+    if (!created) return Response.json({ error: { code: "NOT_FOUND", message: "NOT_FOUND" } }, { status: 404 });
     console.log("[proposals] POST /api/admin/activity-proposals/" + id + "/approve → activity created");
     return Response.json({ ok: true });
   }
@@ -165,10 +163,10 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     const ctx = requireParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const id = extractId(request.url, "/api/activity-proposals/");
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     const proposal = db.query<any, [number]>("SELECT * FROM activity_proposals WHERE id = ?").get(id);
-    if (!proposal) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
-    if (!requireMembership(proposal.party_id, ctx.session.subjectId)) return Response.json({ error: "NOT_PARTY_MEMBER" }, { status: 403 });
+    if (!proposal) return Response.json({ error: { code: "NOT_FOUND", message: "NOT_FOUND" } }, { status: 404 });
+    if (!requireMembership(proposal.party_id, ctx.session.subjectId)) return Response.json({ error: { code: "NOT_PARTY_MEMBER", message: "NOT_PARTY_MEMBER" } }, { status: 403 });
     db.run("INSERT OR IGNORE INTO activity_proposal_votes (proposal_id, participant_id) VALUES (?, ?)", [id, ctx.session.subjectId]);
     const count = voteCount("activity_proposal_votes", id);
     // Task 014: threshold reached → same rows as the admin approve path, no admin click.
@@ -188,7 +186,7 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     const ctx = requireParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const id = extractId(request.url, "/api/activity-proposals/");
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     try { db.run("DELETE FROM activity_proposal_votes WHERE proposal_id = ? AND participant_id = ?", [id, ctx.session.subjectId]); } catch { /* pre-014 DBs */ }
     return Response.json({ voted: false, voteCount: voteCount("activity_proposal_votes", id) });
   }
@@ -197,11 +195,11 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     const ctx = requireParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const activeParty = findActiveParty(db);
-    if (!activeParty) return Response.json({ error: "NOT_ACTIVE_PARTY" }, { status: 400 });
+    if (!activeParty) return Response.json({ error: { code: "NOT_ACTIVE_PARTY", message: "NOT_ACTIVE_PARTY" } }, { status: 400 });
     const membership = db.query<{ count: number }, [number, number]>("SELECT COUNT(*) AS count FROM party_memberships WHERE party_id = ? AND participant_id = ?").get(activeParty.id, ctx.session.subjectId);
-    if (!membership || membership.count === 0) return Response.json({ error: "NOT_PARTY_MEMBER" }, { status: 403 });
+    if (!membership || membership.count === 0) return Response.json({ error: { code: "NOT_PARTY_MEMBER", message: "NOT_PARTY_MEMBER" } }, { status: 403 });
     const body = await request.json().catch(() => null);
-    if (!body || !body.gameName || !body.name) return Response.json({ error: "VALIDATION_ERROR", details: ["gameName, name required"] }, { status: 400 });
+    if (!body || !body.gameName || !body.name) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["gameName, name required"] }, { status: 400 });
     const title = body.gameName.trim().slice(0, 120);
     let gameId: number;
     const existing = db.query<{ id: number }, [string]>("SELECT id FROM games WHERE LOWER(title) = LOWER(?) LIMIT 1").get(title);
@@ -236,11 +234,11 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     const ctx = requireParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const id = extractId(request.url, "/api/tournament-proposals/");
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     const proposal = db.query<any, [number]>("SELECT * FROM tournament_proposals WHERE id = ?").get(id);
-    if (!proposal) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
+    if (!proposal) return Response.json({ error: { code: "NOT_FOUND", message: "NOT_FOUND" } }, { status: 404 });
     const isAdmin = ctx.session.subjectType === "admin" || db.query<{ role: string }, [number]>("SELECT role FROM participants WHERE id = ?").get(ctx.session.subjectId)?.role === "admin";
-    if (proposal.created_by_participant_id !== ctx.session.subjectId && !isAdmin) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+    if (proposal.created_by_participant_id !== ctx.session.subjectId && !isAdmin) return Response.json({ error: { code: "FORBIDDEN", message: "FORBIDDEN" } }, { status: 403 });
     try { db.run("DELETE FROM tournament_proposal_votes WHERE proposal_id = ?", [id]); } catch { /* pre-014 DBs */ }
     db.run("DELETE FROM tournament_proposals WHERE id = ?", [id]);
     console.log("[proposals] DELETE /api/tournament-proposals/" + id);
@@ -251,9 +249,9 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = extractId(request.url, "/api/admin/tournament-proposals/");
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     const created = approveTournamentProposal(db, id);
-    if (!created) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
+    if (!created) return Response.json({ error: { code: "NOT_FOUND", message: "NOT_FOUND" } }, { status: 404 });
     const started = maybeAutoStartTournament(db, created);
     console.log("[proposals] POST /api/admin/tournament-proposals/" + id + "/approve → tournament#" + created);
     return Response.json({ ok: true, tournamentId: created, started });
@@ -263,10 +261,10 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     const ctx = requireParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const id = extractId(request.url, "/api/tournament-proposals/");
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     const proposal = db.query<any, [number]>("SELECT * FROM tournament_proposals WHERE id = ?").get(id);
-    if (!proposal) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
-    if (!requireMembership(proposal.party_id, ctx.session.subjectId)) return Response.json({ error: "NOT_PARTY_MEMBER" }, { status: 403 });
+    if (!proposal) return Response.json({ error: { code: "NOT_FOUND", message: "NOT_FOUND" } }, { status: 404 });
+    if (!requireMembership(proposal.party_id, ctx.session.subjectId)) return Response.json({ error: { code: "NOT_PARTY_MEMBER", message: "NOT_PARTY_MEMBER" } }, { status: 403 });
     db.run("INSERT OR IGNORE INTO tournament_proposal_votes (proposal_id, participant_id) VALUES (?, ?)", [id, ctx.session.subjectId]);
     const count = voteCount("tournament_proposal_votes", id);
     if (count >= AUTO_APPROVE_VOTES) {
@@ -286,7 +284,7 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     const ctx = requireParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const id = extractId(request.url, "/api/tournament-proposals/");
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     try { db.run("DELETE FROM tournament_proposal_votes WHERE proposal_id = ? AND participant_id = ?", [id, ctx.session.subjectId]); } catch { /* pre-014 DBs */ }
     return Response.json({ voted: false, voteCount: voteCount("tournament_proposal_votes", id) });
   }

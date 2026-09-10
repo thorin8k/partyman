@@ -76,7 +76,7 @@ export function PartyDetail() {
         fetchParty();
       } else {
         const err = await res.json();
-        setError(err.error || 'Error al actualizar');
+        setError(err.error?.code || err.error || 'Error al actualizar');
       }
     } catch {
       setError('Error de conexión');
@@ -113,7 +113,8 @@ export function PartyDetail() {
           PARTY_FINALIZED: 'Esta party ya está finalizada y no se puede modificar.',
           INVALID_STATUS_TRANSITION: 'Transición de estado no válida.',
         };
-        setError(errorMessages[err.error] || err.error || 'Error al ejecutar la acción');
+        const code = err.error?.code || err.error;
+        setError(errorMessages[code] || code || 'Error al ejecutar la acción');
       }
     } catch {
       setError('Error de conexión');
@@ -138,7 +139,7 @@ export function PartyDetail() {
       const data = await res.json().catch(() => ({}));
       if (data.steps) setWizardSteps(data.steps);
       if (res.ok) fetchParty();
-      else setError(data.error === 'WIZARD_BLOCKED' ? 'Hay torneos en curso: termínalos o cancélalos primero.' : (data.error || 'Error al cerrar'));
+      else setError((data.error?.code || data.error) === 'WIZARD_BLOCKED' ? 'Hay torneos en curso: termínalos o cancélalos primero.' : (data.error?.code || data.error || 'Error al cerrar'));
     } catch {
       setError('Error de conexión');
     } finally {

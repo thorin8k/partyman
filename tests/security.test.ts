@@ -67,4 +67,36 @@ describe("hardenRoutes", () => {
     );
     expect(get.status).toBe(403);
   });
+
+  it("passes double-submit CSRF without Origin/Referer (spec: same-origin client)", async () => {
+    const { checkCsrf } = await import("../src/backend/auth/guards");
+    const req = new Request("http://h/api/admin/games", {
+      method: "POST",
+      headers: { cookie: "partyman_csrf=csrf", "x-partyman-csrf": "csrf" },
+    });
+    expect(checkCsrf(req)).toBe(true);
+  });
+
+  it("shapes legacy string errors and sets no-store", async () => {
+    const legacy = (_req: Request, _srv?: any) => Response.json({ error: "ACTIVITY_FULL" }, { status: 409 });
+    const routes = hardenRoutes({ "/t": { POST: legacy } }, { dev: false });
+    const req = new Request("http://h/t", {
+      method: "POST",
+      headers: { cookie: "partyman_csrf=c", "x-partyman-csrf": "c" },
+    });
+    const res = await routes["/t"].POST(req, {});
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: { code: "ACTIVITY_FULL", message: "ACTIVITY_FULL" } });
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("rejects non-JSON bodies (415) and malformed JSON (400 INVALID_JSON)", async () => {
+    const routes = hardenRoutes({ "/t": { POST: ok } }, { dev: false });
+    const plain = new Request("http://h/t", { method: "POST", headers: { "content-type": "text/plain" }, body: "hi" });
+    expect((await routes["/t"].POST(plain, {})).status).toBe(415);
+    const broken = new Request("http://h/t", { method: "POST", headers: { "content-type": "application/json" }, body: "{oops" });
+    const res = await routes["/t"].POST(broken, {});
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("INVALID_JSON");
+  });
 });

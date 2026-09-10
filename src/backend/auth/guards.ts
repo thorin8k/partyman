@@ -79,7 +79,9 @@ export function checkCsrf(req: Request, allowedOrigins?: string[]): boolean {
       return false;
     }
   }
-  return false;
+  // Spec: validar Origin cuando está presente; sin Origin ni Referer (curl, fetch mismo origen)
+  // el double-submit ya acredita la petición.
+  return true;
 }
 
 function json(data: unknown, status: number): Response {

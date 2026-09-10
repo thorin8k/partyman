@@ -4,12 +4,10 @@ import { requireAdmin } from "../auth/guards";
 import { createBackup } from "../ops/backup";
 import { setParticipantRole, getAllParticipants, type ParticipantRole } from "../auth/participants";
 import type { CreatePartyInput, UpdatePartyInput } from "../../shared/contracts/parties";
+import { pathId } from "../http/ids";
 
 function extractId(url: string, prefix: string): number | null {
-  const path = new URL(url).pathname;
-  const suffix = path.slice(prefix.length);
-  const id = parseInt(suffix.split("/")[0], 10);
-  return isNaN(id) || id <= 0 ? null : id;
+  return pathId(url, prefix);
 }
 
 export function createPartyRoutes(db: Database) {
@@ -74,11 +72,11 @@ export function createPartyRoutes(db: Database) {
 
   async function handleGetParty(request: Request): Promise<Response> {
     const id = extractId(request.url, "/api/parties/");
-    if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (id === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     const party = service.getById(id);
     console.log("[parties] GET /api/parties/" + id + " →", party ? "found" : "NOT_FOUND");
     if (!party) {
-      return Response.json({ error: "PARTY_NOT_FOUND" }, { status: 404 });
+      return Response.json({ error: { code: "PARTY_NOT_FOUND", message: "PARTY_NOT_FOUND" } }, { status: 404 });
     }
     return Response.json({ party });
   }
@@ -92,7 +90,7 @@ export function createPartyRoutes(db: Database) {
     const errors = validatePartyInput(body);
     if (errors.length > 0) {
       console.log("[parties] POST /api/admin/parties → VALIDATION_ERROR:", errors);
-      return Response.json({ error: "VALIDATION_ERROR", details: errors }, { status: 400 });
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: errors }, { status: 400 });
     }
 
     try {
@@ -109,14 +107,14 @@ export function createPartyRoutes(db: Database) {
     if (auth instanceof Response) return auth;
 
     const id = extractId(request.url, "/api/admin/parties/");
-    if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (id === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const body = (await request.json()) as UpdatePartyInput;
 
     const errors = validatePartyUpdateInput(body);
     if (errors.length > 0) {
       console.log("[parties] PATCH /api/admin/parties/" + id + " → VALIDATION_ERROR:", errors);
-      return Response.json({ error: "VALIDATION_ERROR", details: errors }, { status: 400 });
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: errors }, { status: 400 });
     }
 
     try {
@@ -134,7 +132,7 @@ export function createPartyRoutes(db: Database) {
     if (auth instanceof Response) return auth;
 
     const id = extractId(request.url, "/api/admin/parties/");
-    if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (id === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     try {
       const party = service.activate(id, auth.session.subjectId);
@@ -151,7 +149,7 @@ export function createPartyRoutes(db: Database) {
     if (auth instanceof Response) return auth;
 
     const id = extractId(request.url, "/api/admin/parties/");
-    if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (id === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     try {
       const party = service.finish(id, auth.session.subjectId);
@@ -168,7 +166,7 @@ export function createPartyRoutes(db: Database) {
     if (auth instanceof Response) return auth;
 
     const id = extractId(request.url, "/api/admin/parties/");
-    if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (id === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     try {
       const party = service.archive(id, auth.session.subjectId);
@@ -185,7 +183,7 @@ export function createPartyRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = extractId(request.url, "/api/admin/parties/");
-    if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (id === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const steps: Array<{ key: string; status: "done" | "blocked" | "failed"; detail: string }> = [];
     try {
@@ -202,7 +200,7 @@ export function createPartyRoutes(db: Database) {
       ).all(id);
       if (live.length > 0) {
         steps.push({ key: "finish", status: "blocked", detail: `En curso: ${live.map(t => t.name).join(", ")}` });
-        return Response.json({ error: "WIZARD_BLOCKED", steps }, { status: 409 });
+        return Response.json({ error: { code: "WIZARD_BLOCKED", message: "WIZARD_BLOCKED" }, steps }, { status: 409 });
       }
 
       try {
@@ -227,10 +225,10 @@ export function createPartyRoutes(db: Database) {
 
   function handleErrorWithSteps(err: any, steps: Array<{ key: string; status: string; detail: string }>): Response {
     const message = err instanceof Error ? err.message : String(err);
-    if (message === "PARTY_NOT_FOUND") return Response.json({ error: "PARTY_NOT_FOUND", steps }, { status: 404 });
-    if (message === "UNFINISHED_TOURNAMENTS") return Response.json({ error: "WIZARD_BLOCKED", steps }, { status: 409 });
-    if (message === "INVALID_STATUS_TRANSITION") return Response.json({ error: "INVALID_STATUS_TRANSITION", steps }, { status: 400 });
-    return Response.json({ error: "INTERNAL_ERROR", steps }, { status: 500 });
+    if (message === "PARTY_NOT_FOUND") return Response.json({ error: { code: "PARTY_NOT_FOUND", message: "PARTY_NOT_FOUND" }, steps }, { status: 404 });
+    if (message === "UNFINISHED_TOURNAMENTS") return Response.json({ error: { code: "WIZARD_BLOCKED", message: "WIZARD_BLOCKED" }, steps }, { status: 409 });
+    if (message === "INVALID_STATUS_TRANSITION") return Response.json({ error: { code: "INVALID_STATUS_TRANSITION", message: "INVALID_STATUS_TRANSITION" }, steps }, { status: 400 });
+    return Response.json({ error: { code: "INTERNAL_ERROR", message: "INTERNAL_ERROR" }, steps }, { status: 500 });
   }
 
   async function handleDeleteParty(request: Request): Promise<Response> {
@@ -238,7 +236,7 @@ export function createPartyRoutes(db: Database) {
     if (auth instanceof Response) return auth;
 
     const id = extractId(request.url, "/api/admin/parties/");
-    if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (id === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     try {
       service.deleteParty(id);
@@ -345,17 +343,17 @@ export function createPartyRoutes(db: Database) {
 
     switch (message) {
       case "PARTY_NOT_FOUND":
-        return Response.json({ error: "PARTY_NOT_FOUND" }, { status: 404 });
+        return Response.json({ error: { code: "PARTY_NOT_FOUND", message: "PARTY_NOT_FOUND" } }, { status: 404 });
       case "PARTY_FINALIZED":
-        return Response.json({ error: "PARTY_FINALIZED" }, { status: 409 });
+        return Response.json({ error: { code: "PARTY_FINALIZED", message: "PARTY_FINALIZED" } }, { status: 409 });
       case "ACTIVE_PARTY_EXISTS":
-        return Response.json({ error: "ACTIVE_PARTY_EXISTS" }, { status: 409 });
+        return Response.json({ error: { code: "ACTIVE_PARTY_EXISTS", message: "ACTIVE_PARTY_EXISTS" } }, { status: 409 });
       case "UNFINISHED_TOURNAMENTS":
-        return Response.json({ error: "UNFINISHED_TOURNAMENTS" }, { status: 409 });
+        return Response.json({ error: { code: "UNFINISHED_TOURNAMENTS", message: "UNFINISHED_TOURNAMENTS" } }, { status: 409 });
       case "INVALID_STATUS_TRANSITION":
-        return Response.json({ error: "INVALID_STATUS_TRANSITION" }, { status: 400 });
+        return Response.json({ error: { code: "INVALID_STATUS_TRANSITION", message: "INVALID_STATUS_TRANSITION" } }, { status: 400 });
       default:
-        return Response.json({ error: "INTERNAL_ERROR" }, { status: 500 });
+        return Response.json({ error: { code: "INTERNAL_ERROR", message: "INTERNAL_ERROR" } }, { status: 500 });
     }
   }
 
@@ -374,17 +372,17 @@ export function createPartyRoutes(db: Database) {
 
     const id = extractId(request.url, "/api/admin/participants/");
     if (id === null) {
-      return Response.json({ error: "INVALID_ID" }, { status: 400 });
+      return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     }
 
     const body = await request.json().catch(() => null);
     if (!body || !body.role || !["participant", "admin"].includes(body.role)) {
-      return Response.json({ error: "INVALID_ROLE", message: "role must be 'participant' or 'admin'" }, { status: 400 });
+      return Response.json({ error: { code: "INVALID_ROLE", message: "role must be 'participant' or 'admin'" } }, { status: 400 });
     }
 
     const participant = db.query<{ id: number }, [number]>("SELECT id FROM participants WHERE id = ?").get(id);
     if (!participant) {
-      return Response.json({ error: "PARTICIPANT_NOT_FOUND" }, { status: 404 });
+      return Response.json({ error: { code: "PARTICIPANT_NOT_FOUND", message: "PARTICIPANT_NOT_FOUND" } }, { status: 404 });
     }
 
     setParticipantRole(db, id, body.role as ParticipantRole);

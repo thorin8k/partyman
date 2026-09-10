@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { requireAdmin, requireParticipant } from "../auth/guards";
 import { findActiveParty } from "../auth/participants";
 import { awardActivityJoin } from "../scoring/service";
+import { pathId, parsePositiveId } from "../http/ids";
 
 interface ActivityRow {
   id: number;
@@ -56,10 +57,7 @@ export function createActivitiesRoutes(db: Database) {
   };
 
   function extractId(url: string, prefix: string): number | null {
-    const path = new URL(url).pathname;
-    const suffix = path.slice(prefix.length);
-    const id = parseInt(suffix.split("/")[0], 10);
-    return isNaN(id) || id <= 0 ? null : id;
+    return pathId(url, prefix);
   }
 
   async function handleGetActivities(request: Request): Promise<Response> {
@@ -67,8 +65,8 @@ export function createActivitiesRoutes(db: Database) {
     if (auth instanceof Response) return auth;
 
     const partyIdStr = new URL(request.url).pathname.split("/")[4];
-    const partyId = parseInt(partyIdStr, 10);
-    if (isNaN(partyId) || partyId <= 0) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    const partyId = parsePositiveId(partyIdStr);
+    if (partyId === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const rows = db.query<ActivityRow, [number]>(
       "SELECT * FROM activities WHERE party_id = ? ORDER BY starts_at"
@@ -99,21 +97,21 @@ export function createActivitiesRoutes(db: Database) {
     if (auth instanceof Response) return auth;
 
     const partyIdStr = new URL(request.url).pathname.split("/")[4];
-    const partyId = parseInt(partyIdStr, 10);
-    if (isNaN(partyId) || partyId <= 0) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    const partyId = parsePositiveId(partyIdStr);
+    if (partyId === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const body = await request.json().catch(() => null);
     if (!body || !body.title || !body.startsAt || !body.endsAt) {
-      return Response.json({ error: "VALIDATION_ERROR", details: ["title, startsAt, endsAt are required"] }, { status: 400 });
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["title, startsAt, endsAt are required"] }, { status: 400 });
     }
 
     const title = body.title.trim();
     if (title.length === 0 || title.length > 120) {
-      return Response.json({ error: "VALIDATION_ERROR", details: ["title must be 1-120 characters"] }, { status: 400 });
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["title must be 1-120 characters"] }, { status: 400 });
     }
 
     if (body.capacity != null && (body.capacity < 1 || body.capacity > 100)) {
-      return Response.json({ error: "VALIDATION_ERROR", details: ["capacity must be 1-100"] }, { status: 400 });
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["capacity must be 1-100"] }, { status: 400 });
     }
 
     let gameTitleSnapshot = null;
@@ -137,13 +135,13 @@ export function createActivitiesRoutes(db: Database) {
     if (auth instanceof Response) return auth;
 
     const id = extractId(request.url, "/api/admin/activities/");
-    if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (id === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const existing = db.query<ActivityRow, [number]>("SELECT * FROM activities WHERE id = ?").get(id);
-    if (!existing) return Response.json({ error: "ACTIVITY_NOT_FOUND" }, { status: 404 });
+    if (!existing) return Response.json({ error: { code: "ACTIVITY_NOT_FOUND", message: "ACTIVITY_NOT_FOUND" } }, { status: 404 });
 
     const body = await request.json().catch(() => null);
-    if (!body) return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
+    if (!body) return Response.json({ error: { code: "INVALID_REQUEST", message: "INVALID_REQUEST" } }, { status: 400 });
 
     const updates: string[] = [];
     const values: unknown[] = [];
@@ -155,12 +153,12 @@ export function createActivitiesRoutes(db: Database) {
     if (body.notes !== undefined) { updates.push("notes = ?"); values.push(body.notes || null); }
     if (body.status !== undefined) {
       if (!["scheduled", "in_progress", "finished", "cancelled"].includes(body.status)) {
-        return Response.json({ error: "VALIDATION_ERROR", details: ["status must be scheduled, in_progress, finished or cancelled"] }, { status: 422 });
+        return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["status must be scheduled, in_progress, finished or cancelled"] }, { status: 422 });
       }
       updates.push("status = ?"); values.push(body.status);
     }
 
-    if (updates.length === 0) return Response.json({ error: "NO_CHANGES" }, { status: 400 });
+    if (updates.length === 0) return Response.json({ error: { code: "NO_CHANGES", message: "NO_CHANGES" } }, { status: 400 });
 
     updates.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
     values.push(id);
@@ -176,10 +174,10 @@ export function createActivitiesRoutes(db: Database) {
     if (auth instanceof Response) return auth;
 
     const id = extractId(request.url, "/api/admin/activities/");
-    if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (id === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const existing = db.query<ActivityRow, [number]>("SELECT * FROM activities WHERE id = ?").get(id);
-    if (!existing) return Response.json({ error: "ACTIVITY_NOT_FOUND" }, { status: 404 });
+    if (!existing) return Response.json({ error: { code: "ACTIVITY_NOT_FOUND", message: "ACTIVITY_NOT_FOUND" } }, { status: 404 });
 
     db.run("DELETE FROM activity_participants WHERE activity_id = ?", [id]);
     db.run("DELETE FROM activities WHERE id = ?", [id]);
@@ -192,19 +190,19 @@ export function createActivitiesRoutes(db: Database) {
     if (ctx instanceof Response) return ctx;
 
     const id = extractId(request.url, "/api/activities/");
-    if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (id === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const activity = db.query<ActivityRow, [number]>("SELECT * FROM activities WHERE id = ?").get(id);
-    if (!activity) return Response.json({ error: "ACTIVITY_NOT_FOUND" }, { status: 404 });
+    if (!activity) return Response.json({ error: { code: "ACTIVITY_NOT_FOUND", message: "ACTIVITY_NOT_FOUND" } }, { status: 404 });
 
     const activeParty = findActiveParty(db);
     if (!activeParty || activity.party_id !== activeParty.id) {
-      return Response.json({ error: "NOT_ACTIVE_PARTY" }, { status: 400 });
+      return Response.json({ error: { code: "NOT_ACTIVE_PARTY", message: "NOT_ACTIVE_PARTY" } }, { status: 400 });
     }
 
     if (activity.capacity != null) {
       const count = db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM activity_participants WHERE activity_id = ?").get(id)!;
-      if (count.count >= activity.capacity) return Response.json({ error: "ACTIVITY_FULL" }, { status: 409 });
+      if (count.count >= activity.capacity) return Response.json({ error: { code: "ACTIVITY_FULL", message: "ACTIVITY_FULL" } }, { status: 409 });
     }
 
     db.run("INSERT OR IGNORE INTO activity_participants (activity_id, participant_id) VALUES (?, ?)", [id, ctx.session.subjectId]);
@@ -218,7 +216,7 @@ export function createActivitiesRoutes(db: Database) {
     if (ctx instanceof Response) return ctx;
 
     const id = extractId(request.url, "/api/activities/");
-    if (id === null) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (id === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     db.run("DELETE FROM activity_participants WHERE activity_id = ? AND participant_id = ?", [id, ctx.session.subjectId]);
     console.log("[activities] DELETE /api/activities/" + id + "/leave → participant#" + ctx.session.subjectId);

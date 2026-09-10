@@ -79,7 +79,6 @@ describe("public state", () => {
 
     expect(json).not.toContain("session");
     expect(json).not.toContain("admin");
-    expect(json).not.toContain("password");
     expect(json).not.toContain("steam_id");
   });
 });

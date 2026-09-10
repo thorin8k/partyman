@@ -33,6 +33,26 @@ export function hardenRoutes<T extends RouteMap>(routes: T, opts?: { dev?: boole
             dev
           );
         }
+        // Spec: los bodies JSON exigen Content-Type application/json; JSON roto → 400 INVALID_JSON.
+        // Solo cuando hay body real (los POST sin body del admin no llevan Content-Type;
+        // el header content-length puede mentir, req.body no).
+        const hasBody = req.body != null || req.headers.get("transfer-encoding") != null;
+        if (hasBody) {
+          const ct = req.headers.get("content-type") ?? "";
+          if (!ct.includes("application/json")) {
+            return applySecurityHeaders(
+              Response.json({ error: { code: "UNSUPPORTED_MEDIA_TYPE", message: "Content-Type must be application/json" } }, { status: 415 }),
+              dev
+            );
+          }
+          const valid = await req.clone().json().then(() => true).catch(() => false);
+          if (!valid) {
+            return applySecurityHeaders(
+              Response.json({ error: { code: "INVALID_JSON", message: "Malformed JSON body" } }, { status: 400 }),
+              dev
+            );
+          }
+        }
         // ponytail: un solo guard CSRF para todos los writes (el login inicial se exime solo).
         if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS" && !checkCsrf(req)) {
           return applySecurityHeaders(
@@ -40,9 +60,28 @@ export function hardenRoutes<T extends RouteMap>(routes: T, opts?: { dev?: boole
             dev
           );
         }
-        return applySecurityHeaders(await handler(req, server), dev);
+        return applySecurityHeaders(await shapeError(await handler(req, server)), dev);
       };
     }
   }
   return out as T;
+}
+
+// Spec: los writes devuelven { error: { code, message } }.
+// Red de seguridad: si algún handler devuelve el antiguo { error: <string> }, se normaliza aquí.
+async function shapeError(res: Response): Promise<Response> {
+  const ct = res.headers.get("content-type") ?? "";
+  if (!ct.includes("application/json")) return res;
+  let data: Record<string, any>;
+  try {
+    data = await res.clone().json();
+  } catch {
+    return res;
+  }
+  if (!data || typeof data.error !== "string") return res;
+  const { error: code, message, ...rest } = data;
+  return new Response(JSON.stringify({ error: { code, message: typeof message === "string" ? message : code }, ...rest }), {
+    status: res.status,
+    headers: res.headers,
+  });
 }

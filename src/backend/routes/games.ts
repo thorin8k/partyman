@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { requireAdmin, requireParticipant } from "../auth/guards";
+import { parsePositiveId } from "../http/ids";
 
 interface GameRow {
   id: number;
@@ -80,16 +81,16 @@ export function createGamesRoutes(db: Database) {
 
     const body = await request.json().catch(() => null);
     if (!body || !body.title || typeof body.title !== "string") {
-      return Response.json({ error: "VALIDATION_ERROR", details: ["title is required"] }, { status: 400 });
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["title is required"] }, { status: 400 });
     }
 
     const title = body.title.trim();
     if (title.length === 0 || title.length > 120) {
-      return Response.json({ error: "VALIDATION_ERROR", details: ["title must be 1-120 characters"] }, { status: 400 });
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["title must be 1-120 characters"] }, { status: 400 });
     }
 
     if (body.minPlayers != null && body.maxPlayers != null && body.minPlayers > body.maxPlayers) {
-      return Response.json({ error: "VALIDATION_ERROR", details: ["minPlayers must be <= maxPlayers"] }, { status: 400 });
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["minPlayers must be <= maxPlayers"] }, { status: 400 });
     }
 
     const result = db.run(
@@ -107,21 +108,21 @@ export function createGamesRoutes(db: Database) {
     if (auth instanceof Response) return auth;
 
     const idStr = new URL(request.url).pathname.split("/").pop();
-    const id = parseInt(idStr ?? "", 10);
-    if (isNaN(id) || id <= 0) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    const id = parsePositiveId(idStr);
+    if (id === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const existing = db.query<GameRow, [number]>("SELECT * FROM games WHERE id = ?").get(id);
-    if (!existing) return Response.json({ error: "GAME_NOT_FOUND" }, { status: 404 });
+    if (!existing) return Response.json({ error: { code: "GAME_NOT_FOUND", message: "GAME_NOT_FOUND" } }, { status: 404 });
 
     const body = await request.json().catch(() => null);
-    if (!body) return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
+    if (!body) return Response.json({ error: { code: "INVALID_REQUEST", message: "INVALID_REQUEST" } }, { status: 400 });
 
     const updates: string[] = [];
     const values: unknown[] = [];
 
     if (body.title !== undefined) {
       const t = body.title.trim();
-      if (t.length === 0 || t.length > 120) return Response.json({ error: "VALIDATION_ERROR", details: ["title must be 1-120 characters"] }, { status: 400 });
+      if (t.length === 0 || t.length > 120) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["title must be 1-120 characters"] }, { status: 400 });
       updates.push("title = ?");
       values.push(t);
     }
@@ -132,7 +133,7 @@ export function createGamesRoutes(db: Database) {
     if (body.setupNotes !== undefined) { updates.push("setup_notes = ?"); values.push(body.setupNotes || null); }
     if (body.enabled !== undefined) { updates.push("enabled = ?"); values.push(body.enabled ? 1 : 0); }
 
-    if (updates.length === 0) return Response.json({ error: "NO_CHANGES" }, { status: 400 });
+    if (updates.length === 0) return Response.json({ error: { code: "NO_CHANGES", message: "NO_CHANGES" } }, { status: 400 });
 
     updates.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
     values.push(id);
@@ -147,10 +148,10 @@ export function createGamesRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const idStr = new URL(request.url).pathname.split("/").pop();
-    const id = parseInt(idStr ?? "", 10);
-    if (isNaN(id) || id <= 0) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    const id = parsePositiveId(idStr);
+    if (id === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     const existing = db.query<GameRow, [number]>("SELECT * FROM games WHERE id = ?").get(id);
-    if (!existing) return Response.json({ error: "GAME_NOT_FOUND" }, { status: 404 });
+    if (!existing) return Response.json({ error: { code: "GAME_NOT_FOUND", message: "GAME_NOT_FOUND" } }, { status: 404 });
     // ponytail: referenciado → desactivar en vez de borrar (el histórico usa snapshots).
     let referenced = false;
     try {

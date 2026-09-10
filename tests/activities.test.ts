@@ -105,7 +105,7 @@ describe("activities", () => {
     );
     expect(res.status).toBe(409);
     const body = await res.json();
-    expect(body.error).toBe("ACTIVITY_FULL");
+    expect(body.error.code).toBe("ACTIVITY_FULL");
   });
 
   it("validates manual status transitions", async () => {

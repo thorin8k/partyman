@@ -67,7 +67,7 @@ export function AdminGames() {
       body: JSON.stringify({ title: game.name, imageUrl: game.imageUrl || null, steamgriddbId: game.id || null }),
     });
     if (res.ok) { fetchGames(); setSearchResults([]); setSearchQuery(''); }
-    else { const err = await res.json(); setError(err.error || 'Error'); }
+    else { const err = await res.json(); setError(err.error?.code || err.error || 'Error'); }
   };
 
   if (loading) return <div className="container"><div className="loading">Cargando…</div></div>;

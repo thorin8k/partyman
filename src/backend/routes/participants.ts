@@ -41,7 +41,7 @@ export function createParticipantRoutes(db: Database) {
 
     const participant = findParticipantById(db, ctx.session.subjectId);
     if (!participant) {
-      return Response.json({ error: "PARTICIPANT_NOT_FOUND" }, { status: 404 });
+      return Response.json({ error: { code: "PARTICIPANT_NOT_FOUND", message: "PARTICIPANT_NOT_FOUND" } }, { status: 404 });
     }
 
     const activeParty = findActiveParty(db);

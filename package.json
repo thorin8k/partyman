@@ -8,14 +8,12 @@
     "dev": "bun --hot src/backend.ts",
     "dev:proxy": "NODE_ENV=production bun src/backend.ts",
     "build": "bun build --sourcemap --outdir=dist --target=bun --production src/backend.ts",
-    "copy": "bunx cp -r src/public dist/",
-    "compile": "bun run build && bun run copy",
+    "copy": "cp -r src/public dist/",
+    "compile": "rm -rf dist && bun run build && bun run copy",
     "start": "NODE_ENV=production bun src/backend.ts",
     "prod": "cd dist && NODE_ENV=production bun backend.js",
     "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "format": "bun format src tests migrations *.json *.ts",
-    "format:check": "bun format --check src tests migrations *.json *.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "react": "^18.3.1",

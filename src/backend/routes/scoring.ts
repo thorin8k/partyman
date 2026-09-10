@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { requireAdmin, requireParticipant } from "../auth/guards";
 import { getLeaderboard, scorePartyParticipation } from "../scoring/service";
+import { pathId, parsePositiveId } from "../http/ids";
 
 export function createScoringRoutes(db: Database) {
   return {
@@ -17,10 +18,7 @@ export function createScoringRoutes(db: Database) {
   };
 
   function extractId(url: string, prefix: string): number | null {
-    const path = new URL(url).pathname;
-    const suffix = path.slice(prefix.length);
-    const id = parseInt(suffix.split("/")[0], 10);
-    return isNaN(id) || id <= 0 ? null : id;
+    return pathId(url, prefix);
   }
 
   async function handleGetLeaderboard(request: Request): Promise<Response> {
@@ -28,8 +26,8 @@ export function createScoringRoutes(db: Database) {
     const partyIdParam = url.searchParams.get("partyId");
     let partyId: number | undefined;
     if (partyIdParam) {
-      partyId = parseInt(partyIdParam, 10);
-      if (isNaN(partyId) || partyId <= 0) return Response.json({ error: { code: "INVALID_ID", message: "Invalid partyId" } }, { status: 400 });
+      partyId = parsePositiveId(partyIdParam) ?? undefined;
+      if (partyId === undefined) return Response.json({ error: { code: "INVALID_ID", message: "Invalid partyId" } }, { status: 400 });
       const exists = db.query<any, [number]>("SELECT id FROM parties WHERE id = ?").get(partyId);
       if (!exists) return Response.json({ error: { code: "PARTY_NOT_FOUND", message: "Party not found" } }, { status: 404 });
     }
@@ -46,10 +44,10 @@ export function createScoringRoutes(db: Database) {
     const ctx = requireParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const id = extractId(request.url, "/api/participants/");
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     if (ctx.session.subjectId !== id) {
       const isAdmin = ctx.session.subjectType === "admin" || db.query<{ role: string }, [number]>("SELECT role FROM participants WHERE id = ?").get(ctx.session.subjectId)?.role === "admin";
-      if (!isAdmin) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+      if (!isAdmin) return Response.json({ error: { code: "FORBIDDEN", message: "FORBIDDEN" } }, { status: 403 });
     }
     const ledger = db.query<any, [number]>("SELECT * FROM point_ledger WHERE participant_id = ? ORDER BY created_at DESC").all(id);
     const awards = db.query<any, [number]>("SELECT * FROM participant_awards WHERE participant_id = ? ORDER BY created_at DESC").all(id);
@@ -67,23 +65,23 @@ export function createScoringRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const body = await request.json().catch(() => null);
-    if (!body?.code || !body?.label || body.points == null) return Response.json({ error: "VALIDATION_ERROR" }, { status: 400 });
+    if (!body?.code || !body?.label || body.points == null) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" } }, { status: 400 });
     try {
       const res = db.run("INSERT INTO point_rules (code, label, points) VALUES (?, ?, ?)", [body.code, body.label, body.points]);
       const rule = db.query<any, [number]>("SELECT * FROM point_rules WHERE id = ?").get(Number(res.lastInsertRowid));
       return Response.json({ rule }, { status: 201 });
-    } catch { return Response.json({ error: "DUPLICATE_CODE" }, { status: 409 }); }
+    } catch { return Response.json({ error: { code: "DUPLICATE_CODE", message: "DUPLICATE_CODE" } }, { status: 409 }); }
   }
 
   async function handleUpdatePointRule(request: Request): Promise<Response> {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = extractId(request.url, "/api/admin/point-rules/");
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     const existing = db.query<any, [number]>("SELECT id FROM point_rules WHERE id = ?").get(id);
     if (!existing) return Response.json({ error: { code: "NOT_FOUND", message: "Rule not found" } }, { status: 404 });
     const body = await request.json().catch(() => null);
-    if (!body) return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
+    if (!body) return Response.json({ error: { code: "INVALID_REQUEST", message: "INVALID_REQUEST" } }, { status: 400 });
     if (body.enabled !== undefined) db.run("UPDATE point_rules SET enabled = ? WHERE id = ?", [body.enabled ? 1 : 0, id]);
     if (body.points !== undefined) {
       if (typeof body.points !== "number" || !Number.isInteger(body.points)) return Response.json({ error: { code: "VALIDATION_ERROR", message: "points must be integer" } }, { status: 400 });
@@ -105,12 +103,12 @@ export function createScoringRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const body = await request.json().catch(() => null);
-    if (!body?.code || !body?.name) return Response.json({ error: "VALIDATION_ERROR" }, { status: 400 });
+    if (!body?.code || !body?.name) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" } }, { status: 400 });
     try {
       const res = db.run("INSERT INTO achievements (code, name, description) VALUES (?, ?, ?)", [body.code, body.name, body.description ?? null]);
       const achievement = db.query<any, [number]>("SELECT * FROM achievements WHERE id = ?").get(Number(res.lastInsertRowid));
       return Response.json({ achievement }, { status: 201 });
-    } catch { return Response.json({ error: "DUPLICATE_CODE" }, { status: 409 }); }
+    } catch { return Response.json({ error: { code: "DUPLICATE_CODE", message: "DUPLICATE_CODE" } }, { status: 409 }); }
   }
 
   async function handleCreateAward(request: Request): Promise<Response> {
@@ -139,11 +137,11 @@ export function createScoringRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = extractId(request.url, "/api/admin/achievements/");
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     const existing = db.query<any, [number]>("SELECT * FROM achievements WHERE id = ?").get(id);
     if (!existing) return Response.json({ error: { code: "NOT_FOUND", message: "Achievement not found" } }, { status: 404 });
     const body = await request.json().catch(() => null);
-    if (!body) return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
+    if (!body) return Response.json({ error: { code: "INVALID_REQUEST", message: "INVALID_REQUEST" } }, { status: 400 });
     try {
       if (body.code !== undefined) db.run("UPDATE achievements SET code = ? WHERE id = ?", [String(body.code).trim(), id]);
       if (body.name !== undefined) db.run("UPDATE achievements SET name = ? WHERE id = ?", [String(body.name).trim().slice(0, 120), id]);
@@ -173,7 +171,7 @@ export function createScoringRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = extractId(request.url, "/api/admin/parties/");
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     const party = db.query<any, [number]>("SELECT id FROM parties WHERE id = ?").get(id);
     if (!party) return Response.json({ error: { code: "PARTY_NOT_FOUND", message: "Party not found" } }, { status: 404 });
     scorePartyParticipation(db, id);

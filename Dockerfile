@@ -15,6 +15,8 @@ RUN bun compile
 FROM oven/bun:1-slim
 WORKDIR /usr/src/app
 COPY --from=base /usr/src/app/dist ./
+# Las migraciones no van en el bundle: copiarlas para el runner (migrate.ts las busca junto al binario o en cwd).
+COPY --from=base /usr/src/app/migrations ./migrations
 RUN mkdir -p /data /uploads /data/backups
 
 EXPOSE 8400

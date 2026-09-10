@@ -121,7 +121,7 @@ export function AdminPlanning() {
         method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify(body),
       });
       if (res.ok) { setShowForm(false); setEditingActivity(null); setForm({ title: '', gameId: '', startsAt: '', endsAt: '', capacity: '', notes: '' }); if (partyId) fetchActivities(partyId); }
-      else { const err = await res.json(); setError(err.error || 'Error'); }
+      else { const err = await res.json(); setError(err.error?.code || err.error || 'Error'); }
       return;
     }
 
@@ -131,7 +131,7 @@ export function AdminPlanning() {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify(body),
     });
     if (res.ok) { setShowForm(false); setForm({ title: '', gameId: '', startsAt: '', endsAt: '', capacity: '', notes: '' }); fetchActivities(partyId); }
-    else { const err = await res.json(); setError(err.error || 'Error'); }
+    else { const err = await res.json(); setError(err.error?.code || err.error || 'Error'); }
   };
 
   const handleDelete = async (id: number) => {

@@ -12,12 +12,17 @@ export async function executeMigrations() {
     )
   `);
 
-  // Load SQL migrations from the migrations folder
-  const migrationsDir = join(import.meta.dir, "../../../migrations");
-  
-  if (!existsSync(migrationsDir)) {
-    console.log("No migrations directory found");
-    return;
+  // Dev: src/backend/db → raíz del repo. Prod (dist/backend.js): cwd o junto al binario.
+  // Sin esto el contenedor arrancaba con DB vacía porque dist/ no incluía migrations/.
+  const candidates = [
+    join(process.cwd(), "migrations"),
+    join(import.meta.dir, "migrations"),
+    join(import.meta.dir, "../../../migrations"),
+  ];
+  const migrationsDir = candidates.find((d) => existsSync(d));
+
+  if (!migrationsDir) {
+    throw new Error(`Migrations directory not found (tried: ${candidates.join(", ")})`);
   }
 
   const files = readdirSync(migrationsDir)

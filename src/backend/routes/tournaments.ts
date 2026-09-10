@@ -3,6 +3,7 @@ import { requireAdmin, requireParticipant } from "../auth/guards";
 import { findActiveParty } from "../auth/participants";
 import { generateBracket, getNextMatchPosition, isBye } from "../tournaments/single-elimination";
 import { REPORT_TIMEOUT_MIN, logEvent, scoreTournamentFinished } from "../scoring/service";
+import { pathId, parsePositiveId } from "../http/ids";
 
 interface TournamentRow {
   id: number; party_id: number; game_id: number; game_title_snapshot: string;
@@ -18,10 +19,7 @@ interface MatchRow {
 }
 
 function extractId(url: string, prefix: string): number | null {
-  const path = new URL(url).pathname;
-  const suffix = path.slice(prefix.length);
-  const id = parseInt(suffix.split("/")[0], 10);
-  return isNaN(id) || id <= 0 ? null : id;
+  return pathId(url, prefix);
 }
 
 export function createTournamentRoutes(db: Database) {
@@ -48,7 +46,7 @@ export function createTournamentRoutes(db: Database) {
     const parts = new URL(url).pathname.split("/");
     for (let i = parts.length - 1; i >= 0; i--) {
       if (parts[i] === "tournaments" || parts[i] === "matches") {
-        return parseInt(parts[i + 1], 10) || null;
+        return parsePositiveId(parts[i + 1]);
       }
     }
     return null;
@@ -58,7 +56,7 @@ export function createTournamentRoutes(db: Database) {
     const parts = new URL(url).pathname.split("/");
     for (let i = parts.length - 1; i >= 0; i--) {
       if (parts[i] === "matches") {
-        return parseInt(parts[i + 1], 10) || null;
+        return parsePositiveId(parts[i + 1]);
       }
     }
     return null;
@@ -69,10 +67,10 @@ export function createTournamentRoutes(db: Database) {
     if (auth instanceof Response) return auth;
     const body = await request.json().catch(() => null);
     if (!body || !body.partyId || !body.gameId || !body.name) {
-      return Response.json({ error: "VALIDATION_ERROR", details: ["partyId, gameId, name required"] }, { status: 400 });
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["partyId, gameId, name required"] }, { status: 400 });
     }
     const game = db.query<{ id: number; title: string; enabled: number }, [number]>("SELECT id, title, enabled FROM games WHERE id = ?").get(body.gameId);
-    if (!game || !game.enabled) return Response.json({ error: "GAME_NOT_FOUND" }, { status: 404 });
+    if (!game || !game.enabled) return Response.json({ error: { code: "GAME_NOT_FOUND", message: "GAME_NOT_FOUND" } }, { status: 404 });
 
     // Task 014: creation publishes directly (no draft state for new tournaments).
     const result = db.run(
@@ -88,21 +86,21 @@ export function createTournamentRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = getTournamentId(request.url);
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const existing = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
-    if (!existing) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
-    if (existing.status !== "draft") return Response.json({ error: "INVALID_TOURNAMENT_STATE" }, { status: 409 });
+    if (!existing) return Response.json({ error: { code: "TOURNAMENT_NOT_FOUND", message: "TOURNAMENT_NOT_FOUND" } }, { status: 404 });
+    if (existing.status !== "draft") return Response.json({ error: { code: "INVALID_TOURNAMENT_STATE", message: "INVALID_TOURNAMENT_STATE" } }, { status: 409 });
 
     const body = await request.json().catch(() => null);
-    if (!body) return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
+    if (!body) return Response.json({ error: { code: "INVALID_REQUEST", message: "INVALID_REQUEST" } }, { status: 400 });
 
     const updates: string[] = [];
     const values: unknown[] = [];
     if (body.name) { updates.push("name = ?"); values.push(body.name.trim()); }
     if (body.maxParticipants) { updates.push("max_participants = ?"); values.push(body.maxParticipants); }
     if (body.activityId !== undefined) { updates.push("activity_id = ?"); values.push(body.activityId); }
-    if (updates.length === 0) return Response.json({ error: "NO_CHANGES" }, { status: 400 });
+    if (updates.length === 0) return Response.json({ error: { code: "NO_CHANGES", message: "NO_CHANGES" } }, { status: 400 });
 
     updates.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
     values.push(id);
@@ -115,14 +113,14 @@ export function createTournamentRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = getTournamentId(request.url);
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
-    if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
-    if (t.status !== "draft") return Response.json({ error: "INVALID_TOURNAMENT_STATE" }, { status: 409 });
+    if (!t) return Response.json({ error: { code: "TOURNAMENT_NOT_FOUND", message: "TOURNAMENT_NOT_FOUND" } }, { status: 404 });
+    if (t.status !== "draft") return Response.json({ error: { code: "INVALID_TOURNAMENT_STATE", message: "INVALID_TOURNAMENT_STATE" } }, { status: 409 });
 
     const count = db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ?").get(id)!;
-    if (count.count < 2) return Response.json({ error: "NEED_MIN_PARTICIPANTS", details: ["Need at least 2 participants"] }, { status: 400 });
+    if (count.count < 2) return Response.json({ error: { code: "NEED_MIN_PARTICIPANTS", message: "NEED_MIN_PARTICIPANTS" }, details: ["Need at least 2 participants"] }, { status: 400 });
 
     db.run("UPDATE tournaments SET status = 'upcoming', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [id]);
     console.log("[tournaments] POST /api/admin/tournaments/" + id + "/publish");
@@ -133,12 +131,12 @@ export function createTournamentRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = getTournamentId(request.url);
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const r = startTournamentNow(db, id);
     if (!r.ok) {
       const status = r.error === "TOURNAMENT_NOT_FOUND" ? 404 : r.error === "INVALID_TOURNAMENT_STATE" ? 409 : 400;
-      return Response.json({ error: r.error }, { status });
+      return Response.json({ error: { code: r.error, message: r.error } }, { status });
     }
     console.log("[tournaments] POST /api/admin/tournaments/" + id + "/start");
     return Response.json({ tournament: db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id) });
@@ -148,11 +146,11 @@ export function createTournamentRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = getTournamentId(request.url);
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
-    if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
-    if (t.status === "finished") return Response.json({ error: "INVALID_TOURNAMENT_STATE" }, { status: 409 });
+    if (!t) return Response.json({ error: { code: "TOURNAMENT_NOT_FOUND", message: "TOURNAMENT_NOT_FOUND" } }, { status: 404 });
+    if (t.status === "finished") return Response.json({ error: { code: "INVALID_TOURNAMENT_STATE", message: "INVALID_TOURNAMENT_STATE" } }, { status: 409 });
 
     db.run("UPDATE tournaments SET status = 'cancelled', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [id]);
     console.log("[tournaments] POST /api/admin/tournaments/" + id + "/cancel");
@@ -163,9 +161,9 @@ export function createTournamentRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = getTournamentId(request.url);
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
-    if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
+    if (!t) return Response.json({ error: { code: "TOURNAMENT_NOT_FOUND", message: "TOURNAMENT_NOT_FOUND" } }, { status: 404 });
     db.run("DELETE FROM matches WHERE tournament_id = ?", [id]);
     db.run("DELETE FROM match_reports WHERE match_id IN (SELECT id FROM matches WHERE tournament_id = ?)", [id]);
     db.run("DELETE FROM tournament_participants WHERE tournament_id = ?", [id]);
@@ -178,20 +176,20 @@ export function createTournamentRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = getTournamentId(request.url);
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
-    if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
-    if (t.status !== "draft" && t.status !== "upcoming") return Response.json({ error: "INVALID_TOURNAMENT_STATE" }, { status: 409 });
+    if (!t) return Response.json({ error: { code: "TOURNAMENT_NOT_FOUND", message: "TOURNAMENT_NOT_FOUND" } }, { status: 404 });
+    if (t.status !== "draft" && t.status !== "upcoming") return Response.json({ error: { code: "INVALID_TOURNAMENT_STATE", message: "INVALID_TOURNAMENT_STATE" } }, { status: 409 });
 
     const body = await request.json().catch(() => null);
-    if (!body || !body.participantId) return Response.json({ error: "VALIDATION_ERROR" }, { status: 400 });
+    if (!body || !body.participantId) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" } }, { status: 400 });
 
     const participant = db.query<{ id: number; display_name: string }, [number]>("SELECT id, display_name FROM participants WHERE id = ?").get(body.participantId);
-    if (!participant) return Response.json({ error: "PARTICIPANT_NOT_FOUND" }, { status: 404 });
+    if (!participant) return Response.json({ error: { code: "PARTICIPANT_NOT_FOUND", message: "PARTICIPANT_NOT_FOUND" } }, { status: 404 });
 
     const count = db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ?").get(id)!;
-    if (count.count >= t.max_participants) return Response.json({ error: "TOURNAMENT_FULL" }, { status: 409 });
+    if (count.count >= t.max_participants) return Response.json({ error: { code: "TOURNAMENT_FULL", message: "TOURNAMENT_FULL" } }, { status: 409 });
 
     const maxSeed = db.query<{ max_seed: number }, [number]>("SELECT COALESCE(MAX(seed), 0) AS max_seed FROM tournament_participants WHERE tournament_id = ?").get(id)!;
     db.run(
@@ -205,7 +203,7 @@ export function createTournamentRoutes(db: Database) {
 
   // ponytail: utilidades de demo; fuera de producción para no ensuciar datos reales.
   function devOnly(): Response | null {
-    if (process.env.NODE_ENV === "production") return Response.json({ error: "NOT_FOUND" }, { status: 404 });
+    if (process.env.NODE_ENV === "production") return Response.json({ error: { code: "NOT_FOUND", message: "NOT_FOUND" } }, { status: 404 });
     return null;
   }
 
@@ -215,11 +213,11 @@ export function createTournamentRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = getTournamentId(request.url);
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
-    if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
+    if (!t) return Response.json({ error: { code: "TOURNAMENT_NOT_FOUND", message: "TOURNAMENT_NOT_FOUND" } }, { status: 404 });
     const activeParty = findActiveParty(db);
-    if (!activeParty) return Response.json({ error: "NO_ACTIVE_PARTY" }, { status: 400 });
+    if (!activeParty) return Response.json({ error: { code: "NO_ACTIVE_PARTY", message: "NO_ACTIVE_PARTY" } }, { status: 400 });
     const need = Math.max(0, 2 - db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ?").get(id)!.count);
     // ensure at least 4 fake participants exist
     for (let i = 0; i < Math.max(need, 3); i++) {
@@ -279,8 +277,8 @@ export function createTournamentRoutes(db: Database) {
     const partyIdParam = url.searchParams.get("partyId");
     let partyId: number | null = null;
     if (isAdmin && partyIdParam) {
-      partyId = parseInt(partyIdParam, 10);
-      if (isNaN(partyId) || partyId <= 0) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+      partyId = parsePositiveId(partyIdParam);
+      if (partyId === null) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     } else {
       const activeParty = findActiveParty(db);
       if (!activeParty) return Response.json({ tournaments: [] });
@@ -325,10 +323,10 @@ export function createTournamentRoutes(db: Database) {
     const auth = requireParticipant(db, request);
     if (auth instanceof Response) return auth;
     const id = getTournamentId(request.url);
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
-    if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
+    if (!t) return Response.json({ error: { code: "TOURNAMENT_NOT_FOUND", message: "TOURNAMENT_NOT_FOUND" } }, { status: 404 });
 
     sweepDueReports(db);
 
@@ -389,17 +387,17 @@ export function createTournamentRoutes(db: Database) {
     const auth = requireParticipant(db, request);
     if (auth instanceof Response) return auth;
     const id = getTournamentId(request.url);
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
-    if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
-    if (t.status !== "upcoming" && t.status !== "draft") return Response.json({ error: "TOURNAMENT_NOT_JOINABLE" }, { status: 409 });
+    if (!t) return Response.json({ error: { code: "TOURNAMENT_NOT_FOUND", message: "TOURNAMENT_NOT_FOUND" } }, { status: 404 });
+    if (t.status !== "upcoming" && t.status !== "draft") return Response.json({ error: { code: "TOURNAMENT_NOT_JOINABLE", message: "TOURNAMENT_NOT_JOINABLE" } }, { status: 409 });
 
     const participant = db.query<{ id: number; display_name: string }, [number]>("SELECT id, display_name FROM participants WHERE id = ?").get(auth.session.subjectId);
-    if (!participant) return Response.json({ error: "PARTICIPANT_NOT_FOUND" }, { status: 404 });
+    if (!participant) return Response.json({ error: { code: "PARTICIPANT_NOT_FOUND", message: "PARTICIPANT_NOT_FOUND" } }, { status: 404 });
 
     const count = db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ?").get(id)!;
-    if (count.count >= t.max_participants) return Response.json({ error: "TOURNAMENT_FULL" }, { status: 409 });
+    if (count.count >= t.max_participants) return Response.json({ error: { code: "TOURNAMENT_FULL", message: "TOURNAMENT_FULL" } }, { status: 409 });
 
     const existing = db.query<{ count: number }, [number, number]>("SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?").get(id, auth.session.subjectId)!;
     if (existing.count > 0) return Response.json({ ok: true, alreadyMember: true });
@@ -418,11 +416,11 @@ export function createTournamentRoutes(db: Database) {
     const auth = requireParticipant(db, request);
     if (auth instanceof Response) return auth;
     const id = getTournamentId(request.url);
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
-    if (!t) return Response.json({ error: "TOURNAMENT_NOT_FOUND" }, { status: 404 });
-    if (t.status !== "upcoming" && t.status !== "draft") return Response.json({ error: "TOURNAMENT_NOT_JOINABLE" }, { status: 409 });
+    if (!t) return Response.json({ error: { code: "TOURNAMENT_NOT_FOUND", message: "TOURNAMENT_NOT_FOUND" } }, { status: 404 });
+    if (t.status !== "upcoming" && t.status !== "draft") return Response.json({ error: { code: "TOURNAMENT_NOT_JOINABLE", message: "TOURNAMENT_NOT_JOINABLE" } }, { status: 409 });
 
     db.run("DELETE FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?", [id, auth.session.subjectId]);
     console.log("[tournaments] DELETE /api/tournaments/" + id + "/leave → participant#" + auth.session.subjectId);
@@ -433,32 +431,32 @@ export function createTournamentRoutes(db: Database) {
     const auth = requireParticipant(db, request);
     if (auth instanceof Response) return auth;
     const id = getMatchId(request.url);
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const match = db.query<MatchRow, [number]>("SELECT * FROM matches WHERE id = ?").get(id);
-    if (!match) return Response.json({ error: "MATCH_NOT_FOUND" }, { status: 404 });
-    if (match.status !== "pending" && match.status !== "reported") return Response.json({ error: "INVALID_MATCH_STATE" }, { status: 409 });
+    if (!match) return Response.json({ error: { code: "MATCH_NOT_FOUND", message: "MATCH_NOT_FOUND" } }, { status: 404 });
+    if (match.status !== "pending" && match.status !== "reported") return Response.json({ error: { code: "INVALID_MATCH_STATE", message: "INVALID_MATCH_STATE" } }, { status: 409 });
     if (match.participant_a_id !== auth.session.subjectId && match.participant_b_id !== auth.session.subjectId) {
-      return Response.json({ error: "NOT_IN_MATCH" }, { status: 403 });
+      return Response.json({ error: { code: "NOT_IN_MATCH", message: "NOT_IN_MATCH" } }, { status: 403 });
     }
 
     const body = await request.json().catch(() => null);
-    if (!body || !body.winnerId || !body.score) return Response.json({ error: "VALIDATION_ERROR", details: ["winnerId and score required"] }, { status: 400 });
+    if (!body || !body.winnerId || !body.score) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["winnerId and score required"] }, { status: 400 });
 
     if (body.winnerId !== match.participant_a_id && body.winnerId !== match.participant_b_id) {
-      return Response.json({ error: "INVALID_WINNER" }, { status: 400 });
+      return Response.json({ error: { code: "INVALID_WINNER", message: "INVALID_WINNER" } }, { status: 400 });
     }
 
     const scoreA = body.score.a;
     const scoreB = body.score.b;
     if (typeof scoreA !== "number" || typeof scoreB !== "number" || scoreA < 0 || scoreA > 99 || scoreB < 0 || scoreB > 99 || scoreA === scoreB) {
-      return Response.json({ error: "INVALID_SCORE", details: ["scores must be 0-99 and different"] }, { status: 400 });
+      return Response.json({ error: { code: "INVALID_SCORE", message: "INVALID_SCORE" }, details: ["scores must be 0-99 and different"] }, { status: 400 });
     }
 
     const expectedWinnerScore = body.winnerId === match.participant_a_id ? scoreA : scoreB;
     const expectedLoserScore = body.winnerId === match.participant_a_id ? scoreB : scoreA;
     if (expectedWinnerScore <= expectedLoserScore) {
-      return Response.json({ error: "INVALID_SCORE", details: ["winner score must be greater"] }, { status: 400 });
+      return Response.json({ error: { code: "INVALID_SCORE", message: "INVALID_SCORE" }, details: ["winner score must be greater"] }, { status: 400 });
     }
 
     // Upsert report
@@ -499,23 +497,23 @@ export function createTournamentRoutes(db: Database) {
     if (auth instanceof Response) return auth;
     const parts = new URL(request.url).pathname.split("/");
     const id = parseInt(parts[parts.indexOf("disputes") + 1], 10);
-    if (!id || id <= 0) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id || id <= 0) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const match = db.query<MatchRow, [number]>("SELECT * FROM matches WHERE id = ?").get(id);
-    if (!match) return Response.json({ error: "MATCH_NOT_FOUND" }, { status: 404 });
-    if (match.status !== "reported") return Response.json({ error: "NO_DISPUTE", details: ["match is not under dispute"] }, { status: 409 });
+    if (!match) return Response.json({ error: { code: "MATCH_NOT_FOUND", message: "MATCH_NOT_FOUND" } }, { status: 404 });
+    if (match.status !== "reported") return Response.json({ error: { code: "NO_DISPUTE", message: "NO_DISPUTE" }, details: ["match is not under dispute"] }, { status: 409 });
     if (auth.session.subjectId === match.participant_a_id || auth.session.subjectId === match.participant_b_id) {
-      return Response.json({ error: "IN_MATCH", details: ["players cannot vote on their own dispute"] }, { status: 403 });
+      return Response.json({ error: { code: "IN_MATCH", message: "IN_MATCH" }, details: ["players cannot vote on their own dispute"] }, { status: 403 });
     }
     const member = db.query<{ count: number }, [number, number]>(
       "SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?"
     ).get(match.tournament_id, auth.session.subjectId);
-    if (!member || member.count === 0) return Response.json({ error: "NOT_IN_TOURNAMENT" }, { status: 403 });
+    if (!member || member.count === 0) return Response.json({ error: { code: "NOT_IN_TOURNAMENT", message: "NOT_IN_TOURNAMENT" } }, { status: 403 });
 
     const body = await request.json().catch(() => null);
-    if (!body || !body.winnerId) return Response.json({ error: "VALIDATION_ERROR", details: ["winnerId required"] }, { status: 400 });
+    if (!body || !body.winnerId) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["winnerId required"] }, { status: 400 });
     if (body.winnerId !== match.participant_a_id && body.winnerId !== match.participant_b_id) {
-      return Response.json({ error: "INVALID_WINNER" }, { status: 400 });
+      return Response.json({ error: { code: "INVALID_WINNER", message: "INVALID_WINNER" } }, { status: 400 });
     }
 
     db.run("INSERT INTO dispute_votes (match_id, participant_id, winner_id) VALUES (?, ?, ?) ON CONFLICT(match_id, participant_id) DO UPDATE SET winner_id = excluded.winner_id",
@@ -544,18 +542,18 @@ export function createTournamentRoutes(db: Database) {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
     const id = getMatchId(request.url);
-    if (!id) return Response.json({ error: "INVALID_ID" }, { status: 400 });
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
 
     const match = db.query<MatchRow, [number]>("SELECT * FROM matches WHERE id = ?").get(id);
-    if (!match) return Response.json({ error: "MATCH_NOT_FOUND" }, { status: 404 });
+    if (!match) return Response.json({ error: { code: "MATCH_NOT_FOUND", message: "MATCH_NOT_FOUND" } }, { status: 404 });
     const tournament = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(match.tournament_id);
-    if (tournament?.status === "finished" || tournament?.status === "cancelled") return Response.json({ error: "INVALID_TOURNAMENT_STATE" }, { status: 409 });
+    if (tournament?.status === "finished" || tournament?.status === "cancelled") return Response.json({ error: { code: "INVALID_TOURNAMENT_STATE", message: "INVALID_TOURNAMENT_STATE" } }, { status: 409 });
 
     const body = await request.json().catch(() => null);
-    if (!body || !body.winnerId || !body.score) return Response.json({ error: "VALIDATION_ERROR" }, { status: 400 });
+    if (!body || !body.winnerId || !body.score) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" } }, { status: 400 });
 
     if (body.winnerId !== match.participant_a_id && body.winnerId !== match.participant_b_id) {
-      return Response.json({ error: "INVALID_WINNER" }, { status: 400 });
+      return Response.json({ error: { code: "INVALID_WINNER", message: "INVALID_WINNER" } }, { status: 400 });
     }
 
     db.run("UPDATE matches SET winner_id = ?, score_json = ?, status = 'confirmed', confirmed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), version = version + 1 WHERE id = ?",

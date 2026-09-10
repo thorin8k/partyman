@@ -45,7 +45,7 @@ export function AdminDashboard() {
       const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
       const res = await fetch('/api/admin/parties', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify(data) });
       if (res.ok) { setShowForm(false); fetchParties(); }
-      else { const err = await res.json(); setError(err.error || 'Error al crear la party'); }
+      else { const err = await res.json(); setError(err.error?.code || err.error || 'Error al crear la party'); }
     } catch { setError('Error de conexión'); }
     finally { setCreating(false); }
   };
