@@ -93,8 +93,7 @@ describe("authentication and attendance", () => {
     expect(members.count).toBe(1);
   });
 
-  it("is idempotent for repeated Steam logins", async () => {
-    setSteamVerifier(async (params: URLSearchParams) => ({
+  it("is idempotent for repeated Steam logins", async () => {    setSteamVerifier(async (params: URLSearchParams) => ({
       steamId: params.get("openid.claimed_id")!.match(/\/(\d+)$/)![1],
     }));
     
@@ -105,6 +104,47 @@ describe("authentication and attendance", () => {
       .query<{ count: number }, [string]>("SELECT COUNT(*) AS count FROM participants WHERE steam_id = ?")
       .get("76561190000000002")!;
     expect(participants.count).toBe(1);
+  });
+
+  it("rejects Steam entry when STEAM_ENABLED=false", async () => {
+    process.env.STEAM_ENABLED = "false";
+    try {
+      const routes = createAuthRoutes(dbCtx.db);
+      const res = await routes["/auth/steam"].GET(
+        new Request("http://localhost:8400/auth/steam?returnTo=/")
+      );
+      expect(res.status).toBe(503);
+      expect((await res.json()).error.code).toBe("STEAM_DISABLED");
+    } finally {
+      delete process.env.STEAM_ENABLED;
+    }
+  });
+  it("stores returnTo in a short-lived cookie on login entry", async () => {
+    const res = await authRoutes["/auth/steam"].GET(
+      new Request("http://localhost:8400/auth/steam?returnTo=/tournaments/3")
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get("set-cookie") ?? "").toContain("partyman_return_to=%2Ftournaments%2F3");
+  });
+
+  it("redirects to the returnTo cookie and rejects open redirects", async () => {
+    setSteamVerifier(async (params: URLSearchParams) => ({
+      steamId: params.get("openid.claimed_id")!.match(/\/(\d+)$/)![1],
+    }));
+    const ok = await authRoutes["/auth/steam/callback"].GET(
+      new Request(setupSteamCallback("76561190000000003"), {
+        headers: { cookie: "partyman_return_to=%2Ftournaments%2F3" },
+      })
+    );
+    expect(ok.status).toBe(302);
+    expect(ok.headers.get("location")).toBe("/tournaments/3");
+
+    const evil = await authRoutes["/auth/steam/callback"].GET(
+      new Request(setupSteamCallback("76561190000000004"), {
+        headers: { cookie: "partyman_return_to=https%3A%2F%2Fevil.example" },
+      })
+    );
+    expect(evil.headers.get("location")).toBe("/");
   });
 
   it("rejects admin login with bad credentials", async () => {

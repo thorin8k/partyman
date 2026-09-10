@@ -31,6 +31,12 @@ export function createAuthRoutes(db: Database) {
   };
 
   async function handleSteamLogin(request: Request): Promise<Response> {
+    if (!config.steam.enabled) {
+      return Response.json(
+        { error: { code: "STEAM_DISABLED", message: "Steam login is disabled" } },
+        { status: 503 }
+      );
+    }
     const url = new URL(request.url);
     const returnTo = url.searchParams.get("returnTo") ?? "/";
     console.log("[auth] GET /auth/steam → returnTo:", returnTo);
@@ -50,7 +56,11 @@ export function createAuthRoutes(db: Database) {
     );
 
     const redirect = buildSteamRedirectUrl(config.steam, state);
-    return new Response(null, { status: 302, headers: { location: redirect } });
+    // Steam no devuelve nuestro state: el returnTo viaja en cookie de corta vida (mismo navegador).
+    const res = new Response(null, { status: 302, headers: { location: redirect } });
+    const sec = config.cookieSecure ? "; Secure" : "";
+    res.headers.append("set-cookie", `partyman_return_to=${encodeURIComponent(returnTo)}; Path=/; SameSite=Lax; Max-Age=600${sec}`);
+    return res;
   }
 
   async function handleSteamCallback(request: Request): Promise<Response> {
@@ -64,10 +74,11 @@ export function createAuthRoutes(db: Database) {
       joinActiveParty(db, participant.id, participant.displayName);
       const info = createSession(db, "participant", participant.id);
       console.log("[auth] Steam callback →", profile.nickname, "(steamId:", steamId, ")");
-      return redirectWithSession("/", info);
+      return redirectWithSession(takeReturnTo(request), info);
     } catch (err) {
       console.log("[auth] Steam callback FAILED:", err);
-      return Response.redirect(`/?error=STEAM_UNAVAILABLE`, 302);
+      const dest = takeReturnTo(request);
+      return Response.redirect(`${dest}${dest.includes("?") ? "&" : "?"}error=STEAM_UNAVAILABLE`, 302);
     }
   }
 
@@ -80,7 +91,7 @@ export function createAuthRoutes(db: Database) {
       ? new URL(origin).origin === requestOrigin || (publicOrigin && new URL(origin).origin === publicOrigin)
       : referer
       ? new URL(referer).origin === requestOrigin || (publicOrigin && new URL(referer).origin === publicOrigin)
-      : false;
+      : true; // sin Origin ni Referer: cliente mismo origen o no-navegador (spec)
 
     if (!sameOrigin) {
       console.log("[auth] POST /auth/admin/login → REJECTED (cross-origin)");
@@ -176,13 +187,35 @@ export function createAuthRoutes(db: Database) {
     });
   }
 
+  // Cookie de un solo uso del login: solo rutas internas, nunca // ni URLs absolutas.
+  function takeReturnTo(request: Request): string {
+    const raw = request.headers
+      .get("cookie")
+      ?.split(";")
+      .map((s) => s.trim())
+      .find((s) => s.startsWith("partyman_return_to="))
+      ?.slice("partyman_return_to=".length);
+    if (!raw) return "/";
+    try {
+      const dest = decodeURIComponent(raw);
+      if (dest.startsWith("/") && !dest.startsWith("//")) return dest;
+    } catch {
+      /* cookie corrupta: destino por defecto */
+    }
+    return "/";
+  }
+
   function redirectWithSession(location: string, info: { token: string; csrfToken: string }) {
     const res = new Response(null, {
       status: 302,
       headers: { location },
     });
-    res.headers.append("set-cookie", `partyman_session=${info.token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 7}`);
-    res.headers.append("set-cookie", `partyman_csrf=${info.csrfToken}; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 7}`);
+    // Secure solo con HTTPS (COOKIE_SECURE=true); en LAN HTTP la cookie con Secure se dropearía.
+    const sec = config.cookieSecure ? "; Secure" : "";
+    res.headers.append("set-cookie", `partyman_session=${info.token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 7}${sec}`);
+    res.headers.append("set-cookie", `partyman_csrf=${info.csrfToken}; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 7}${sec}`);
+    // Limpia el returnTo de un solo uso (solo el callback de Steam usa este helper).
+    res.headers.append("set-cookie", `partyman_return_to=; Path=/; SameSite=Lax; Max-Age=0${sec}`);
     return res;
   }
 
@@ -194,14 +227,16 @@ export function createAuthRoutes(db: Database) {
         "cache-control": "no-store",
       },
     });
-    res.headers.append("set-cookie", `partyman_session=${info.token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 7}`);
-    res.headers.append("set-cookie", `partyman_csrf=${info.csrfToken}; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 7}`);
+    const sec = config.cookieSecure ? "; Secure" : "";
+    res.headers.append("set-cookie", `partyman_session=${info.token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 7}${sec}`);
+    res.headers.append("set-cookie", `partyman_csrf=${info.csrfToken}; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 7}${sec}`);
     return res;
   }
 
   function clearSession(res: Response): Response {
-    res.headers.append("set-cookie", "partyman_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0");
-    res.headers.append("set-cookie", "partyman_csrf=; Path=/; SameSite=Lax; Max-Age=0");
+    const sec = config.cookieSecure ? "; Secure" : "";
+    res.headers.append("set-cookie", `partyman_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${sec}`);
+    res.headers.append("set-cookie", `partyman_csrf=; Path=/; SameSite=Lax; Max-Age=0${sec}`);
     return res;
   }
 }

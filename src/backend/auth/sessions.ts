@@ -51,3 +51,21 @@ export function getSession(db: Database, token: string): SessionInfo | null {
 export function deleteSession(db: Database, token: string): void {
   db.run("DELETE FROM sessions WHERE id_hash = ?", [sha256Hex(token)]);
 }
+
+// Limpieza periódica: sesiones y estados de login Steam caducados.
+// Mismo formato ISO que usan los escritores (toISOString), no datetime('now') con espacio.
+// Tolerante si alguna tabla aún no existe (migraciones parciales en tests).
+export function purgeExpired(db: Database, now = new Date()): { sessions: number; loginStates: number } {
+  const iso = now.toISOString();
+  let sessions = 0;
+  let loginStates = 0;
+  try {
+    const r = db.run("DELETE FROM sessions WHERE expires_at < ?", [iso]);
+    sessions = Number(r.changes ?? 0);
+  } catch { /* tabla ausente */ }
+  try {
+    const r = db.run("DELETE FROM steam_login_states WHERE expires_at < ?", [iso]);
+    loginStates = Number(r.changes ?? 0);
+  } catch { /* tabla ausente */ }
+  return { sessions, loginStates };
+}

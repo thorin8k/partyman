@@ -7,6 +7,11 @@ export function ParticipantLogin() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const [error, setError] = useState<string | null>(null);
+  const [steamEnabled, setSteamEnabled] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/auth/config').then(r => r.json()).then(c => setSteamEnabled(c.steamEnabled !== false)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!loading && user) {
@@ -28,7 +33,7 @@ export function ParticipantLogin() {
   }, [search]);
 
   const handleSteamLogin = () => {
-    window.location.href = '/auth/steam?returnTo=/';
+    window.location.href = '/auth/steam?returnTo=' + encodeURIComponent(window.location.pathname);
   };
 
   if (loading) {
@@ -49,6 +54,7 @@ export function ParticipantLogin() {
           </div>
         )}
 
+        {steamEnabled ? (
         <button
           onClick={handleSteamLogin}
           className="primary"
@@ -56,6 +62,11 @@ export function ParticipantLogin() {
         >
           ▶ ENTRAR CON STEAM
         </button>
+        ) : (
+          <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
+            El login con Steam está desactivado en este servidor.
+          </p>
+        )}
 
         <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
           Al iniciar sesión, te unirás automáticamente a la party activa.

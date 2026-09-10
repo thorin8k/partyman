@@ -56,7 +56,8 @@ export function loadConfig(): Config {
     wifiSsid: optionalString("WIFI_SSID"),
     wifiPassword: optionalString("WIFI_PASSWORD"),
     steam: {
-      enabled: true,
+      // .env.example lo documenta como STEAM_ENABLED; default true para no romper la LAN.
+      enabled: process.env.STEAM_ENABLED !== "false",
       realm: publicOrigin,
       returnTo: `${publicOrigin}/auth/steam/callback`,
       apiKey: optionalString("STEAM_API_KEY"),

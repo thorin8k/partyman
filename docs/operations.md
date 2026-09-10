@@ -15,6 +15,7 @@ Single-container LAN deployment. SQLite + uploads live in mounted host directori
 | `PUBLIC_ORIGIN` | (required) | Browser-facing origin, used by Steam callbacks and CSRF |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` | (required on first boot) | Admin provisioning only |
 | `STEAM_API_KEY` | (optional) | Without it, display names fall back to `Participant #id` |
+| `STEAM_ENABLED` | `true` | Set `false` to disable Steam login (`/auth/steam` → 503) |
 | `WIFI_SSID` / `WIFI_PASSWORD` | (optional) | Shows a WiFi QR on the display next to the join QR; omit for no WiFi QR |
 | `COOKIE_SECURE` | `false` | Keep `false` for HTTP LAN use |
 

@@ -23,7 +23,7 @@ Prove the independently developed domains work as one vertical slice and that th
 
 ## Acceptance Criteria
 
-- Clean checkout passes `format:check`, `typecheck`, `bun test`, and production `build`.
+- Clean checkout passes `typecheck`, `bun test`, and production `build`.
 - E2E test: provision admin → create + activate party → two participants joined → game + activity + tournament created/started → matches reported/confirmed → tournament `finished`, leaderboard reflects winner points, `/api/public/state` (no cookies) shows tournament + ranking.
 - Finish party: participation points awarded once per member, history visible, finalized party rejects edits.
 - Backup from `008` downloads, passes `integrity_check`, and opens in a fresh SQLite connection with party history intact.

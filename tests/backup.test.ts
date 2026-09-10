@@ -127,3 +127,34 @@ describe("backups", () => {
     expect(checkIntegrity(join(ctx.dir, "other.sqlite3"))).toBe(false);
   });
 });
+
+describe("offline restore procedure (docs/operations.md)", () => {
+  it("a backup file replaces the live database and data survives reopen", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "partyman-restore-"));
+    const livePath = join(dir, "live.sqlite3");
+    try {
+      const live = new Database(livePath, { create: true });
+      live.exec("PRAGMA journal_mode = WAL");
+      live.exec("CREATE TABLE ledger (id INTEGER PRIMARY KEY, label TEXT NOT NULL)");
+      live.run("INSERT INTO ledger (label) VALUES ('party-data')");
+      const meta = await createBackup(live, join(dir, "backups"));
+      // Cambios posteriores al backup que el restore debe revertir.
+      live.run("INSERT INTO ledger (label) VALUES ('post-backup')");
+      live.close();
+
+      // Pasos 2-5 del procedimiento: reemplazar + limpiar sidecars + reabrir.
+      const { copyFileSync } = await import("node:fs");
+      copyFileSync(join(dir, "backups", meta.id), livePath);
+      rmSync(livePath + "-wal", { force: true });
+      rmSync(livePath + "-shm", { force: true });
+      expect(checkIntegrity(livePath)).toBe(true);
+
+      const reopened = new Database(livePath, { readonly: true });
+      const labels = reopened.query<{ label: string }, []>("SELECT label FROM ledger ORDER BY id").all().map(r => r.label);
+      reopened.close();
+      expect(labels).toEqual(["party-data"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

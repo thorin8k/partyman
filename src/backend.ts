@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import index from "./index.html";
 import { executeMigrations } from "./backend/db/migrate";
 import { ensureProvisionedAdmin } from "./backend/auth/password";
+import { purgeExpired } from "./backend/auth/sessions";
 import { seedAchievements, seedPointRules } from "./backend/scoring/service";
 import { loadConfig } from "./backend/config";
 import db from "./backend/db/db.conn";
@@ -32,6 +33,10 @@ seedPointRules(db);
 seedAchievements(db);
 ensureProvisionedAdmin(db, process.env.ADMIN_USERNAME ?? null, process.env.ADMIN_PASSWORD_HASH ?? null);
 console.log("Database migrations complete.");
+
+// Sesiones caducadas fuera: al arrancar y cada hora (unref para no retener el proceso en tests).
+purgeExpired(db);
+setInterval(() => purgeExpired(db), 60 * 60 * 1000).unref();
 
 const healthRoutes = createHealthRoutes(db, { dirs: [config.uploadsPath, config.backupDir] });
 const authRoutes = createAuthRoutes(db);
