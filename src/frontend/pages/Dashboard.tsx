@@ -323,7 +323,7 @@ export function Dashboard() {
           <div style={{ marginTop: '1rem' }}>
             <h3 style={{ color: 'var(--neon-green)', marginBottom: '0.5rem' }}>{activeParty.name}</h3>
             <p style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>
-              {new Date(activeParty.startsAt).toLocaleDateString()} - {new Date(activeParty.endsAt).toLocaleDateString()}
+              {new Date(activeParty.startsAt).toLocaleDateString('es-ES')} - {new Date(activeParty.endsAt).toLocaleDateString('es-ES')}
             </p>
             {activeParty.location && <p style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}><span style={{ color: 'var(--neon-cyan)' }}>UBICACIÓN:</span> {activeParty.location}</p>}
             {activeParty.description && <p style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}><span style={{ color: 'var(--neon-cyan)' }}>DESCRIPCIÓN:</span> {activeParty.description}</p>}

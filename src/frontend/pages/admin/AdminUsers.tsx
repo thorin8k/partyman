@@ -72,10 +72,10 @@ export function AdminUsers() {
                   )}
                   <span style={{ fontSize: '0.875rem' }}>{p.displayName}</span>
                   {p.role === 'admin' && (
-                    <span style={{ padding: '0.125rem 0.5rem', border: '1px solid var(--neon-magenta)', color: 'var(--neon-magenta)', fontFamily: 'var(--font-display)', fontSize: '0.4rem' }}>ADMIN</span>
+                    <span style={{ padding: '0.25rem 0.75rem', border: '1px solid var(--neon-magenta)', color: 'var(--neon-magenta)', fontFamily: 'var(--font-display)', fontSize: '0.5rem' }}>ADMIN</span>
                   )}
                 </div>
-                <button onClick={() => handleToggleRole(p)} style={{ fontSize: '0.4rem', padding: '0.375rem 0.75rem' }}>
+                <button onClick={() => handleToggleRole(p)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem' }}>
                   {p.role === 'admin' ? 'REVOCAR ADMIN' : 'HACER ADMIN'}
                 </button>
               </div>

@@ -81,8 +81,16 @@ export function TournamentDetail() {
   if (!tournament) return <div className="container"><div className="loading">Cargando torneo...</div></div>;
 
   const rounds = [...new Set(tournament.matches.map(m => m.round))].sort((a, b) => a - b);
-  const roundLabels: Record<number, string> = { 1: 'CUARTOS', 2: 'SEMIFINAL', 3: 'FINAL' };
-  const totalRounds = rounds.length;
+  const TOTAL_ROUNDS = rounds.length;
+  // ponytail: etiquetas relativas a la final (funciona con 2-16 jugadores).
+  const roundLabel = (round: number) => {
+    const fromEnd = TOTAL_ROUNDS - round;
+    if (fromEnd === 0) return 'FINAL';
+    if (fromEnd === 1) return 'SEMIFINAL';
+    if (fromEnd === 2) return 'CUARTOS';
+    return `RONDA ${round}`;
+  };
+  const STATUS_ES: Record<string, string> = { draft: 'Borrador', upcoming: 'Inscripción abierta', in_progress: 'En curso', finished: 'Finalizado', cancelled: 'Cancelado' };
 
   return (
     <div className="container">
@@ -99,15 +107,16 @@ export function TournamentDetail() {
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <h2>{tournament.name}</h2>
-          <span style={{ padding: '0.25rem 0.75rem', border: '1px solid var(--neon-cyan)', color: 'var(--neon-cyan)', fontFamily: 'var(--font-display)', fontSize: '0.4rem' }}>
-            {tournament.status}
+          <span style={{ padding: '0.25rem 0.75rem', border: '1px solid var(--neon-cyan)', color: 'var(--neon-cyan)', fontFamily: 'var(--font-display)', fontSize: '0.5rem' }}>
+            {STATUS_ES[tournament.status] || tournament.status}
           </span>
         </div>
         <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>
           {tournament.gameTitleSnapshot} · Max {tournament.maxParticipants} · {tournament.participants.length} inscritos
         </p>
         {tournament.status === 'finished' && (() => {
-          const final = tournament.matches.filter(m => m.status === 'confirmed').sort((a,b) => b.round - a.round)[0];
+          const maxRound = Math.max(...tournament.matches.map(m => m.round));
+          const final = tournament.matches.find(m => m.round === maxRound && m.winner);
           return final?.winner ? (
             <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(0,255,136,0.1)', border: '1px solid var(--neon-green)', borderRadius: 'var(--radius)', textAlign: 'center' }}>
               <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.625rem', color: 'var(--neon-green)' }}>CAMPEÓN</span>
@@ -153,7 +162,7 @@ export function TournamentDetail() {
               return (
                 <div key={round} style={{ minWidth: '220px', display: 'flex', flexDirection: 'column' }}>
                   <h3 style={{ fontSize: '0.625rem', color: 'var(--neon-cyan)', marginBottom: '1rem', textAlign: 'center', fontFamily: 'var(--font-display)' }}>
-                    {roundLabels[round] || `RONDA ${round}`}
+                    {roundLabel(round)}
                   </h3>
                   <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, gap: '1rem' }}>
                     {roundMatches.map(m => (

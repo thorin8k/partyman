@@ -176,18 +176,18 @@ export function AdminTournaments() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {tournaments.map(t => (
-                <div key={t.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <div>
-                    <h3 style={{ marginBottom: '0.25rem' }}>{t.name}</h3>
+                <div key={t.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+                    <h3 style={{ marginBottom: '0.25rem', wordBreak: 'break-word' }}>{t.name}</h3>
                     <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>{t.gameTitleSnapshot} · Max {t.maxParticipants}</p>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <span style={{ padding: '0.25rem 0.75rem', border: `1px solid ${statusColors[t.status]}`, color: statusColors[t.status], fontFamily: 'var(--font-display)', fontSize: '0.4rem' }}>
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexShrink: 0 }}>
+                    <span style={{ padding: '0.25rem 0.75rem', border: `1px solid ${statusColors[t.status]}`, color: statusColors[t.status], fontFamily: 'var(--font-display)', fontSize: '0.5rem' }}>
                       {statusLabels[t.status]}
                     </span>
-                    {t.status === 'upcoming' && <button onClick={() => handleAction(t.id, 'start')} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>INICIAR</button>}
-                    {t.status !== 'finished' && t.status !== 'cancelled' && <button onClick={() => handleAction(t.id, 'cancel')} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem', borderColor: 'var(--error)', color: 'var(--error)' }}>CANCELAR</button>}
-                    <a href={`/admin/tournaments/${t.id}`} style={{ fontSize: '0.75rem' }}>VER →</a>
+                    {t.status === 'upcoming' && <button onClick={() => handleAction(t.id, 'start')} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem', whiteSpace: 'nowrap' }}>INICIAR</button>}
+                    {t.status !== 'finished' && t.status !== 'cancelled' && <button onClick={() => handleAction(t.id, 'cancel')} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem', whiteSpace: 'nowrap', borderColor: 'var(--error)', color: 'var(--error)' }}>CANCELAR</button>}
+                    <a href={`/admin/tournaments/${t.id}`} style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>VER →</a>
                   </div>
                 </div>
               ))}

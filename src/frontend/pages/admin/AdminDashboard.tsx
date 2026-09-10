@@ -90,7 +90,7 @@ export function AdminDashboard() {
                 <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
                   <div style={{ flex: '1 1 auto', minWidth: 0 }}>
                     <h3 style={{ marginBottom: '0.25rem', wordBreak: 'break-word' }}>{p.name}</h3>
-                    <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.875rem' }}>{new Date(p.startsAt).toLocaleDateString()} - {new Date(p.endsAt).toLocaleDateString()}</p>
+                    <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.875rem' }}>{new Date(p.startsAt).toLocaleDateString('es-ES')} - {new Date(p.endsAt).toLocaleDateString('es-ES')}</p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
                     <span style={{ padding: '0.25rem 0.75rem', border: `1px solid ${statusColors[p.status]}`, color: statusColors[p.status], fontFamily: 'var(--font-display)', fontSize: '0.5rem' }}>{statusLabels[p.status]}</span>
@@ -119,8 +119,8 @@ export function AdminDashboard() {
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle || 'Sin juego'} · {new Date(p.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
                   </div>
                   <div style={{ display: 'flex', gap: '0.25rem' }}>
-                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; const res = await fetch(`/api/admin/activity-proposals/${p.id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } }); if (res.ok) fetchProposals(); }} className="primary" style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>APROBAR</button>
-                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; await fetch(`/api/activity-proposals/${p.id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }); fetchProposals(); }} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>RECHAZAR</button>
+                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; const res = await fetch(`/api/admin/activity-proposals/${p.id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } }); if (res.ok) fetchProposals(); }} className="primary" style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem' }}>APROBAR</button>
+                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; await fetch(`/api/activity-proposals/${p.id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }); fetchProposals(); }} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem' }}>RECHAZAR</button>
                   </div>
                 </div>
               ))}
@@ -138,8 +138,8 @@ export function AdminDashboard() {
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle} · Max {p.maxParticipants}</p>
                   </div>
                   <div style={{ display: 'flex', gap: '0.25rem' }}>
-                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; const res = await fetch(`/api/admin/tournament-proposals/${p.id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } }); if (res.ok) fetchProposals(); }} className="primary" style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>APROBAR</button>
-                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; await fetch(`/api/tournament-proposals/${p.id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }); fetchProposals(); }} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>RECHAZAR</button>
+                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; const res = await fetch(`/api/admin/tournament-proposals/${p.id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } }); if (res.ok) fetchProposals(); }} className="primary" style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem' }}>APROBAR</button>
+                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; await fetch(`/api/tournament-proposals/${p.id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }); fetchProposals(); }} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem' }}>RECHAZAR</button>
                   </div>
                 </div>
               ))}

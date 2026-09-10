@@ -106,11 +106,11 @@ export function AdminGames() {
                 <div key={i} className="list-item" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'nowrap' }}>
                   {g.imageUrl && <img src={g.imageUrl} alt="" style={{ width: '48px', height: '48px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
                   <div style={{ flex: 1, minWidth: 0 }}><h3 style={{ fontSize: '0.875rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.name}</h3></div>
-                  <button onClick={() => handleAddFromSearch(g)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem', flexShrink: 0 }}>AÑADIR</button>
+                  <button onClick={() => handleAddFromSearch(g)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem', flexShrink: 0 }}>AÑADIR</button>
                 </div>
               ))}
             </div>
-            <button onClick={() => { setSearchResults([]); setSearchQuery(''); }} style={{ fontSize: '0.4rem', marginTop: '0.5rem' }}>CERRAR</button>
+            <button onClick={() => { setSearchResults([]); setSearchQuery(''); }} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem', marginTop: '0.5rem' }}>CERRAR</button>
           </div>
         )}
 
@@ -124,10 +124,10 @@ export function AdminGames() {
                   {g.imageUrl && <img src={g.imageUrl} alt="" style={{ width: '48px', height: '48px', borderRadius: '4px', objectFit: 'cover' }} />}
                   <h3>{g.title}</h3>
                 </div>
-                <button onClick={() => handleToggle(g)} style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem', borderColor: g.enabled ? 'var(--neon-green)' : 'var(--error)', color: g.enabled ? 'var(--neon-green)' : 'var(--error)' }}>
+                <button onClick={() => handleToggle(g)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem', borderColor: g.enabled ? 'var(--neon-green)' : 'var(--error)', color: g.enabled ? 'var(--neon-green)' : 'var(--error)' }}>
                   {g.enabled ? 'ACTIVO' : 'INACTIVO'}
                 </button>
-                <button onClick={() => handleDelete(g.id)} className="danger" style={{ fontSize: '0.4rem', padding: '0.25rem 0.5rem' }}>BORRAR</button>
+                <button onClick={() => handleDelete(g.id)} className="danger" style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem' }}>BORRAR</button>
               </div>
             ))}
           </div>

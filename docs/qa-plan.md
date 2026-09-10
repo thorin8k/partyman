@@ -121,5 +121,12 @@ Not automatable, run before shipping to the real party:
 - `.env` values containing `$` need shell escaping (`\$`).
 - The code-server LAN proxy blocks Bun's dev host check → run
   `NODE_ENV=production bun src/backend.ts` from the repo root.
+- The server bundles the React entry once at boot: after editing any
+  `src/frontend/**` file, restart the server — a browser reload alone serves
+  the stale bundle.
+- Obscura can report layout metrics (offsetWidth/scrollWidth) that disagree
+  with its own paint for small pixel-font buttons ("CANCELAR" clipped with
+  generous padding). Don't trust engine measurements for layout bugs; prefer
+  padding headroom and verify visually.
 - Obscura blocks fetches to private IPs unless `--allow-private-network`
   is passed.
