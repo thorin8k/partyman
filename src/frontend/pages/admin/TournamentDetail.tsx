@@ -1,4 +1,5 @@
 import { useAuth } from '../../components/AuthContext';
+import { apiError } from '../../components/apiError';
 import { useLocation, useParams } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -43,14 +44,14 @@ export function TournamentDetail() {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
       body: JSON.stringify({ participantId }),
     });
-    if (!res.ok) { const err = await res.json(); setError(err.error?.code || err.error || 'Error'); }
+    if (!res.ok) { const err = await res.json(); setError(apiError(err)); }
     fetchTournament();
   };
 
   const handleFillBots = async () => {
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch(`/api/admin/tournaments/${tournamentId}/fill-bots`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
-    if (!res.ok) { const err = await res.json(); setError(err.error?.code || err.error || 'Error'); }
+    if (!res.ok) { const err = await res.json(); setError(apiError(err)); }
     fetchTournament();
   };
 
@@ -59,7 +60,7 @@ export function TournamentDetail() {
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch(`/api/admin/tournaments/${tournamentId}/delete`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
     if (res.ok) navigate('/admin/tournaments');
-    else { const err = await res.json(); setError(err.error?.code || err.error || 'Error'); }
+    else { const err = await res.json(); setError(apiError(err)); }
   };
 
   const handleConfirmMatch = async () => {
@@ -69,7 +70,7 @@ export function TournamentDetail() {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
       body: JSON.stringify({ winnerId: parseInt(reportWinner), score: { a: parseInt(scoreA), b: parseInt(scoreB) } }),
     });
-    if (!res.ok) { const err = await res.json(); setError(err.error?.code || err.error || 'Error'); }
+    if (!res.ok) { const err = await res.json(); setError(apiError(err)); }
     else { setReportMatch(null); setReportWinner(''); setScoreA(''); setScoreB(''); }
     fetchTournament();
   };

@@ -1,4 +1,5 @@
 import { useAuth } from '../../components/AuthContext';
+import { apiError } from '../../components/apiError';
 import { useLocation, useParams } from 'wouter';
 import { useEffect, useState } from 'react';
 import { PartyForm } from '../../components/PartyForm';
@@ -76,7 +77,7 @@ export function PartyDetail() {
         fetchParty();
       } else {
         const err = await res.json();
-        setError(err.error?.code || err.error || 'Error al actualizar');
+        setError(apiError(err, 'Error al actualizar'));
       }
     } catch {
       setError('Error de conexión');

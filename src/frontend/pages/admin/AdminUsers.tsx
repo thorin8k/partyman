@@ -1,4 +1,5 @@
 import { useAuth } from '../../components/AuthContext';
+import { apiError } from '../../components/apiError';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -35,7 +36,7 @@ export function AdminUsers() {
       body: JSON.stringify({ role: newRole }),
     });
     if (res.ok) fetchParticipants();
-    else { const err = await res.json(); setError(err.error?.code || err.error || 'Error'); }
+    else { const err = await res.json(); setError(apiError(err)); }
   };
 
   if (loading) return <div className="container"><div className="loading">Cargando…</div></div>;

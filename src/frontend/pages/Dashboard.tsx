@@ -252,8 +252,9 @@ export function Dashboard() {
 
   const handleLeaveTournament = async (tournamentId: number) => {
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    await fetch(`/api/tournaments/${tournamentId}/leave`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }).catch(() => {});
-    ok('Has salido del torneo.');
+    const res = await fetch(`/api/tournaments/${tournamentId}/leave`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }).catch(() => null);
+    if (res && res.ok) ok('Has salido del torneo.');
+    else if (res) { const err = await res.json().catch(() => ({})); fail(err.error?.code || err.error); }
     fetchTournaments();
   };
 

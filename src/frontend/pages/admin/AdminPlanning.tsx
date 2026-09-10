@@ -1,4 +1,5 @@
 import { useAuth } from '../../components/AuthContext';
+import { apiError } from '../../components/apiError';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -121,7 +122,7 @@ export function AdminPlanning() {
         method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify(body),
       });
       if (res.ok) { setShowForm(false); setEditingActivity(null); setForm({ title: '', gameId: '', startsAt: '', endsAt: '', capacity: '', notes: '' }); if (partyId) fetchActivities(partyId); }
-      else { const err = await res.json(); setError(err.error?.code || err.error || 'Error'); }
+      else { const err = await res.json(); setError(apiError(err)); }
       return;
     }
 
@@ -131,7 +132,7 @@ export function AdminPlanning() {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify(body),
     });
     if (res.ok) { setShowForm(false); setForm({ title: '', gameId: '', startsAt: '', endsAt: '', capacity: '', notes: '' }); fetchActivities(partyId); }
-    else { const err = await res.json(); setError(err.error?.code || err.error || 'Error'); }
+    else { const err = await res.json(); setError(apiError(err)); }
   };
 
   const handleDelete = async (id: number) => {

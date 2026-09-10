@@ -55,11 +55,21 @@ export function ParticipantTournamentDetail() {
       headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
       body: JSON.stringify({ winnerId: parseInt(reportWinner), score: { a, b } }),
     });
-    if (!res.ok) { const err = await res.json().catch(() => ({})); setError(typeof err.error === 'string' ? err.error.replace(/_/g, ' ').toLowerCase() : 'Error al reportar'); }
+    if (!res.ok) { const err = await res.json().catch(() => ({})); setError(apiMsg(err, 'Error al reportar')); }
     else { setReportMatch(null); setReportWinner(''); setScoreA(''); setScoreB(''); setError(null); fetchTournament(); }
   };
 
   const STATUS_ES: Record<string, string> = { draft: 'Borrador', upcoming: 'Inscripción abierta', in_progress: 'En curso', finished: 'Finalizado', cancelled: 'Cancelado' };
+
+  // Códigos de error → castellano legible (el API devuelve { error: { code } }).
+  const apiMsg = (err: any, fallback: string) => {
+    const code = err?.error?.code || err?.error;
+    if (code === 'NOT_IN_MATCH') return 'No participas en este partido.';
+    if (code === 'INVALID_WINNER') return 'Ese jugador no juega este partido.';
+    if (code === 'IN_MATCH') return 'No puedes votar en tu propia disputa.';
+    if (typeof code === 'string' && code.length < 60) return code.replace(/_/g, ' ').toLowerCase();
+    return fallback;
+  };
 
   if (loading) return <div className="container"><div className="loading">Cargando torneo…</div></div>;
   if (!user) return <div className="container"><div className="loading">Redirigiendo al login…</div></div>;
@@ -102,7 +112,7 @@ export function ParticipantTournamentDetail() {
       headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
       body: JSON.stringify({ winnerId }),
     });
-    if (!res.ok) { const err = await res.json().catch(() => ({})); setError(typeof err.error === 'string' ? err.error : 'Error al votar'); }
+    if (!res.ok) { const err = await res.json().catch(() => ({})); setError(apiMsg(err, 'Error al votar')); }
     else fetchTournament();
   };
 

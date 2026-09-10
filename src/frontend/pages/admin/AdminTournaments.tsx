@@ -1,4 +1,5 @@
 import { useAuth } from '../../components/AuthContext';
+import { apiError } from '../../components/apiError';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -86,14 +87,14 @@ export function AdminTournaments() {
       body: JSON.stringify({ partyId: parseInt(partyId), gameId: parseInt(form.gameId), name: form.name, maxParticipants: parseInt(form.maxParticipants) }),
     });
     if (res.ok) { setShowForm(false); setForm({ name: '', gameId: '', maxParticipants: '16' }); fetchTournaments(partyId); }
-    else { const err = await res.json(); setError(err.error?.code || err.error || 'Error'); }
+    else { const err = await res.json(); setError(apiError(err)); }
   };
 
   const handleAction = async (id: number, action: string) => {
     if ((action === 'cancel' || action === 'delete') && !confirm(action === 'delete' ? '¿Eliminar este torneo?' : '¿Cancelar este torneo?')) return;
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch(`/api/admin/tournaments/${id}/${action}`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
-    if (!res.ok) { const err = await res.json(); setError(err.error?.code || err.error || 'Error'); }
+    if (!res.ok) { const err = await res.json(); setError(apiError(err)); }
     if (partyId) fetchTournaments(partyId);
   };
 

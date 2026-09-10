@@ -1,4 +1,5 @@
 import { useAuth } from '../../components/AuthContext';
+import { apiError } from '../../components/apiError';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -67,7 +68,7 @@ export function AdminGames() {
       body: JSON.stringify({ title: game.name, imageUrl: game.imageUrl || null, steamgriddbId: game.id || null }),
     });
     if (res.ok) { fetchGames(); setSearchResults([]); setSearchQuery(''); }
-    else { const err = await res.json(); setError(err.error?.code || err.error || 'Error'); }
+    else { const err = await res.json(); setError(apiError(err)); }
   };
 
   if (loading) return <div className="container"><div className="loading">Cargando…</div></div>;
