@@ -200,21 +200,35 @@ export function PublicDisplay() {
                           <p style={{ fontSize: '0.875rem', color: 'var(--text-dim)', margin: '0.5rem 0 0' }}>{t.gameTitle} · Max {t.maxParticipants}</p>
                         </div>
                       </div>
-                      {t.matches && t.matches.length > 0 && (
-                        <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', overflowX: 'auto' }}>
-                          {[...new Set(t.matches.map(m => m.round))].sort((a,b)=>a-b).map(round => (
-                            <div key={round} style={{ minWidth: '120px', flex: '0 0 auto' }}>
-                              <div style={{ fontSize: '0.5rem', color: 'var(--neon-cyan)', textAlign: 'center', marginBottom: '0.25rem' }}>R{round}</div>
-                              {t.matches.filter(m => m.round === round).map(m => (
-                                <div key={m.id} style={{ fontSize: '0.625rem', padding: '0.25rem', background: 'var(--bg)', border: `1px solid ${m.status === 'confirmed' ? 'var(--neon-green)' : 'var(--border)'}`, marginBottom: '0.25rem', textAlign: 'center' }}>
-                                  {m.participantA ?? '—'} vs {m.participantB ?? 'BYE'}
-                                  {m.winner && <div style={{ color: 'var(--neon-green)' }}>→ {m.winner}</div>}
+                      {t.matches && t.matches.length > 0 && (() => {
+                        const rounds = [...new Set(t.matches.map(m => m.round))].sort((a, b) => a - b);
+                        const max = Math.max(...rounds);
+                        // ponytail: etiquetas relativas a la final, como en las páginas de torneo.
+                        const roundText = (round: number) => {
+                          const fromEnd = max - round;
+                          if (fromEnd === 0) return 'FINAL';
+                          if (fromEnd === 1) return 'SEMIFINAL';
+                          if (fromEnd === 2) return 'CUARTOS';
+                          return `RONDA ${round}`;
+                        };
+                        return (
+                          <div style={{ marginTop: '0.75rem', display: 'flex', gap: '1.5rem', overflowX: 'auto' }}>
+                            {rounds.map(round => (
+                              <div key={round} style={{ minWidth: '160px', flex: '0 0 auto', display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ fontSize: '0.625rem', color: 'var(--neon-cyan)', textAlign: 'center', marginBottom: '0.25rem', fontFamily: 'var(--font-display)' }}>{roundText(round)}</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, gap: '0.5rem' }}>
+                                  {t.matches.filter(m => m.round === round).map(m => (
+                                    <div key={m.id} style={{ fontSize: '0.875rem', padding: '0.375rem 0.5rem', background: 'var(--bg)', border: `1px solid ${m.status === 'confirmed' ? 'var(--neon-green)' : 'var(--border)'}`, textAlign: 'center' }}>
+                                      <div>{m.participantA ?? '—'} vs {m.participantB ?? 'BYE'}</div>
+                                      {m.winner && <div style={{ color: 'var(--neon-green)', fontFamily: 'var(--font-display)', fontSize: '0.625rem', marginTop: '0.25rem' }}>→ {m.winner}</div>}
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })()}

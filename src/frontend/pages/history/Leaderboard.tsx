@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 
-const touchBtn: React.CSSProperties = { minHeight: '44px', fontSize: '0.625rem', padding: '0.75rem 1rem' };
-
 export function Leaderboard() {
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [partyId, setPartyId] = useState<string>('');
@@ -25,13 +23,11 @@ export function Leaderboard() {
     <div className="container">
       <div className="header"><h1>RANKING</h1><a href="/">VOLVER →</a></div>
       <div className="card">
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-          <select value={partyId} onChange={e => setPartyId(e.target.value)} style={{ flex: 1, minWidth: '180px', minHeight: '44px' }}>
-            <option value="">Todas (global)</option>
+        <div style={{ marginBottom: '1rem' }}>
+          <select value={partyId} onChange={e => { setPartyId(e.target.value); fetchBoard(e.target.value || undefined); }} style={{ width: '100%', minWidth: '180px', minHeight: '44px' }}>
+            <option value="">Todas las parties (global)</option>
             {parties.map((p:any) => <option key={p.id} value={String(p.id)}>{p.name} ({p.status})</option>)}
           </select>
-          <button onClick={() => fetchBoard(partyId || undefined)} style={touchBtn}>FILTRAR</button>
-          <button onClick={() => { setPartyId(''); fetchBoard(); }} style={touchBtn}>GLOBAL</button>
         </div>
         <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '1rem' }}>Desempate: puntos → victorias → nombre.</p>
         {loading ? <div className="loading">Cargando ranking…</div>

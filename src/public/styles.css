@@ -1,4 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap');
+/* Fonts self-hosted: la party LAN no depende de Google Fonts */
+@font-face {
+  font-family: 'Press Start 2P';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/press-start-2p.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Share Tech Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/share-tech-mono.woff2') format('woff2');
+}
 
 :root {
   /* Colores principales */

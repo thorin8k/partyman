@@ -147,11 +147,6 @@ export function TournamentDetail() {
         )}
       </div>
 
-      <div className="card" style={{ marginTop: '1rem', borderColor: 'var(--error)' }}>
-        <h2 style={{ color: 'var(--error)' }}>ZONA PELIGROSA</h2>
-        <button onClick={handleDeleteTournament} className="danger" style={{ width: '100%', marginTop: '1rem' }}>ELIMINAR TORNEO</button>
-      </div>
-
       {tournament.matches.length > 0 && (
         <div className="card" style={{ marginTop: '1rem', overflow: 'hidden' }}>
           <h2>BRACKET</h2>
@@ -241,6 +236,11 @@ export function TournamentDetail() {
           </div>
         </div>
       )}
+
+      <div className="card" style={{ marginTop: '1rem', borderColor: 'var(--error)' }}>
+        <h2 style={{ color: 'var(--error)' }}>ZONA PELIGROSA</h2>
+        <button onClick={handleDeleteTournament} className="danger" style={{ width: '100%', marginTop: '1rem' }}>ELIMINAR TORNEO</button>
+      </div>
     </div>
   );
 }
