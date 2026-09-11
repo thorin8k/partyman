@@ -68,10 +68,12 @@ export function TournamentDetail() {
 
   const handleConfirmMatch = async () => {
     if (!reportMatch || !reportWinner) return;
+    const a = scoreA === '' ? null : parseInt(scoreA);
+    const b = scoreB === '' ? null : parseInt(scoreB);
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch(`/api/admin/matches/${reportMatch}/confirm`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
-      body: JSON.stringify({ winnerId: parseInt(reportWinner), score: { a: parseInt(scoreA), b: parseInt(scoreB) } }),
+      body: JSON.stringify({ winnerId: parseInt(reportWinner), ...(a != null && b != null ? { score: { a, b } } : {}) }),
     });
     if (!res.ok) { const err = await res.json(); setError(apiError(err)); }
     else { setReportMatch(null); setReportWinner(''); setScoreA(''); setScoreB(''); }

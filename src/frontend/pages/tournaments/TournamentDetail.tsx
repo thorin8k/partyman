@@ -42,20 +42,25 @@ export function ParticipantTournamentDetail() {
 
   const handleReport = async () => {
     if (!reportMatch || !reportWinner) { setError('Elige el ganador del partido.'); return; }
-    const a = parseInt(scoreA); const b = parseInt(scoreB);
-    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || a > 99 || b < 0 || b > 99) { setError('Los puntos deben ser enteros de 0 a 99.'); return; }
-    if (a === b) { setError('No hay empates: los puntos deben ser distintos.'); return; }
-    const m = tournament?.matches.find(x => x.id === reportMatch);
-    if (m) {
-      const winnerIsA = parseInt(reportWinner) === m.participantAId;
-      const winnerScore = winnerIsA ? a : b; const loserScore = winnerIsA ? b : a;
-      if (winnerScore <= loserScore) { setError('El ganador debe tener más puntos.'); return; }
+    // Puntos opcionales: si se rellenan, deben ser enteros 0-99 distintos y a favor del ganador.
+    let score: { a: number; b: number } | undefined;
+    if (scoreA !== '' || scoreB !== '') {
+      const a = parseInt(scoreA); const b = parseInt(scoreB);
+      if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || a > 99 || b < 0 || b > 99) { setError('Los puntos deben ser enteros de 0 a 99.'); return; }
+      if (a === b) { setError('No hay empates: los puntos deben ser distintos.'); return; }
+      const m = tournament?.matches.find(x => x.id === reportMatch);
+      if (m) {
+        const winnerIsA = parseInt(reportWinner) === m.participantAId;
+        const winnerScore = winnerIsA ? a : b; const loserScore = winnerIsA ? b : a;
+        if (winnerScore <= loserScore) { setError('El ganador debe tener más puntos.'); return; }
+      }
+      score = { a, b };
     }
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch(`/api/matches/${reportMatch}/report`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
-      body: JSON.stringify({ winnerId: parseInt(reportWinner), score: { a, b } }),
+      body: JSON.stringify({ winnerId: parseInt(reportWinner), ...(score ? { score } : {}) }),
     });
     if (!res.ok) { const err = await res.json().catch(() => ({})); setError(apiMsg(err, 'Error al reportar')); }
     else { setReportMatch(null); setReportWinner(''); setScoreA(''); setScoreB(''); setError(null); fetchTournament(); }

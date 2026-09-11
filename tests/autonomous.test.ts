@@ -13,7 +13,7 @@ const migrationsDir = join(import.meta.dir, "..", "migrations");
 
 async function fullSchema(db: Database) {
   db.exec("CREATE TABLE IF NOT EXISTS migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)");
-  const files = ["001_core.sql", "002_auth_participants.sql", "003_parties_audit.sql", "004_public_views.sql", "005_games_planning.sql", "006_tournaments.sql", "007_history_rewards.sql", "008_operations.sql", "010_steam_admin_role.sql", "011_activity_tournament_proposals.sql", "014_autonomous.sql"];
+  const files = ["001_core.sql", "002_auth_participants.sql", "003_parties_audit.sql", "004_public_views.sql", "005_games_planning.sql", "006_tournaments.sql", "007_history_rewards.sql", "008_operations.sql", "010_steam_admin_role.sql", "011_activity_tournament_proposals.sql", "014_autonomous.sql", "015_optional_scores.sql"];
   for (const file of files) {
     db.exec(await Bun.file(join(migrationsDir, file)).text());
     db.run("INSERT INTO migrations (name) VALUES (?)", [file.replace(".sql", "")]);

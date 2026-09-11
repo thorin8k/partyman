@@ -407,22 +407,26 @@ export function createTournamentRoutes(db: Database) {
     if (match.status !== "pending" && match.status !== "reported") return Response.json({ error: { code: "INVALID_MATCH_STATE", message: "INVALID_MATCH_STATE" } }, { status: 409 });
 
     const body = await request.json().catch(() => null);
-    if (!body || !body.winnerId || !body.score) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["winnerId and score required"] }, { status: 400 });
+    if (!body || !body.winnerId) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["winnerId required"] }, { status: 400 });
 
     if (body.winnerId !== match.participant_a_id && body.winnerId !== match.participant_b_id) {
       return Response.json({ error: { code: "INVALID_WINNER", message: "INVALID_WINNER" } }, { status: 400 });
     }
 
-    const scoreA = body.score.a;
-    const scoreB = body.score.b;
-    if (typeof scoreA !== "number" || typeof scoreB !== "number" || scoreA < 0 || scoreA > 99 || scoreB < 0 || scoreB > 99 || scoreA === scoreB) {
-      return Response.json({ error: { code: "INVALID_SCORE", message: "INVALID_SCORE" }, details: ["scores must be 0-99 and different"] }, { status: 400 });
-    }
+    let scoreJson: string | null = null;
+    if (body.score != null) {
+      const scoreA = body.score.a;
+      const scoreB = body.score.b;
+      if (typeof scoreA !== "number" || typeof scoreB !== "number" || scoreA < 0 || scoreA > 99 || scoreB < 0 || scoreB > 99 || scoreA === scoreB) {
+        return Response.json({ error: { code: "INVALID_SCORE", message: "INVALID_SCORE" }, details: ["scores must be 0-99 and different"] }, { status: 400 });
+      }
 
-    const expectedWinnerScore = body.winnerId === match.participant_a_id ? scoreA : scoreB;
-    const expectedLoserScore = body.winnerId === match.participant_a_id ? scoreB : scoreA;
-    if (expectedWinnerScore <= expectedLoserScore) {
-      return Response.json({ error: { code: "INVALID_SCORE", message: "INVALID_SCORE" }, details: ["winner score must be greater"] }, { status: 400 });
+      const expectedWinnerScore = body.winnerId === match.participant_a_id ? scoreA : scoreB;
+      const expectedLoserScore = body.winnerId === match.participant_a_id ? scoreB : scoreA;
+      if (expectedWinnerScore <= expectedLoserScore) {
+        return Response.json({ error: { code: "INVALID_SCORE", message: "INVALID_SCORE" }, details: ["winner score must be greater"] }, { status: 400 });
+      }
+      scoreJson = JSON.stringify(body.score);
     }
 
     // El admin gestiona todo: su reporte confirma al instante sin pasar por
@@ -433,7 +437,7 @@ export function createTournamentRoutes(db: Database) {
       if (!tournament || tournament.status === "finished" || tournament.status === "cancelled") {
         return Response.json({ error: { code: "INVALID_TOURNAMENT_STATE", message: "INVALID_TOURNAMENT_STATE" } }, { status: 409 });
       }
-      confirmMatchRow(db, match, body.winnerId, JSON.stringify(body.score), null);
+      confirmMatchRow(db, match, body.winnerId, scoreJson, null);
       console.log("[tournaments] POST /api/matches/" + id + "/report (admin direct)");
       return Response.json({ ok: true, status: "confirmed" });
     }
@@ -445,21 +449,21 @@ export function createTournamentRoutes(db: Database) {
     // Upsert report
     db.run(
       "INSERT INTO match_reports (match_id, reporter_participant_id, winner_id, score_json) VALUES (?, ?, ?, ?) ON CONFLICT(match_id, reporter_participant_id) DO UPDATE SET winner_id = excluded.winner_id, score_json = excluded.score_json, created_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
-      [id, auth.session.subjectId, body.winnerId, JSON.stringify(body.score)]
+      [id, auth.session.subjectId, body.winnerId, scoreJson]
     );
 
     // Task 014: reports stay pending until both players agree, a timeout passes, or a dispute/admin decides.
-    const reports = db.query<{ reporter_participant_id: number; winner_id: number; score_json: string }, [number]>(
+    const reports = db.query<{ reporter_participant_id: number; winner_id: number; score_json: string | null }, [number]>(
       "SELECT reporter_participant_id, winner_id, score_json FROM match_reports WHERE match_id = ?"
     ).all(id);
 
-    const allSame = reports.every(r => r.winner_id === reports[0].winner_id && r.score_json === reports[0].score_json);
+    const allSame = reportsAgree(reports);
     const reporters = new Set(reports.map(r => r.reporter_participant_id));
     const bothPlayed = match.participant_a_id != null && match.participant_b_id != null &&
       reporters.has(match.participant_a_id) && reporters.has(match.participant_b_id);
 
     if (allSame && bothPlayed) {
-      confirmMatchRow(db, match, reports[0].winner_id, reports[0].score_json, auth.session.subjectId);
+      confirmMatchRow(db, match, reports[0].winner_id, agreedScore(reports), auth.session.subjectId);
     } else {
       const wasPending = match.status === "pending";
       db.run("UPDATE matches SET status = 'reported', reported_by = ?, reported_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [auth.session.subjectId, id]);
@@ -533,14 +537,29 @@ export function createTournamentRoutes(db: Database) {
     if (tournament?.status === "finished" || tournament?.status === "cancelled") return Response.json({ error: { code: "INVALID_TOURNAMENT_STATE", message: "INVALID_TOURNAMENT_STATE" } }, { status: 409 });
 
     const body = await request.json().catch(() => null);
-    if (!body || !body.winnerId || !body.score) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" } }, { status: 400 });
+    if (!body || !body.winnerId) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" } }, { status: 400 });
 
     if (body.winnerId !== match.participant_a_id && body.winnerId !== match.participant_b_id) {
       return Response.json({ error: { code: "INVALID_WINNER", message: "INVALID_WINNER" } }, { status: 400 });
     }
 
+    let confirmScore: string | null = null;
+    if (body.score != null) {
+      const scoreA = body.score.a;
+      const scoreB = body.score.b;
+      if (typeof scoreA !== "number" || typeof scoreB !== "number" || scoreA < 0 || scoreA > 99 || scoreB < 0 || scoreB > 99 || scoreA === scoreB) {
+        return Response.json({ error: { code: "INVALID_SCORE", message: "INVALID_SCORE" }, details: ["scores must be 0-99 and different"] }, { status: 400 });
+      }
+      const expectedWinnerScore = body.winnerId === match.participant_a_id ? scoreA : scoreB;
+      const expectedLoserScore = body.winnerId === match.participant_a_id ? scoreB : scoreA;
+      if (expectedWinnerScore <= expectedLoserScore) {
+        return Response.json({ error: { code: "INVALID_SCORE", message: "INVALID_SCORE" }, details: ["winner score must be greater"] }, { status: 400 });
+      }
+      confirmScore = JSON.stringify(body.score);
+    }
+
     db.run("UPDATE matches SET winner_id = ?, score_json = ?, status = 'confirmed', confirmed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), version = version + 1 WHERE id = ?",
-      [body.winnerId, JSON.stringify(body.score), id]);
+      [body.winnerId, confirmScore, id]);
     advanceWinner(db, { ...match, winner_id: body.winnerId });
 
     // Check if tournament is finished
@@ -610,11 +629,23 @@ export function maybeAutoStartTournament(db: Database, id: number): boolean {
 }
 
 // Task 014: single confirm path (agreement, timeout, dispute, admin).
-export function confirmMatchRow(db: Database, match: MatchRow, winnerId: number, scoreJson: string, confirmedBy: number | null) {
+export function confirmMatchRow(db: Database, match: MatchRow, winnerId: number, scoreJson: string | null, confirmedBy: number | null) {
   db.run("UPDATE matches SET winner_id = ?, score_json = ?, status = 'confirmed', reported_by = COALESCE(?, reported_by), reported_at = COALESCE(reported_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), confirmed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), version = version + 1 WHERE id = ?",
     [winnerId, scoreJson, confirmedBy, match.id]);
   advanceWinner(db, { ...match, winner_id: winnerId });
   checkTournamentFinished(db, match.tournament_id);
+}
+
+// Acuerdo: mismo ganador y puntuaciones compatibles (al menos una ausente
+// o iguales). Confirmar usa la primera puntuación presente, si la hay.
+function reportsAgree(reps: Array<{ winner_id: number; score_json: string | null }>): boolean {
+  if (reps.length === 0) return false;
+  return reps.every(r => r.winner_id === reps[0].winner_id &&
+    (r.score_json == null || reps[0].score_json == null || r.score_json === reps[0].score_json));
+}
+
+function agreedScore(reps: Array<{ score_json: string | null }>): string | null {
+  return reps.find(r => r.score_json != null)?.score_json ?? null;
 }
 
 // Task 014: lazy timeout — unanimous reported matches confirm themselves; conflicts never do.
@@ -628,8 +659,8 @@ export function sweepDueReports(db: Database): number {
         "SELECT reporter_participant_id, winner_id, score_json FROM match_reports WHERE match_id = ?"
       ).all(m.id);
       if (reps.length === 0) continue;
-      if (!reps.every(r => r.winner_id === reps[0].winner_id && r.score_json === reps[0].score_json)) continue;
-      confirmMatchRow(db, m, reps[0].winner_id, reps[0].score_json, reps[0].reporter_participant_id);
+      if (!reportsAgree(reps)) continue;
+      confirmMatchRow(db, m, reps[0].winner_id, agreedScore(reps), reps[0].reporter_participant_id);
       const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(m.tournament_id);
       if (t) logEvent(db, t.party_id, reps[0].reporter_participant_id, "match_confirmed", `Resultado confirmado por tiempo en ${t.name}`);
       done++;

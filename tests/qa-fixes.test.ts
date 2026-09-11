@@ -15,7 +15,7 @@ const migrationsDir = join(import.meta.dir, "..", "migrations");
 
 async function fullSchema(db: Database) {
   db.exec("CREATE TABLE IF NOT EXISTS migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)");
-  const files = ["001_core.sql", "002_auth_participants.sql", "003_parties_audit.sql", "004_public_views.sql", "005_games_planning.sql", "006_tournaments.sql", "007_history_rewards.sql", "008_operations.sql", "010_steam_admin_role.sql", "011_activity_tournament_proposals.sql", "014_autonomous.sql"];
+  const files = ["001_core.sql", "002_auth_participants.sql", "003_parties_audit.sql", "004_public_views.sql", "005_games_planning.sql", "006_tournaments.sql", "007_history_rewards.sql", "008_operations.sql", "010_steam_admin_role.sql", "011_activity_tournament_proposals.sql", "014_autonomous.sql", "015_optional_scores.sql"];
   for (const file of files) db.exec(await Bun.file(join(migrationsDir, file)).text());
 }
 
@@ -372,6 +372,54 @@ describe("qa fixes", () => {
     const act = db.query<{ id: number }, []>("SELECT id FROM activities WHERE title = 'Karaoke'").get()!;
     const joined = db.query<{ participant_id: number }, [number]>("SELECT participant_id FROM activity_participants WHERE activity_id = ?").all(act.id).map(r => r.participant_id).sort((x, y) => x - y);
     expect(joined).toEqual(voters.map(v => v.pid).sort((x, y) => x - y));
+  });
+
+  it("accepts winner-only reports and agrees across mixed null/scored reports", async () => {
+    const routes = createTournamentRoutes(db);
+    const mk = (steam: string) => {
+      const pid = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES (?, ?)", [steam, steam]).lastInsertRowid);
+      return { pid, token: session(db, "participant", pid) };
+    };
+    const p1 = mk("s-noscore-1"), p2 = mk("s-noscore-2");
+    const mkTour = async (name: string) => {
+      const created = await routes["/api/admin/tournaments"].POST(
+        new Request("http://localhost/api/admin/tournaments", post(adminToken, { partyId: activePartyId, gameId, name, maxParticipants: 2 }))
+      );
+      const tourId = (await created.json()).tournament.id;
+      for (const p of [p1, p2]) {
+        await routes["/api/tournaments/:id/join"].POST(new Request(`http://localhost/api/tournaments/${tourId}/join`, post(p.token)));
+      }
+      return tourId;
+    };
+    const rep = (tourId: number, mid: number, tok: string, body: unknown) =>
+      routes["/api/matches/:id/report"].POST(new Request(`http://localhost/api/matches/${mid}/report`, post(tok, body)));
+    const matchOf = (tourId: number) =>
+      db.query<{ id: number; a: number | null; b: number | null }, [number]>("SELECT id, participant_a_id AS a, participant_b_id AS b FROM matches WHERE tournament_id = ?").get(tourId)!;
+
+    // Solo ganador, ambos: confirma sin puntuación.
+    const t1 = await mkTour("NoScore");
+    const m1 = matchOf(t1);
+    expect((await rep(t1, m1.id, p1.token, { winnerId: m1.a })).status).toBe(200);
+    const c1 = await rep(t1, m1.id, p2.token, { winnerId: m1.a });
+    expect((await c1.json()).status).toBe("confirmed");
+    expect(db.query<{ s: string | null }, [number]>("SELECT score_json AS s FROM matches WHERE id = ?").get(m1.id)?.s).toBeNull();
+
+    // Mixto: uno sin puntos + otro con puntos del mismo ganador → confirma y guarda los puntos.
+    const t2 = await mkTour("MixedScore");
+    const m2 = matchOf(t2);
+    const score = { a: 5, b: 2 }; // el ganador es m2.a (slot a)
+    await rep(t2, m2.id, p1.token, { winnerId: m2.a });
+    const c2 = await rep(t2, m2.id, p2.token, { winnerId: m2.a, score });
+    expect((await c2.json()).status).toBe("confirmed");
+    expect(db.query<{ s: string | null }, [number]>("SELECT score_json AS s FROM matches WHERE id = ?").get(m2.id)?.s).toBe(JSON.stringify(score));
+
+    // Admin confirma sin puntos.
+    const t3 = await mkTour("AdminNoScore");
+    const m3 = matchOf(t3);
+    const adm = await routes["/api/admin/matches/:id/confirm"].POST(
+      new Request(`http://localhost/api/admin/matches/${m3.id}/confirm`, post(adminToken, { winnerId: m3.b }))
+    );
+    expect(adm.status).toBe(200);
   });
 
   it("gates party join behind JOIN_PASSWORD when set", async () => {
