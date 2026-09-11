@@ -10,7 +10,7 @@ type RouteMap = Record<string, Record<string, Handler>>;
 
 // Single composition point: body limit + rate limit before, headers after.
 // Bun.serve has no middleware chain, so backend.ts wraps the merged route map.
-export function hardenRoutes<T extends RouteMap>(routes: T, opts?: { dev?: boolean; limiter?: ReturnType<typeof createRateLimiter> }): T {
+export function hardenRoutes<T extends RouteMap>(routes: T, opts?: { dev?: boolean; limiter?: ReturnType<typeof createRateLimiter>; csrfOrigins?: string[] }): T {
   const dev = opts?.dev ?? process.env.NODE_ENV !== "production";
   const limiter = opts?.limiter ?? createRateLimiter();
   const out: RouteMap = {};
@@ -54,7 +54,8 @@ export function hardenRoutes<T extends RouteMap>(routes: T, opts?: { dev?: boole
           }
         }
         // ponytail: un solo guard CSRF para todos los writes (el login inicial se exime solo).
-        if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS" && !checkCsrf(req)) {
+        // csrfOrigins cubre el acceso tras proxy (PUBLIC_ORIGIN) cuando el Host interno difiere.
+        if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS" && !checkCsrf(req, opts?.csrfOrigins)) {
           return applySecurityHeaders(
             Response.json({ error: { code: "FORBIDDEN", message: "CSRF check failed" } }, { status: 403 }),
             dev

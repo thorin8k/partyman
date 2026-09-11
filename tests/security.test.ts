@@ -77,6 +77,17 @@ describe("hardenRoutes", () => {
     expect(checkCsrf(req)).toBe(true);
   });
 
+  it("accepts the public origin behind a proxy that rewrites Host", async () => {
+    const { checkCsrf } = await import("../src/backend/auth/guards");
+    const viaProxy = (origin: string) => new Request("http://localhost:8400/api/matches/1/report", {
+      method: "POST",
+      headers: { cookie: "partyman_csrf=csrf", "x-partyman-csrf": "csrf", origin },
+    });
+    expect(checkCsrf(viaProxy("https://party.example.com"), ["https://party.example.com"])).toBe(true);
+    expect(checkCsrf(viaProxy("https://party.example.com"))).toBe(false);
+    expect(checkCsrf(viaProxy("https://evil.example.com"), ["https://party.example.com"])).toBe(false);
+  });
+
   it("shapes legacy string errors and sets no-store", async () => {
     const legacy = (_req: Request, _srv?: any) => Response.json({ error: "ACTIVITY_FULL" }, { status: 409 });
     const routes = hardenRoutes({ "/t": { POST: legacy } }, { dev: false });

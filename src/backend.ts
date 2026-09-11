@@ -76,7 +76,7 @@ const server = serve({
       ...proposalRoutes2,
       ...scoringRoutes,
       ...operationsRoutes,
-    }),
+    }, { csrfOrigins: [config.publicOrigin] }),
 
     // Contrato API: una ruta /api desconocida es 404 JSON, nunca el shell del SPA.
     // Fuera de hardenRoutes para no exigir CSRF a un 404.
