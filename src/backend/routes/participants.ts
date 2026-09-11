@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { requireParticipant } from "../auth/guards";
 import { findParticipantById, joinActiveParty, findActiveParty } from "../auth/participants";
+import { joinPasswordRequired, verifyJoinPassword } from "../auth/password";
 
 export function createParticipantRoutes(db: Database) {
   return {
@@ -57,6 +58,16 @@ export function createParticipantRoutes(db: Database) {
 
     if (alreadyMember && alreadyMember.count > 0) {
       return Response.json({ joined: false, reason: "ALREADY_MEMBER" });
+    }
+
+    if (joinPasswordRequired()) {
+      const body = await request.json().catch(() => null);
+      if (!body || body.password == null) {
+        return Response.json({ joined: false, reason: "JOIN_PASSWORD_REQUIRED" }, { status: 403 });
+      }
+      if (!verifyJoinPassword(body.password)) {
+        return Response.json({ error: { code: "JOIN_PASSWORD_INVALID", message: "JOIN_PASSWORD_INVALID" } }, { status: 403 });
+      }
     }
 
     joinActiveParty(db, participant.id, participant.displayName);

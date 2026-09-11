@@ -6,6 +6,7 @@ import { createTournamentRoutes } from "../src/backend/routes/tournaments";
 import { createActivityTournamentProposalRoutes } from "../src/backend/routes/activity-tournament-proposals";
 import { createScoringRoutes } from "../src/backend/routes/scoring";
 import { createPartyRoutes } from "../src/backend/routes/parties";
+import { createParticipantRoutes } from "../src/backend/routes/participants";
 import { createAuthRoutes } from "../src/backend/routes/auth";
 import { hardenRoutes } from "../src/backend/middleware/harden";
 import { rateLimitRule } from "../src/backend/middleware/rate-limit";
@@ -371,6 +372,31 @@ describe("qa fixes", () => {
     const act = db.query<{ id: number }, []>("SELECT id FROM activities WHERE title = 'Karaoke'").get()!;
     const joined = db.query<{ participant_id: number }, [number]>("SELECT participant_id FROM activity_participants WHERE activity_id = ?").all(act.id).map(r => r.participant_id).sort((x, y) => x - y);
     expect(joined).toEqual(voters.map(v => v.pid).sort((x, y) => x - y));
+  });
+
+  it("gates party join behind JOIN_PASSWORD when set", async () => {
+    const routes = createParticipantRoutes(db);
+    const partyRoutes = createPartyRoutes(db);
+    const pid = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES ('s-gated', 'G')").lastInsertRowid);
+    const token = session(db, "participant", pid);
+    const join = (t: string, body?: unknown) => routes["/api/participants/join"].POST(new Request("http://localhost/api/participants/join", post(t, body)));
+    process.env.JOIN_PASSWORD = "lanfiesta";
+    try {
+      expect((await join(token)).status).toBe(403);
+      expect((await join(token, { password: "nope" })).status).toBe(403);
+      expect(db.query<{ n: number }, [number, number]>("SELECT COUNT(*) AS n FROM party_memberships WHERE party_id = ? AND participant_id = ?").get(activePartyId, pid)?.n).toBe(0);
+      const okRes = await join(token, { password: "lanfiesta" });
+      expect((await okRes.json()).joined).toBe(true);
+      // La alta perezosa tampoco salta la verja.
+      const pid2 = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES ('s-gated2', 'G2')").lastInsertRowid);
+      await partyRoutes["/api/parties/active"].GET(new Request("http://localhost/api/parties/active", { headers: cookie(session(db, "participant", pid2)) }));
+      expect(db.query<{ n: number }, [number, number]>("SELECT COUNT(*) AS n FROM party_memberships WHERE party_id = ? AND participant_id = ?").get(activePartyId, pid2)?.n).toBe(0);
+    } finally {
+      delete process.env.JOIN_PASSWORD;
+    }
+    // Sin verja: entra solo como antes.
+    const pid3 = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES ('s-free', 'F')").lastInsertRowid);
+    expect(await (await join(session(db, "participant", pid3))).json()).toMatchObject({ joined: true });
   });
 
   it("lazily joins a participant who opens the app after activation", async () => {

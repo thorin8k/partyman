@@ -4,7 +4,7 @@ import { sha256Hex, createSession } from "../auth/sessions";
 import { buildSteamRedirectUrl, createSteamState, verifySteamCallback, fetchSteamProfile } from "../auth/steam";
 import { upsertParticipant, joinActiveParty } from "../auth/participants";
 import { requireSession, requireAdmin, checkCsrf } from "../auth/guards";
-import { hashPassword, verifyPassword } from "../auth/password";
+import { hashPassword, verifyPassword, joinPasswordRequired } from "../auth/password";
 
 export function createAuthRoutes(db: Database) {
   const config = loadConfig();
@@ -23,7 +23,7 @@ export function createAuthRoutes(db: Database) {
       POST: handleLogout,
     },
     "/api/auth/config": {
-      GET: (_req: Request) => Response.json({ steamEnabled: config.steam.enabled, devTools: process.env.NODE_ENV !== "production" }),
+      GET: (_req: Request) => Response.json({ steamEnabled: config.steam.enabled, devTools: process.env.NODE_ENV !== "production", joinPasswordRequired: joinPasswordRequired() }),
     },
     "/api/me": {
       GET: handleGetMe,
@@ -74,7 +74,8 @@ export function createAuthRoutes(db: Database) {
       const { steamId } = await verifySteamCallback(params);
       const profile = await fetchSteamProfile(config.steam.apiKey, steamId);
       const participant = upsertParticipant(db, steamId, profile.nickname, profile.avatarUrl);
-      joinActiveParty(db, participant.id, participant.displayName);
+      // Con JOIN_PASSWORD la membership la da el propio usuario en /api/participants/join.
+      if (!joinPasswordRequired()) joinActiveParty(db, participant.id, participant.displayName);
       const info = createSession(db, "participant", participant.id);
       console.log("[auth] Steam callback →", profile.nickname, "(steamId:", steamId, ")");
       return redirectWithSession(takeReturnTo(request), info);
