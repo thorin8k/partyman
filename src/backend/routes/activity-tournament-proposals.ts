@@ -15,6 +15,13 @@ export function approveActivityProposal(db: Database, id: number): number | null
     const res = db.run("INSERT INTO activities (party_id, game_id, game_title_snapshot, title, starts_at, ends_at, capacity, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       [proposal.party_id, proposal.game_id, gameTitle, proposal.title, proposal.starts_at, proposal.ends_at, proposal.capacity, proposal.notes]);
     activityId = Number(res.lastInsertRowid);
+    // Quien la pidió y quienes la votaron van dentro (en orden de voto hasta capacity).
+    const voters = db.query<{ participant_id: number }, [number]>("SELECT participant_id FROM activity_proposal_votes WHERE proposal_id = ? ORDER BY created_at, rowid").all(id).map(v => v.participant_id);
+    const joiners = [...new Set([proposal.created_by_participant_id, ...voters].filter((x): x is number => x != null))];
+    const capped = proposal.capacity != null ? joiners.slice(0, proposal.capacity) : joiners;
+    for (const pid of capped) {
+      try { db.run("INSERT OR IGNORE INTO activity_participants (activity_id, participant_id) VALUES (?, ?)", [activityId, pid]); } catch { /* pre-014 DBs */ }
+    }
     try { db.run("DELETE FROM activity_proposal_votes WHERE proposal_id = ?", [id]); } catch { /* pre-014 DBs */ }
     db.run("DELETE FROM activity_proposals WHERE id = ?", [id]);
   })();

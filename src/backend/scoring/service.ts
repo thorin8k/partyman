@@ -32,17 +32,18 @@ function achievementId(db: Database, code: string): number | null {
   return db.query<{ id: number }, [string]>("SELECT id FROM achievements WHERE code = ?").get(code)?.id ?? null;
 }
 
-// ponytail: exactly-once por (achievement, party, participant); el título es el nombre del logro.
-function awardAuto(db: Database, participantId: number, code: string, partyId: number | null, note: string) {
+// ponytail: exactly-once por (achievement, party, participant); el título es el nombre del logro. Devuelve true si concede ahora.
+function awardAuto(db: Database, participantId: number, code: string, partyId: number | null, note: string): boolean {
   const achId = achievementId(db, code);
-  if (!achId) return;
+  if (!achId) return false;
   const exists = db.query<{ n: number }, [number, number, number | null, number | null]>(
     "SELECT COUNT(*) AS n FROM participant_awards WHERE participant_id = ? AND achievement_id = ? AND ((party_id IS NULL AND ? IS NULL) OR party_id = ?)"
   ).get(participantId, achId, partyId, partyId);
-  if (exists && exists.n > 0) return;
+  if (exists && exists.n > 0) return false;
   const name = db.query<{ name: string }, [number]>("SELECT name FROM achievements WHERE id = ?").get(achId)!.name;
   db.run("INSERT INTO participant_awards (participant_id, achievement_id, party_id, title, note) VALUES (?, ?, ?, ?, ?)",
     [participantId, achId, partyId, name, note]);
+  return true;
 }
 
 export function logEvent(db: Database, partyId: number, participantId: number | null, eventType: string, message: string) {
@@ -97,14 +98,14 @@ export function scoreTournamentFinished(db: Database, tournamentId: number, part
   }
   if (winner?.winner_id) {
     const wins = db.query<{ n: number }, [number]>("SELECT COUNT(*) AS n FROM point_ledger WHERE participant_id = ? AND reason = 'tournament_win' AND correction_of IS NULL AND NOT EXISTS (SELECT 1 FROM point_ledger c WHERE c.correction_of = point_ledger.id)").get(winner.winner_id)?.n ?? 0;
-    if (wins === 1) { awardAuto(db, winner.winner_id, "first_win", partyId, `Primer torneo ganado: ${tournament.name}`); logEvent(db, partyId, winner.winner_id, "achievement", `Primera victoria en ${tournament.name}`); }
-    if (wins === 3) { awardAuto(db, winner.winner_id, "veteran_3_wins", partyId, "3 victorias en torneos"); logEvent(db, partyId, winner.winner_id, "achievement", "3 victorias en torneos"); }
+    if (wins >= 1 && awardAuto(db, winner.winner_id, "first_win", partyId, `Primer torneo ganado: ${tournament.name}`)) logEvent(db, partyId, winner.winner_id, "achievement", `Primera victoria en ${tournament.name}`);
+    if (wins >= 3 && awardAuto(db, winner.winner_id, "veteran_3_wins", partyId, "3 victorias en torneos")) logEvent(db, partyId, winner.winner_id, "achievement", "3 victorias en torneos");
   }
   for (const p of listed) {
     const played = db.query<{ n: number }, [number]>(
       "SELECT COUNT(DISTINCT tp.tournament_id) AS n FROM tournament_participants tp JOIN tournaments t ON t.id = tp.tournament_id WHERE tp.participant_id = ? AND t.status = 'finished'"
     ).get(p.participant_id)?.n ?? 0;
-    if (played === 3) { awardAuto(db, p.participant_id, "regular_3_tournaments", null, "3 torneos jugados"); logEvent(db, partyId, p.participant_id, "achievement", "3 torneos jugados"); }
+    if (played >= 3 && awardAuto(db, p.participant_id, "regular_3_tournaments", null, "3 torneos jugados")) logEvent(db, partyId, p.participant_id, "achievement", "3 torneos jugados");
   }
   console.log("[scoring] Tournament #" + tournamentId + " scored");
 }
@@ -118,13 +119,13 @@ export function scorePartyParticipation(db: Database, partyId: number) {
       (db as any).run("INSERT OR IGNORE INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points) VALUES (?, ?, 'party_membership', ?, 'party_participation', ?)",
         [m.participant_id, partyId, `membership:${partyId}:${m.participant_id}`, rule.points]);
       const ever = db.query<{ n: number }, [number]>("SELECT COUNT(*) AS n FROM point_ledger WHERE participant_id = ? AND reason = 'party_participation' AND correction_of IS NULL AND NOT EXISTS (SELECT 1 FROM point_ledger c WHERE c.correction_of = point_ledger.id)").get(m.participant_id)?.n ?? 0;
-      if (ever === 1) { awardAuto(db, m.participant_id, "debut", partyId, "Primera party"); logEvent(db, partyId, m.participant_id, "achievement", "Debut en party"); }
+      if (ever >= 1 && awardAuto(db, m.participant_id, "debut", partyId, "Primera party")) logEvent(db, partyId, m.participant_id, "achievement", "Debut en party");
       const social = db.query<{ n: number }, [number, number]>("SELECT COUNT(*) AS n FROM activity_participants ap JOIN activities a ON a.id = ap.activity_id WHERE ap.participant_id = ? AND a.party_id = ?").get(m.participant_id, partyId)?.n ?? 0;
-      if (social >= 3) { awardAuto(db, m.participant_id, "social_3_activities", partyId, "3 actividades en una party"); logEvent(db, partyId, m.participant_id, "achievement", "Sociable: 3 actividades"); }
+      if (social >= 3 && awardAuto(db, m.participant_id, "social_3_activities", partyId, "3 actividades en una party")) logEvent(db, partyId, m.participant_id, "achievement", "Sociable: 3 actividades");
       const played = db.query<{ tournament_id: number }, [number, number]>("SELECT tp.tournament_id FROM tournament_participants tp JOIN tournaments t ON t.id = tp.tournament_id WHERE tp.participant_id = ? AND t.party_id = ? AND t.status = 'finished'").all(m.participant_id, partyId);
       if (played.length >= 2) {
         const won = db.query<{ n: number }, [number, number]>("SELECT COUNT(DISTINCT tournament_id) AS n FROM point_ledger WHERE participant_id = ? AND party_id = ? AND reason = 'tournament_win' AND correction_of IS NULL AND NOT EXISTS (SELECT 1 FROM point_ledger c WHERE c.correction_of = point_ledger.id)").get(m.participant_id, partyId)?.n ?? 0;
-        if (won === played.length) { awardAuto(db, m.participant_id, "undefeated_party", partyId, "Invicto en la party"); logEvent(db, partyId, m.participant_id, "achievement", "Invicto en la party"); }
+        if (won === played.length && awardAuto(db, m.participant_id, "undefeated_party", partyId, "Invicto en la party")) logEvent(db, partyId, m.participant_id, "achievement", "Invicto en la party");
       }
     }
     // MVP: top of the party board (ties share it).
@@ -132,7 +133,7 @@ export function scorePartyParticipation(db: Database, partyId: number) {
       const board = getLeaderboard(db, partyId);
       const top = board.length ? board[0].points : null;
       for (const b of board) {
-        if (b.points === top && top !== null) { awardAuto(db, b.participantId, "party_mvp", partyId, "MVP de la party"); logEvent(db, partyId, b.participantId, "achievement", "MVP de la party"); }
+        if (b.points === top && top !== null && awardAuto(db, b.participantId, "party_mvp", partyId, "MVP de la party")) logEvent(db, partyId, b.participantId, "achievement", "MVP de la party");
       }
     } catch { /* board optional */ }
     (db as any).run("INSERT OR REPLACE INTO party_scoring_runs (party_id, status, updated_at) VALUES (?, 'completed', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", [partyId]);

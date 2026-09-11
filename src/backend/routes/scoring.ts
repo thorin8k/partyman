@@ -170,6 +170,16 @@ export function createScoringRoutes(db: Database) {
       [original.participant_id, original.party_id, original.source_type, original.source_key, String(body.reason).slice(0, 500), body.points, body.ledgerId]).lastInsertRowid);
     db.run("INSERT INTO audit_log (actor_participant_id, actor_admin_id, action, target_type, target_id, metadata_json) VALUES (?, ?, 'points_corrected', 'point_ledger', ?, ?)",
       [auth.session.subjectType === "participant" ? auth.session.subjectId : null, auth.session.subjectType === "admin" ? auth.session.subjectId : null, correctionId, JSON.stringify({ ledgerId: body.ledgerId, points: body.points })]);
+    // La anulación revoca los auto-logros que colgaban de esa fila; el próximo
+    // scoring los re-concede si siguen ganados (contadores ya excluyen anuladas).
+    const affected = original.reason === "tournament_win"
+      ? ["first_win", "veteran_3_wins", "undefeated_party", "party_mvp"]
+      : original.reason === "party_participation" ? ["debut"] : [];
+    for (const code of affected) {
+      const achId = db.query<{ id: number }, [string]>("SELECT id FROM achievements WHERE code = ?").get(code)?.id;
+      if (achId) db.run("DELETE FROM participant_awards WHERE participant_id = ? AND achievement_id = ? AND ((party_id IS NULL AND ? IS NULL) OR party_id = ?)",
+        [original.participant_id, achId, original.party_id, original.party_id]);
+    }
     return Response.json({ ok: true });
   }
 

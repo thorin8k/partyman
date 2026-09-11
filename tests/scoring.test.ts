@@ -178,4 +178,24 @@ describe("task 007 scoring", () => {
     const vet = ctx.db.query<{ n: number }, [number, string]>("SELECT COUNT(*) AS n FROM participant_awards pa JOIN achievements a ON a.id = pa.achievement_id WHERE pa.participant_id = ? AND a.code = ?").get(carol, "veteran_3_wins")!;
     expect(vet.n).toBe(1);
   });
+
+  it("revokes auto achievements on correction and re-grants them when still earned", async () => {
+    seedAchievements(ctx.db);
+    const dave = Number(ctx.db.run("INSERT INTO participants (steam_id, display_name) VALUES ('steam-dave', 'Dave')").lastInsertRowid);
+    const mkCup = (name: string) => {
+      const t = Number(ctx.db.run("INSERT INTO tournaments (party_id, name) VALUES (?, ?)", [party, name]).lastInsertRowid);
+      ctx.db.run("INSERT INTO tournament_participants (tournament_id, participant_id, display_name_snapshot) VALUES (?, ?, 'Dave'), (?, ?, 'bob')", [t, dave, t, bob]);
+      ctx.db.run("INSERT INTO matches (tournament_id, round, position, participant_a_id, participant_b_id, winner_id, status) VALUES (?, 1, 0, ?, ?, ?, 'confirmed')", [t, dave, bob, dave]);
+      return t;
+    };
+    const has = (code: string) => ctx.db.query<{ n: number }, [number, string]>("SELECT COUNT(*) AS n FROM participant_awards pa JOIN achievements a ON a.id = pa.achievement_id WHERE pa.participant_id = ? AND a.code = ?").get(dave, code)!.n;
+    scoreTournamentFinished(ctx.db, mkCup("DaveA"), party);
+    expect(has("first_win")).toBe(1);
+    const winRow = ctx.db.query<{ id: number }, [number]>("SELECT id FROM point_ledger WHERE participant_id = ? AND reason = 'tournament_win' AND correction_of IS NULL").get(dave)!;
+    const corr = await routes["/api/admin/point-corrections"].POST(jsonReq("http://localhost/api/admin/point-corrections", "POST", adminToken, { ledgerId: winRow.id, points: -10, reason: "void" }));
+    expect(corr.status).toBe(200);
+    expect(has("first_win")).toBe(0);
+    scoreTournamentFinished(ctx.db, mkCup("DaveB"), party);
+    expect(has("first_win")).toBe(1);
+  });
 });

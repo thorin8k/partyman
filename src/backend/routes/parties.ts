@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { PartyService } from "../parties/service";
-import { requireAdmin } from "../auth/guards";
+import { requireAdmin, requireSession } from "../auth/guards";
 import { createBackup } from "../ops/backup";
 import { setParticipantRole, getAllParticipants, type ParticipantRole } from "../auth/participants";
 import type { CreatePartyInput, UpdatePartyInput } from "../../shared/contracts/parties";
@@ -55,8 +55,17 @@ export function createPartyRoutes(db: Database) {
     },
   };
 
-  async function handleGetActiveParty(): Promise<Response> {
+  async function handleGetActiveParty(request: Request): Promise<Response> {
     const party = service.getActive();
+    // Alta perezosa: quien abre la app con party activa y sesión de participante
+    // entra solo (cubre logins anteriores a la activación). Nunca falla a visitas.
+    if (party) {
+      const ctx = requireSession(db, request);
+      if (!(ctx instanceof Response) && ctx.session.subjectType === "participant") {
+        db.run("INSERT OR IGNORE INTO party_memberships (party_id, participant_id, display_name_snapshot) VALUES (?, ?, (SELECT display_name FROM participants WHERE id = ?))",
+          [party.id, ctx.session.subjectId, ctx.session.subjectId]);
+      }
+    }
     console.log("[parties] GET /api/parties/active →", party ? `party#${party.id}` : "null");
     return Response.json({ party });
   }

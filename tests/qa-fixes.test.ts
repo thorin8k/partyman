@@ -349,4 +349,37 @@ describe("qa fixes", () => {
     const audit = db.query<{ action: string }, []>("SELECT action FROM audit_log WHERE action IN ('role_changed', 'award_created')").all().map(r => r.action).sort();
     expect(audit).toEqual(["award_created", "role_changed"]);
   });
+
+  it("auto-joins voters and proposer when an activity proposal is approved", async () => {
+    const routes = createActivityTournamentProposalRoutes(db);
+    const voters: Array<{ pid: number; token: string }> = [];
+    for (let i = 1; i <= 3; i++) {
+      const pid = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES (?, ?)", [`s-av-${i}`, `AV${i}`]).lastInsertRowid);
+      db.run("INSERT INTO party_memberships (party_id, participant_id, display_name_snapshot) VALUES (?, ?, ?)", [activePartyId, pid, `AV${i}`]);
+      voters.push({ pid, token: session(db, "participant", pid) });
+    }
+    const created = await routes["/api/activity-proposals"].POST(
+      new Request("http://localhost/api/activity-proposals", post(voters[0].token, { title: "Karaoke", startsAt: "2026-01-01T10:00:00Z", endsAt: "2026-01-01T11:00:00Z" }))
+    );
+    expect(created.status).toBe(201);
+    const propId = (await created.json()).proposal.id;
+    for (const v of voters) {
+      await routes["/api/activity-proposals/:id/vote"].PUT(
+        new Request(`http://localhost/api/activity-proposals/${propId}/vote`, { method: "PUT", headers: cookie(v.token) })
+      );
+    }
+    const act = db.query<{ id: number }, []>("SELECT id FROM activities WHERE title = 'Karaoke'").get()!;
+    const joined = db.query<{ participant_id: number }, [number]>("SELECT participant_id FROM activity_participants WHERE activity_id = ?").all(act.id).map(r => r.participant_id).sort((x, y) => x - y);
+    expect(joined).toEqual(voters.map(v => v.pid).sort((x, y) => x - y));
+  });
+
+  it("lazily joins a participant who opens the app after activation", async () => {
+    const partyRoutes = createPartyRoutes(db);
+    const pid = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES ('s-late', 'Tarde')").lastInsertRowid);
+    const token = session(db, "participant", pid);
+    expect(db.query<{ n: number }, [number, number]>("SELECT COUNT(*) AS n FROM party_memberships WHERE party_id = ? AND participant_id = ?").get(activePartyId, pid)?.n).toBe(0);
+    const res = await partyRoutes["/api/parties/active"].GET(new Request("http://localhost/api/parties/active", { headers: cookie(token) }));
+    expect(res.status).toBe(200);
+    expect(db.query<{ n: number }, [number, number]>("SELECT COUNT(*) AS n FROM party_memberships WHERE party_id = ? AND participant_id = ?").get(activePartyId, pid)?.n).toBe(1);
+  });
 });
