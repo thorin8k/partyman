@@ -1,7 +1,7 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
 import { confirmDialog } from '../../components/ConfirmDialog';
-import { pageBtn, rowBtn, rowColumn, rowFooter, rowMain, rowTitle, headerBtn } from '../../components/listRow';
+import { pageBtn, rowBtn, rowColumn, rowFooter, rowHead, rowMain, rowTitle, headerBtn } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -125,14 +125,16 @@ export function AdminGames() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {games.map(g => (
                 <div key={g.id} className="list-item" style={rowColumn}>
-                  <div style={{ ...rowMain, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    {g.imageUrl && <img src={g.imageUrl} alt="" style={{ width: '48px', height: '48px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
-                    <h3 style={rowTitle}>{g.title}</h3>
-                  </div>
-                  <div style={rowFooter}>
+                  <div style={rowHead}>
+                    <div style={{ ...rowMain, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      {g.imageUrl && <img src={g.imageUrl} alt="" style={{ width: '48px', height: '48px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
+                      <h3 style={rowTitle}>{g.title}</h3>
+                    </div>
                     <button onClick={() => handleToggle(g)} style={{ ...rowBtn, borderColor: g.enabled ? 'var(--neon-green)' : 'var(--error)', color: g.enabled ? 'var(--neon-green)' : 'var(--error)' }}>
                       {g.enabled ? 'ACTIVO' : 'INACTIVO'}
                     </button>
+                  </div>
+                  <div style={rowFooter}>
                     <button onClick={() => handleDelete(g.id)} className="danger" style={rowBtn}>BORRAR</button>
                   </div>
                 </div>

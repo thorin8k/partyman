@@ -1,6 +1,6 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
-import { rowBtn, rowFooter, rowMain, rowColumn, badge, headerBtn } from '../../components/listRow';
+import { rowBtn, rowFooter, rowHead, rowMain, rowColumn, badge, headerBtn } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -79,15 +79,17 @@ export function AdminUsers() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem' }}>
             {participants.map(p => (
               <div key={p.id} className="list-item" style={rowColumn}>
-                <div style={{ ...rowMain, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  {p.avatarUrl ? (
-                    <img src={p.avatarUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0 }} />
-                  ) : (
-                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--neon-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--bg)', flexShrink: 0 }}>
-                      {p.displayName.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <span style={{ fontSize: '0.875rem', wordBreak: 'break-word' }}>{p.displayName}</span>
+                <div style={rowHead}>
+                  <div style={{ ...rowMain, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    {p.avatarUrl ? (
+                      <img src={p.avatarUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--neon-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--bg)', flexShrink: 0 }}>
+                        {p.displayName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span style={{ fontSize: '0.875rem', wordBreak: 'break-word' }}>{p.displayName}</span>
+                  </div>
                   {p.role === 'admin' && (
                     <span style={badge('var(--neon-magenta)')}>ADMIN</span>
                   )}

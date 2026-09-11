@@ -1,7 +1,7 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
 import { confirmDialog } from '../../components/ConfirmDialog';
-import { pageBtn, rowActions, rowBtn, rowColumn, rowFooter, rowMain, rowTitle, badge, headerBtn } from '../../components/listRow';
+import { pageBtn, rowActions, rowBtn, rowColumn, rowFooter, rowHead, rowMain, rowTitle, badge, headerBtn } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -233,18 +233,11 @@ export function AdminPlanning() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {activities.map(a => (
                 <div key={a.id} className="list-item" style={{ ...rowColumn, padding: '0.75rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={rowHead}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', ...rowMain }}>
                       {a.gameImage && <img src={a.gameImage} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />}
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <h3 style={{ marginBottom: '0.25rem' }}>{a.title}</h3>
-                          {(() => {
-                            if (a.status === 'cancelled') return <span style={badge('var(--error)')}>CANCELADA</span>;
-                            if (a.status === 'finished') return <span style={badge('var(--muted)')}>FINALIZADA</span>;
-                            const now = new Date(); const live = new Date(a.startsAt) <= now && now <= new Date(a.endsAt);
-                            return live ? <span style={badge('var(--neon-green)')}>EN CURSO</span> : null;
-                          })()}
-                        </div>
+                        <h3 style={{ marginBottom: '0.25rem' }}>{a.title}</h3>
                         <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
                           {a.gameTitleSnapshot ? `${a.gameTitleSnapshot} · ` : ''}
                           {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
@@ -253,6 +246,13 @@ export function AdminPlanning() {
                         {a.notes && <p style={{ margin: '0.25rem 0 0', color: 'var(--text-dim)', fontSize: '0.7rem', fontStyle: 'italic' }}>{a.notes}</p>}
                       </div>
                     </div>
+                    {(() => {
+                      if (a.status === 'cancelled') return <span style={badge('var(--error)')}>CANCELADA</span>;
+                      if (a.status === 'finished') return <span style={badge('var(--muted)')}>FINALIZADA</span>;
+                      const now = new Date(); const live = new Date(a.startsAt) <= now && now <= new Date(a.endsAt);
+                      return live ? <span style={badge('var(--neon-green)')}>EN CURSO</span> : null;
+                    })()}
+                  </div>
                   {a.participants && a.participants.length > 0 && (
                     <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border)' }}>
                       <p style={{ fontSize: '0.625rem', color: 'var(--text-dim)', marginBottom: '0.25rem' }}>INSCRITOS ({a.participants.length}):</p>
@@ -263,7 +263,7 @@ export function AdminPlanning() {
                       </div>
                     </div>
                   )}
-                  <div style={{ ...rowFooter, flexWrap: 'wrap' }}>
+                  <div style={rowFooter}>
                     {(a.status === 'scheduled' || a.status === 'in_progress') && (
                       <>
                         <button onClick={() => handleStatus(a.id, 'finished', 'FINALIZADA')} style={{ ...rowBtn, borderColor: 'var(--neon-green)', color: 'var(--neon-green)' }}>TERMINAR</button>

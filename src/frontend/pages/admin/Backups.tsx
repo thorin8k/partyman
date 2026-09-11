@@ -1,5 +1,5 @@
 import { useAuth } from '../../components/AuthContext';
-import { pageBtn, rowViewTouch } from '../../components/listRow';
+import { pageBtn, rowColumn, rowFooter, rowMain, rowViewTouch } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -59,12 +59,14 @@ export function Backups() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
             {backups.map(b => (
-              <div key={b.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <div>
+              <div key={b.id} className="list-item" style={rowColumn}>
+                <div style={{ ...rowMain }}>
                   <h3 style={{ fontSize: '0.875rem' }}>{fmtDate(b.createdAt)}</h3>
                   <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>{fmtBytes(b.sizeBytes)} · {b.integrity === 'ok' ? 'verificada' : 'CORRUPTA'}</p>
                 </div>
-                <a href={`/api/admin/backups/${b.id}/download`} style={rowViewTouch}>DESCARGAR →</a>
+                <div style={rowFooter}>
+                  <a href={`/api/admin/backups/${b.id}/download`} style={rowViewTouch}>DESCARGAR →</a>
+                </div>
               </div>
             ))}
           </div>

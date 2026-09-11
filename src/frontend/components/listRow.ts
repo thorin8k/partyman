@@ -22,6 +22,15 @@ export const rowColumn: CSSProperties = {
 export const rowFooter: CSSProperties = {
   ...rowActions,
   justifyContent: 'flex-end',
+  flexWrap: 'nowrap',
+  overflowX: 'auto',
+};
+// Cabecera de card: contenido a la izquierda + badge de estado arriba a la derecha.
+export const rowHead: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'flex-start',
+  gap: '0.75rem',
 };
 // Botones de página/primarios (formularios, crear, buscar): la talla grande
 // de la jerarquía.
@@ -74,5 +83,6 @@ export function badge(color: string): CSSProperties {
     fontFamily: 'var(--font-display)',
     fontSize: '0.625rem',
     whiteSpace: 'nowrap',
+    flexShrink: 0,
   };
 }

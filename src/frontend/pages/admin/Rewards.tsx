@@ -1,6 +1,6 @@
 import { useAuth } from '../../components/AuthContext';
 import { confirmDialog } from '../../components/ConfirmDialog';
-import { pageBtn, rowBtn, rowColumn, rowFooter, rowMain } from '../../components/listRow';
+import { pageBtn, rowBtn, rowColumn, rowFooter, rowHead, rowMain, badge } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -173,13 +173,18 @@ export function Rewards() {
           {correctPid && visible.length === 0 && <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>Sin movimientos.</p>}
           {visible.map((l: any) => (
             <div key={l.id} className="list-item" style={rowColumn}>
-              <span style={{ ...rowMain }}>{reasonLabel(l)} <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>· {fmtDate(l.created_at)}</span></span>
-              <span style={rowFooter}>
-                <span style={{ color: l.points < 0 ? 'var(--error)' : 'var(--neon-green)' }}>{l.points > 0 ? `+${l.points}` : l.points}</span>
-                {correctedIds.has(l.id)
-                  ? <span style={{ fontSize: '0.625rem', color: 'var(--text-dim)' }}>ANULADO</span>
-                  : <button onClick={() => handleUndo(l)} style={{ ...rowBtn, borderColor: 'var(--error)', color: 'var(--error)' }}>ANULAR</button>}
-              </span>
+              <div style={rowHead}>
+                <span style={{ ...rowMain }}>{reasonLabel(l)} <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>· {fmtDate(l.created_at)}</span></span>
+                <span style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+                  <span style={{ color: l.points < 0 ? 'var(--error)' : 'var(--neon-green)' }}>{l.points > 0 ? `+${l.points}` : l.points}</span>
+                  {correctedIds.has(l.id) && <span style={badge('var(--text-dim)')}>ANULADO</span>}
+                </span>
+              </div>
+              {!correctedIds.has(l.id) && (
+                <span style={rowFooter}>
+                  <button onClick={() => handleUndo(l)} style={{ ...rowBtn, borderColor: 'var(--error)', color: 'var(--error)' }}>ANULAR</button>
+                </span>
+              )}
             </div>
           ))}
           {visible.length > 0 && <input placeholder="Motivo (opcional)" value={motive} onChange={e => setMotive(e.target.value)} maxLength={500} />}

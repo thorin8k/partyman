@@ -1,6 +1,6 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
-import { pageBtn, rowActions, rowBtn, rowColumn, rowFooter, rowMain, rowTitle, badge, headerBtn, rowView } from '../../components/listRow';
+import { pageBtn, rowActions, rowBtn, rowColumn, rowFooter, rowHead, rowMain, rowTitle, badge, headerBtn, rowView } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 import { PartyForm } from '../../components/PartyForm';
@@ -89,12 +89,14 @@ export function AdminDashboard() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {parties.map(p => (
                 <div key={p.id} className="list-item" style={rowColumn}>
-                  <div style={rowMain}>
-                    <h3 style={rowTitle}>{p.name}</h3>
-                    <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.875rem' }}>{new Date(p.startsAt).toLocaleDateString('es-ES')} - {new Date(p.endsAt).toLocaleDateString('es-ES')}</p>
+                  <div style={rowHead}>
+                    <div style={rowMain}>
+                      <h3 style={rowTitle}>{p.name}</h3>
+                      <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.875rem' }}>{new Date(p.startsAt).toLocaleDateString('es-ES')} - {new Date(p.endsAt).toLocaleDateString('es-ES')}</p>
+                    </div>
+                    <span style={badge(statusColors[p.status])}>{statusLabels[p.status]}</span>
                   </div>
                   <div style={rowFooter}>
-                    <span style={badge(statusColors[p.status])}>{statusLabels[p.status]}</span>
                     <a href={`/admin/parties/${p.id}`} style={rowView}>VER →</a>
                   </div>
                 </div>
@@ -148,20 +150,20 @@ export function AdminDashboard() {
           )}
         </div>
         {(activityProposals.length > 0 || tournamentProposals.length > 0) && <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-          <a href="/admin/planning" style={{ fontSize: '0.5rem' }}>GESTIÓN ACTIVIDADES →</a>
-          <a href="/admin/tournaments" style={{ fontSize: '0.5rem' }}>GESTIÓN TORNEOS →</a>
+          <a href="/admin/planning" style={{ fontSize: '0.625rem' }}>GESTIÓN ACTIVIDADES →</a>
+          <a href="/admin/tournaments" style={{ fontSize: '0.625rem' }}>GESTIÓN TORNEOS →</a>
         </div>}
       </details>
 
       <div className="card" style={{ marginTop: '1rem' }}>
         <h2>ACCIONES RÁPIDAS</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
-          <a href="/admin/planning" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>ACTIVIDADES</a>
-          <a href="/admin/games" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>JUEGOS</a>
-          <a href="/admin/tournaments" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>TORNEOS</a>
-          <a href="/admin/rewards" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>PREMIOS</a>
-          <a href="/admin/users" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>USUARIOS</a>
-          <a href="/admin/backups" style={{ fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>COPIAS</a>
+          <a href="/admin/planning" style={{ fontSize: '0.625rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>ACTIVIDADES</a>
+          <a href="/admin/games" style={{ fontSize: '0.625rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>JUEGOS</a>
+          <a href="/admin/tournaments" style={{ fontSize: '0.625rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>TORNEOS</a>
+          <a href="/admin/rewards" style={{ fontSize: '0.625rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>PREMIOS</a>
+          <a href="/admin/users" style={{ fontSize: '0.625rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>USUARIOS</a>
+          <a href="/admin/backups" style={{ fontSize: '0.625rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.875rem 1.5rem', border: '2px solid var(--neon-cyan)', borderRadius: 'var(--radius)', textDecoration: 'none' }}>COPIAS</a>
         </div>
       </div>
     </div>
