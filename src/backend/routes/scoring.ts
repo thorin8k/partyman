@@ -129,8 +129,10 @@ export function createScoringRoutes(db: Database) {
     const participant = db.query<any, [number]>("SELECT id FROM participants WHERE id = ?").get(body.participantId);
     if (!participant) return Response.json({ error: { code: "PARTICIPANT_NOT_FOUND", message: "Participant not found" } }, { status: 404 });
     const title = hasTitle ? String(body.title).trim().slice(0, 120) : db.query<{ name: string }, [number]>("SELECT name FROM achievements WHERE id = ?").get(body.achievementId)?.name ?? "Award";
-    db.run("INSERT INTO participant_awards (participant_id, achievement_id, party_id, title, note, awarded_by) VALUES (?, ?, ?, ?, ?, ?)",
-      [body.participantId, body.achievementId ?? null, body.partyId ?? null, title, body.note ?? null, auth.session.subjectId]);
+    const awardId = Number(db.run("INSERT INTO participant_awards (participant_id, achievement_id, party_id, title, note, awarded_by) VALUES (?, ?, ?, ?, ?, ?)",
+      [body.participantId, body.achievementId ?? null, body.partyId ?? null, title, body.note ?? null, auth.session.subjectId]).lastInsertRowid);
+    db.run("INSERT INTO audit_log (actor_participant_id, actor_admin_id, action, target_type, target_id, metadata_json) VALUES (?, ?, 'award_created', 'award', ?, ?)",
+      [auth.session.subjectType === "participant" ? auth.session.subjectId : null, auth.session.subjectType === "admin" ? auth.session.subjectId : null, awardId, JSON.stringify({ participantId: body.participantId, title })]);
     console.log("[awards] POST /api/admin/awards → participant#" + body.participantId);
     return Response.json({ ok: true }, { status: 201 });
   }
@@ -164,8 +166,10 @@ export function createScoringRoutes(db: Database) {
     if (!original) return Response.json({ error: { code: "LEDGER_NOT_FOUND", message: "Ledger row not found" } }, { status: 404 });
     const already = db.query<any, [number]>("SELECT id FROM point_ledger WHERE correction_of = ? LIMIT 1").get(body.ledgerId);
     if (already) return Response.json({ error: { code: "LEDGER_ALREADY_CORRECTED", message: "Already corrected" } }, { status: 409 });
-    db.run("INSERT INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points, correction_of) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [original.participant_id, original.party_id, original.source_type, original.source_key, String(body.reason).slice(0, 500), body.points, body.ledgerId]);
+    const correctionId = Number(db.run("INSERT INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points, correction_of) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [original.participant_id, original.party_id, original.source_type, original.source_key, String(body.reason).slice(0, 500), body.points, body.ledgerId]).lastInsertRowid);
+    db.run("INSERT INTO audit_log (actor_participant_id, actor_admin_id, action, target_type, target_id, metadata_json) VALUES (?, ?, 'points_corrected', 'point_ledger', ?, ?)",
+      [auth.session.subjectType === "participant" ? auth.session.subjectId : null, auth.session.subjectType === "admin" ? auth.session.subjectId : null, correctionId, JSON.stringify({ ledgerId: body.ledgerId, points: body.points })]);
     return Response.json({ ok: true });
   }
 

@@ -51,6 +51,7 @@ const ERROR_ES: Record<string, string> = {
   NOT_IN_MATCH: 'Solo los jugadores del partido pueden reportar.',
   PARTICIPANT_ONLY: 'Solo un participante puede hacer eso. Como admin, gestiona desde el panel.',
   PROPOSAL_NOT_FOUND: 'La propuesta ya no existe.',
+  DUPLICATE_PROPOSAL: 'Ya existe esa propuesta.',
   VALIDATION_ERROR: 'Revisa los datos del formulario.',
 };
 

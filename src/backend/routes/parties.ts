@@ -211,7 +211,9 @@ export function createPartyRoutes(db: Database) {
       }
 
       try {
-        const meta = await createBackup(db, process.env.BACKUP_DIR ?? "/data/backups");
+        const backupDir = process.env.BACKUP_DIR ?? "/data/backups";
+        const backupKeep = Number.parseInt(process.env.BACKUP_KEEP ?? "20", 10);
+        const meta = await createBackup(db, backupDir, { keep: backupKeep });
         steps.push({ key: "backup", status: "done", detail: `Copia ${meta.filename} verificada` });
       } catch {
         steps.push({ key: "backup", status: "failed", detail: "No se pudo crear la copia; reintenta" });
@@ -386,6 +388,8 @@ export function createPartyRoutes(db: Database) {
     }
 
     setParticipantRole(db, id, body.role as ParticipantRole);
+    db.run("INSERT INTO audit_log (actor_participant_id, actor_admin_id, action, target_type, target_id, metadata_json) VALUES (?, ?, 'role_changed', 'participant', ?, ?)",
+      [auth.session.subjectType === "participant" ? auth.session.subjectId : null, auth.session.subjectType === "admin" ? auth.session.subjectId : null, id, JSON.stringify({ role: body.role })]);
     console.log("[admin] PATCH /api/admin/participants/" + id + "/role →", body.role);
     return Response.json({ ok: true, role: body.role });
   }

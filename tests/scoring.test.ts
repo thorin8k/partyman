@@ -24,6 +24,7 @@ function makeTempDb(): { db: Database; close: () => void } {
   db.exec("CREATE TABLE participant_awards (id INTEGER PRIMARY KEY AUTOINCREMENT, participant_id INTEGER NOT NULL, achievement_id INTEGER, party_id INTEGER, title TEXT NOT NULL, note TEXT, awarded_by INTEGER, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))");
   db.exec("CREATE TABLE activity_events (id INTEGER PRIMARY KEY AUTOINCREMENT, party_id INTEGER, participant_id INTEGER, event_type TEXT NOT NULL, message TEXT NOT NULL, source_type TEXT, source_id INTEGER)");
   db.exec("CREATE TABLE party_scoring_runs (party_id INTEGER PRIMARY KEY, status TEXT NOT NULL, last_error TEXT, updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))");
+  db.exec("CREATE TABLE audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, actor_participant_id INTEGER, actor_admin_id INTEGER, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id INTEGER NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}')");
   return { db, close: () => db.close() };
 }
 

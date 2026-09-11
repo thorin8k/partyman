@@ -190,6 +190,7 @@ export class PartyService {
       if (existing.has("tournaments")) tourIds = this.db.query<{ id: number }, [number]>("SELECT id FROM tournaments WHERE party_id = ?").all(id);
       for (const t of tourIds) {
         if (existing.has("match_reports") && existing.has("matches")) this.db.run("DELETE FROM match_reports WHERE match_id IN (SELECT id FROM matches WHERE tournament_id = ?)", [t.id]);
+        if (existing.has("dispute_votes") && existing.has("matches")) this.db.run("DELETE FROM dispute_votes WHERE match_id IN (SELECT id FROM matches WHERE tournament_id = ?)", [t.id]);
         run("matches", "DELETE FROM matches WHERE tournament_id = ?", [t.id]);
         run("tournament_participants", "DELETE FROM tournament_participants WHERE tournament_id = ?", [t.id]);
       }
@@ -202,7 +203,9 @@ export class PartyService {
       if (existing.has("party_game_proposals")) propIds = this.db.query<{ id: number }, [number]>("SELECT id FROM party_game_proposals WHERE party_id = ?").all(id);
       for (const p of propIds) run("proposal_votes", "DELETE FROM proposal_votes WHERE proposal_id = ?", [p.id]);
       run("party_game_proposals", "DELETE FROM party_game_proposals WHERE party_id = ?", [id]);
+      if (existing.has("activity_proposal_votes") && existing.has("activity_proposals")) this.db.run("DELETE FROM activity_proposal_votes WHERE proposal_id IN (SELECT id FROM activity_proposals WHERE party_id = ?)", [id]);
       run("activity_proposals", "DELETE FROM activity_proposals WHERE party_id = ?", [id]);
+      if (existing.has("tournament_proposal_votes") && existing.has("tournament_proposals")) this.db.run("DELETE FROM tournament_proposal_votes WHERE proposal_id IN (SELECT id FROM tournament_proposals WHERE party_id = ?)", [id]);
       run("tournament_proposals", "DELETE FROM tournament_proposals WHERE party_id = ?", [id]);
       run("point_ledger", "DELETE FROM point_ledger WHERE party_id = ?", [id]);
       run("participant_awards", "DELETE FROM participant_awards WHERE party_id = ?", [id]);

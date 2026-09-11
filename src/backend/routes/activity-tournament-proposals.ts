@@ -100,9 +100,20 @@ export function createActivityTournamentProposalRoutes(db: Database) {
       }
     }
 
-    const res = db.run("INSERT INTO activity_proposals (party_id, game_id, title, starts_at, ends_at, capacity, notes, created_by_participant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      [activeParty.id, gameId, body.title.trim(), body.startsAt, body.endsAt, body.capacity ?? null, body.notes ?? null, ctx.session.subjectId]);
-    const proposal = db.query<any, [number]>("SELECT * FROM activity_proposals WHERE id = ?").get(Number(res.lastInsertRowid));
+    const sameTitle = db.query<{ id: number }, [number, string, string, number | null, number]>(
+      "SELECT id FROM activity_proposals WHERE party_id = ? AND title = ? AND starts_at = ? AND ((game_id IS NULL AND ? IS NULL) OR game_id = ?)"
+    ).get(activeParty.id, body.title.trim(), body.startsAt, gameId, gameId ?? -1);
+    if (sameTitle) return Response.json({ error: { code: "DUPLICATE_PROPOSAL", message: "DUPLICATE_PROPOSAL" } }, { status: 409 });
+
+    let proposalId: number;
+    try {
+      const res = db.run("INSERT INTO activity_proposals (party_id, game_id, title, starts_at, ends_at, capacity, notes, created_by_participant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [activeParty.id, gameId, body.title.trim(), body.startsAt, body.endsAt, body.capacity ?? null, body.notes ?? null, ctx.session.subjectId]);
+      proposalId = Number(res.lastInsertRowid);
+    } catch {
+      return Response.json({ error: { code: "DUPLICATE_PROPOSAL", message: "DUPLICATE_PROPOSAL" } }, { status: 409 });
+    }
+    const proposal = db.query<any, [number]>("SELECT * FROM activity_proposals WHERE id = ?").get(proposalId);
     console.log("[proposals] POST /api/activity-proposals → #" + proposal.id);
     return Response.json({ proposal }, { status: 201 });
   }
@@ -217,9 +228,15 @@ export function createActivityTournamentProposalRoutes(db: Database) {
       const res = db.run("INSERT INTO games (title, image_url, enabled) VALUES (?, ?, 1)", [title, body.imageUrl ?? null]);
       gameId = Number(res.lastInsertRowid);
     }
-    const res = db.run("INSERT INTO tournament_proposals (party_id, game_id, name, max_participants, created_by_participant_id) VALUES (?, ?, ?, ?, ?)",
-      [activeParty.id, gameId, body.name.trim(), maxParticipants, ctx.session.subjectId]);
-    const proposal = db.query<any, [number]>("SELECT * FROM tournament_proposals WHERE id = ?").get(Number(res.lastInsertRowid));
+    let proposalId: number;
+    try {
+      const res = db.run("INSERT INTO tournament_proposals (party_id, game_id, name, max_participants, created_by_participant_id) VALUES (?, ?, ?, ?, ?)",
+        [activeParty.id, gameId, body.name.trim(), maxParticipants, ctx.session.subjectId]);
+      proposalId = Number(res.lastInsertRowid);
+    } catch {
+      return Response.json({ error: { code: "DUPLICATE_PROPOSAL", message: "DUPLICATE_PROPOSAL" } }, { status: 409 });
+    }
+    const proposal = db.query<any, [number]>("SELECT * FROM tournament_proposals WHERE id = ?").get(proposalId);
     console.log("[proposals] POST /api/tournament-proposals → #" + proposal.id);
     return Response.json({ proposal }, { status: 201 });
   }

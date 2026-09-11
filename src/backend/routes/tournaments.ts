@@ -67,6 +67,10 @@ export function createTournamentRoutes(db: Database) {
     if (!body || !body.partyId || !body.gameId || !body.name) {
       return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["partyId, gameId, name required"] }, { status: 400 });
     }
+    const maxParticipants = body.maxParticipants ?? 16;
+    if (!Number.isInteger(maxParticipants) || maxParticipants < 2 || maxParticipants > 16) {
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["maxParticipants must be 2-16"] }, { status: 422 });
+    }
     const game = db.query<{ id: number; title: string; enabled: number }, [number]>("SELECT id, title, enabled FROM games WHERE id = ?").get(body.gameId);
     if (!game || !game.enabled) return Response.json({ error: { code: "GAME_NOT_FOUND", message: "GAME_NOT_FOUND" } }, { status: 404 });
 
@@ -79,7 +83,7 @@ export function createTournamentRoutes(db: Database) {
     // Task 014: creation publishes directly (no draft state for new tournaments).
     const result = db.run(
       "INSERT INTO tournaments (party_id, game_id, game_title_snapshot, activity_id, name, max_participants, status) VALUES (?, ?, ?, ?, ?, ?, 'upcoming')",
-      [body.partyId, body.gameId, game.title, body.activityId ?? null, body.name.trim(), body.maxParticipants ?? 16]
+      [body.partyId, body.gameId, game.title, body.activityId ?? null, body.name.trim(), maxParticipants]
     );
     const tournament = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(Number(result.lastInsertRowid))!;
     console.log("[tournaments] POST /api/admin/tournaments → created #" + tournament.id);
@@ -123,6 +127,7 @@ export function createTournamentRoutes(db: Database) {
     if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
     const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
     if (!t) return Response.json({ error: { code: "TOURNAMENT_NOT_FOUND", message: "TOURNAMENT_NOT_FOUND" } }, { status: 404 });
+    if (t.status === "finished") return Response.json({ error: { code: "INVALID_TOURNAMENT_STATE", message: "INVALID_TOURNAMENT_STATE" } }, { status: 409 });
     db.run("DELETE FROM matches WHERE tournament_id = ?", [id]);
     db.run("DELETE FROM match_reports WHERE match_id IN (SELECT id FROM matches WHERE tournament_id = ?)", [id]);
     db.run("DELETE FROM tournament_participants WHERE tournament_id = ?", [id]);

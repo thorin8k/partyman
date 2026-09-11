@@ -116,8 +116,9 @@ export function createActivitiesRoutes(db: Database) {
 
     let gameTitleSnapshot = null;
     if (body.gameId) {
-      const game = db.query<{ title: string }, [number]>("SELECT title FROM games WHERE id = ?").get(body.gameId);
-      if (game) gameTitleSnapshot = game.title;
+      const game = db.query<{ title: string; enabled: number }, [number]>("SELECT title, enabled FROM games WHERE id = ?").get(body.gameId);
+      if (!game || !game.enabled) return Response.json({ error: { code: "GAME_NOT_FOUND", message: "GAME_NOT_FOUND" } }, { status: 404 });
+      gameTitleSnapshot = game.title;
     }
 
     const result = db.run(

@@ -3,8 +3,8 @@ import { loadConfig } from "../config";
 import { sha256Hex, createSession } from "../auth/sessions";
 import { buildSteamRedirectUrl, createSteamState, verifySteamCallback, fetchSteamProfile } from "../auth/steam";
 import { upsertParticipant, joinActiveParty } from "../auth/participants";
-import { requireSession, checkCsrf } from "../auth/guards";
-import { verifyPassword } from "../auth/password";
+import { requireSession, requireAdmin, checkCsrf } from "../auth/guards";
+import { hashPassword, verifyPassword } from "../auth/password";
 
 export function createAuthRoutes(db: Database) {
   const config = loadConfig();
@@ -27,6 +27,9 @@ export function createAuthRoutes(db: Database) {
     },
     "/api/me": {
       GET: handleGetMe,
+    },
+    "/api/admin/password": {
+      POST: handleChangePassword,
     },
   };
 
@@ -132,8 +135,34 @@ export function createAuthRoutes(db: Database) {
     );
   }
 
-  async function handleLogout(request: Request): Promise<Response> {
+  async function handleChangePassword(request: Request): Promise<Response> {
+    const auth = requireAdmin(db, request);
+    if (auth instanceof Response) return auth;
     if (!checkCsrf(request, [config.publicOrigin])) {
+      return Response.json({ error: { code: "FORBIDDEN", message: "CSRF check failed" } }, { status: 403 });
+    }
+    // Solo la cuenta admin local tiene password; los admins de Steam no.
+    if (auth.session.subjectType !== "admin") {
+      return Response.json({ error: { code: "FORBIDDEN", message: "Local admin only" } }, { status: 403 });
+    }
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body.currentPassword !== "string" || typeof body.newPassword !== "string") {
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "currentPassword and newPassword required" } }, { status: 422 });
+    }
+    if (body.newPassword.length < 8) {
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "newPassword must be at least 8 characters" } }, { status: 422 });
+    }
+    const row = db.query<{ password_hash: string }, [number]>("SELECT password_hash FROM admin_users WHERE id = ?").get(auth.session.subjectId);
+    if (!row || !(await verifyPassword(body.currentPassword, row.password_hash))) {
+      return Response.json({ error: { code: "AUTH_INVALID_CREDENTIALS", message: "Current password is wrong" } }, { status: 401 });
+    }
+    db.run("UPDATE admin_users SET password_hash = ? WHERE id = ?", [await hashPassword(body.newPassword), auth.session.subjectId]);
+    db.run("INSERT INTO audit_log (actor_admin_id, action, target_type, target_id) VALUES (?, 'password_changed', 'admin', ?)", [auth.session.subjectId, auth.session.subjectId]);
+    console.log("[auth] POST /api/admin/password → changed");
+    return Response.json({ ok: true });
+  }
+
+  async function handleLogout(request: Request): Promise<Response> {    if (!checkCsrf(request, [config.publicOrigin])) {
       return Response.json(
         { error: { code: "FORBIDDEN", message: "CSRF check failed" } },
         { status: 403 }

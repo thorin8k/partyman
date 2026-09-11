@@ -26,6 +26,8 @@ const ADMIN_ES: Record<string, string> = {
   INVALID_ID: "Identificador no válido.",
   NO_CHANGES: "Sin cambios que guardar.",
   DUPLICATE_CODE: "Ese código ya existe.",
+  DUPLICATE_PROPOSAL: "Ya existe esa propuesta.",
+  AUTH_INVALID_CREDENTIALS: "Credenciales no válidas.",
   FORBIDDEN: "Sin permiso para esta acción.",
   PARTICIPANT_ONLY: "Solo un participante puede hacer eso. Como admin, usa el panel.",
   BACKUP_NOT_FOUND: "Esa copia ya no existe.",

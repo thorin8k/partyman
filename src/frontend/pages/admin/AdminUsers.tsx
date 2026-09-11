@@ -29,6 +29,22 @@ export function AdminUsers() {
     if (res.ok) setParticipants((await res.json()).participants);
   };
 
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [pwMsg, setPwMsg] = useState<string | null>(null);
+
+  const handleChangePassword = async () => {
+    setPwMsg(null);
+    if (newPw.length < 8) { setPwMsg('La nueva contraseña debe tener al menos 8 caracteres.'); return; }
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    const res = await fetch('/api/admin/password', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
+      body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
+    });
+    if (res.ok) { setCurrentPw(''); setNewPw(''); setPwMsg('Contraseña actualizada.'); }
+    else { const err = await res.json(); setPwMsg(apiError(err)); }
+  };
+
   const handleToggleRole = async (p: Participant) => {
     const newRole = p.role === 'admin' ? 'participant' : 'admin';
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
@@ -85,6 +101,17 @@ export function AdminUsers() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="card">
+        <h2>CONTRASEÑA ADMIN</h2>
+        <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>Cuenta local (no Steam). Mínimo 8 caracteres.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem', maxWidth: '320px' }}>
+          <input type="password" placeholder="Actual" value={currentPw} onChange={e => setCurrentPw(e.target.value)} autoComplete="current-password" />
+          <input type="password" placeholder="Nueva (mín. 8)" value={newPw} onChange={e => setNewPw(e.target.value)} autoComplete="new-password" />
+          <button onClick={handleChangePassword} style={rowBtn}>CAMBIAR CONTRASEÑA</button>
+          {pwMsg && <p style={{ fontSize: '0.875rem' }}>{pwMsg}</p>}
+        </div>
       </div>
     </div>
   );

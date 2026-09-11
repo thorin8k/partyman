@@ -5,6 +5,8 @@ import { seedPointRules, getLeaderboard } from "../src/backend/scoring/service";
 import { createTournamentRoutes } from "../src/backend/routes/tournaments";
 import { createActivityTournamentProposalRoutes } from "../src/backend/routes/activity-tournament-proposals";
 import { createScoringRoutes } from "../src/backend/routes/scoring";
+import { createPartyRoutes } from "../src/backend/routes/parties";
+import { createAuthRoutes } from "../src/backend/routes/auth";
 import { hardenRoutes } from "../src/backend/middleware/harden";
 import { rateLimitRule } from "../src/backend/middleware/rate-limit";
 
@@ -126,6 +128,45 @@ describe("qa fixes", () => {
     expect(res.status).toBe(422);
   });
 
+  it("completes tournaments for 2,4,5,6,7,8 players by mutual agreement", async () => {
+    const routes = createTournamentRoutes(db);
+    const pool: Array<{ pid: number; token: string }> = [];
+    for (let i = 1; i <= 8; i++) {
+      const pid = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES (?, ?)", [`s-sweep-${i}`, `S${i}`]).lastInsertRowid);
+      pool.push({ pid, token: session(db, "participant", pid) });
+    }
+    const tokOf = (pid: number) => pool.find(p => p.pid === pid)!.token;
+    const detail = async (tourId: number) =>
+      (await (await routes["/api/tournaments/:id"].GET(
+        new Request(`http://localhost/api/tournaments/${tourId}`, { headers: cookie(pool[0].token) })
+      )).json()).tournament;
+
+    for (const n of [2, 4, 5, 6, 7, 8]) {
+      const created = await routes["/api/admin/tournaments"].POST(
+        new Request("http://localhost/api/admin/tournaments", post(adminToken, { partyId: activePartyId, gameId, name: `Sweep${n}`, maxParticipants: n }))
+      );
+      expect(created.status).toBe(201);
+      const tourId = (await created.json()).tournament.id;
+      for (const p of pool.slice(0, n)) {
+        await routes["/api/tournaments/:id/join"].POST(new Request(`http://localhost/api/tournaments/${tourId}/join`, post(p.token)));
+      }
+      let done = false;
+      for (let i = 0; i < 20 && !done; i++) {
+        const t = await detail(tourId);
+        if (t.status === "finished") { done = true; break; }
+        const m = t.matches.find((x: any) => x.status !== "confirmed" && x.participantAId && x.participantBId);
+        if (!m) throw new Error(`Sweep${n}: bracket bloqueado sin partidos jugables`);
+        for (const pid of [m.participantAId, m.participantBId]) {
+          await routes["/api/matches/:id/report"].POST(
+            new Request(`http://localhost/api/matches/${m.id}/report`, post(tokOf(pid), { winnerId: m.participantAId, score: { a: 5, b: 2 } }))
+          );
+        }
+      }
+      expect(done).toBe(true);
+      expect(db.query<{ status: string }, [number]>("SELECT status FROM tournaments WHERE id = ?").get(tourId)?.status).toBe("finished");
+    }
+  });
+
   it("keys login rate limit by X-Forwarded-For when present", () => {
     const req = (xff?: string) => new Request("http://localhost/auth/admin/login", { method: "POST", headers: xff ? { "x-forwarded-for": xff } : {} });
     expect(rateLimitRule(req("1.2.3.4"), "proxy-ip")?.key).toBe("login:1.2.3.4");
@@ -236,5 +277,52 @@ describe("qa fixes", () => {
     );
     expect(joinBlocked.status).toBe(403);
     expect(db.query<{ n: number }, [number]>("SELECT COUNT(*) AS n FROM tournament_participants WHERE tournament_id = ?").get(tour2)?.n).toBe(0);
+  });
+
+  it("changes the admin password (rotatable) and audits role/award writes", async () => {
+    const authRoutes = createAuthRoutes(db);
+    db.run("UPDATE admin_users SET password_hash = ?", [await Bun.password.hash("oldpass1", { algorithm: "bcrypt", cost: 4 })]);
+    const pwReq = (t: string, body: unknown, csrf = true) => new Request("http://localhost/api/admin/password", {
+      method: "POST",
+      headers: csrf
+        ? { ...cookie(t), "content-type": "application/json", "x-partyman-csrf": "csrf", cookie: `partyman_session=${t}; partyman_csrf=csrf` }
+        : post(t, body).headers,
+      body: JSON.stringify(body),
+    });
+
+    const wrong = await authRoutes["/api/admin/password"].POST(pwReq(adminToken, { currentPassword: "nope", newPassword: "newpass12" }));
+    expect(wrong.status).toBe(401);
+    const short = await authRoutes["/api/admin/password"].POST(pwReq(adminToken, { currentPassword: "oldpass1", newPassword: "short" }));
+    expect(short.status).toBe(422);
+    const noCsrf = await authRoutes["/api/admin/password"].POST(pwReq(adminToken, { currentPassword: "oldpass1", newPassword: "newpass12" }, false));
+    expect(noCsrf.status).toBe(403);
+    const ok = await authRoutes["/api/admin/password"].POST(pwReq(adminToken, { currentPassword: "oldpass1", newPassword: "newpass12" }));
+    expect(ok.status).toBe(200);
+    // Login real con la nueva y rechazo de la vieja.
+    const loginNew = await authRoutes["/auth/admin/login"].POST(new Request("http://localhost/auth/admin/login", post(adminToken, { username: "admin", password: "newpass12" })));
+    expect(loginNew.status).toBe(200);
+    const loginOld = await authRoutes["/auth/admin/login"].POST(new Request("http://localhost/auth/admin/login", post(adminToken, { username: "admin", password: "oldpass1" })));
+    expect(loginOld.status).toBe(401);
+    expect(db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'password_changed'").get()?.n).toBe(1);
+
+    // Un admin de Steam no puede cambiar la password de la cuenta local.
+    const steamPid = Number(db.run("INSERT INTO participants (steam_id, display_name, role) VALUES ('s-steamadm', 'SA', 'admin')").lastInsertRowid);
+    const steamTok = session(db, "participant", steamPid);
+    const steamTry = await authRoutes["/api/admin/password"].POST(pwReq(steamTok, { currentPassword: "x", newPassword: "newpass12" }));
+    expect(steamTry.status).toBe(403);
+
+    // Auditoría de roles y premios.
+    const partyRoutes = createPartyRoutes(db);
+    const roleRes = await partyRoutes["/api/admin/participants/:id/role"].PATCH(
+      new Request(`http://localhost/api/admin/participants/${steamPid}/role`, { method: "PATCH", headers: { ...cookie(adminToken), "content-type": "application/json" }, body: JSON.stringify({ role: "participant" }) })
+    );
+    expect(roleRes.status).toBe(200);
+    const scoringRoutes = createScoringRoutes(db);
+    const awardRes = await scoringRoutes["/api/admin/awards"].POST(
+      new Request("http://localhost/api/admin/awards", post(adminToken, { participantId: steamPid, title: "Premio QA" }))
+    );
+    expect(awardRes.status).toBe(201);
+    const audit = db.query<{ action: string }, []>("SELECT action FROM audit_log WHERE action IN ('role_changed', 'award_created')").all().map(r => r.action).sort();
+    expect(audit).toEqual(["award_created", "role_changed"]);
   });
 });

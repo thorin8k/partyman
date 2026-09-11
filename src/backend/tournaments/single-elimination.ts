@@ -15,35 +15,28 @@ export function generateBracket(participantIds: number[]): MatchInput[] {
 
   const matches: MatchInput[] = [];
 
-  // Build first round slots
-  // Top seeds (0..byes-1) get byes (skip first round)
-  // Remaining seeds (byes..n-1) play in first round
-  const slots: (number | null)[] = new Array(bracketSize).fill(null);
-  
-  // Assign top seeds to bye slots (even positions: 0, 2, 4, ...)
-  for (let i = 0; i < byes; i++) {
-    slots[i * 2] = participantIds[i];
-  }
-  
-  // Assign remaining seeds to odd positions
-  let pIdx = byes;
-  for (let i = 0; i < bracketSize; i++) {
-    if (slots[i] === null && pIdx < n) {
-      slots[i] = participantIds[pIdx++];
-    }
-  }
+  const r1count = n - bracketSize / 2;
+  // Los mejores seeds (primeros) libran la R1; el resto la juega.
+  const byePlayers = participantIds.slice(0, byes);
+  const r1players = participantIds.slice(byes);
 
-  // Pair up for first round
+  // Posiciones de R1: pares primero para repartir los byes entre mitades
+  // (los dos mejores seeds no se cruzan antes de la final si hay hueco).
+  const posOrder: number[] = [];
+  for (let p = 0; p < bracketSize / 2; p += 2) posOrder.push(p);
+  for (let p = 1; p < bracketSize / 2; p += 2) posOrder.push(p);
+  const realPos = new Set(posOrder.slice(0, r1count));
+
+  // Cada partido de R1 tiene al menos un jugador: nunca hay huecos
+  // null-vs-null imposibles de cerrar (pasaba con 5/6 jugadores).
+  let ri = 0;
+  let bi = 0;
   for (let pos = 0; pos < bracketSize / 2; pos++) {
-    const a = slots[pos * 2];
-    const b = slots[pos * 2 + 1];
-
-    if (a !== null && b === null) {
-      matches.push({ round: 1, position: pos, participantAId: a, participantBId: null });
-    } else if (a === null && b !== null) {
-      matches.push({ round: 1, position: pos, participantAId: null, participantBId: b });
+    if (realPos.has(pos)) {
+      matches.push({ round: 1, position: pos, participantAId: r1players[ri++], participantBId: r1players[ri++] });
     } else {
-      matches.push({ round: 1, position: pos, participantAId: a, participantBId: b });
+      const pl = byePlayers[bi++];
+      matches.push({ round: 1, position: pos, participantAId: pl, participantBId: null });
     }
   }
 
