@@ -574,6 +574,10 @@ export function startTournamentNow(db: Database, id: number): { ok: boolean; err
         [id, match.round, match.position, match.participantAId, match.participantBId, winner, status, isBye(match) ? new Date().toISOString() : null]
       );
     }
+    // Los byes avanzan ya: sin esto la siguiente ronda queda con huecos null
+    // injugables en torneos de 3/5/6/7 jugadores (deadlock verificado).
+    const byes = db.query<MatchRow, [number]>("SELECT * FROM matches WHERE tournament_id = ? AND status = 'confirmed'").all(id);
+    for (const bye of byes) advanceWinner(db, bye);
     db.run("UPDATE tournaments SET status = 'in_progress', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [id]);
   })();
   logEvent(db, t.party_id, null, "tournament_start", `Torneo ${t.name} iniciado`);

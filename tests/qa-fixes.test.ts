@@ -6,6 +6,7 @@ import { createTournamentRoutes } from "../src/backend/routes/tournaments";
 import { createActivityTournamentProposalRoutes } from "../src/backend/routes/activity-tournament-proposals";
 import { createScoringRoutes } from "../src/backend/routes/scoring";
 import { hardenRoutes } from "../src/backend/middleware/harden";
+import { rateLimitRule } from "../src/backend/middleware/rate-limit";
 
 const migrationsDir = join(import.meta.dir, "..", "migrations");
 
@@ -123,6 +124,61 @@ describe("qa fixes", () => {
     const routes = hardenRoutes({ "/api/test/validation": { GET: () => Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" } }, { status: 400 }) } } as any);
     const res = await routes["/api/test/validation"].GET(new Request("http://localhost/api/test/validation"));
     expect(res.status).toBe(422);
+  });
+
+  it("keys login rate limit by X-Forwarded-For when present", () => {
+    const req = (xff?: string) => new Request("http://localhost/auth/admin/login", { method: "POST", headers: xff ? { "x-forwarded-for": xff } : {} });
+    expect(rateLimitRule(req("1.2.3.4"), "proxy-ip")?.key).toBe("login:1.2.3.4");
+    expect(rateLimitRule(req("9.9.9.9, 1.2.3.4"), "proxy-ip")?.key).toBe("login:9.9.9.9");
+    expect(rateLimitRule(req(), "proxy-ip")?.key).toBe("login:proxy-ip");
+  });
+
+  it("advances bye winners so 3-player tournaments can finish", async () => {
+    const routes = createTournamentRoutes(db);
+    const mk = (steam: string) => {
+      const pid = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES (?, ?)", [steam, steam]).lastInsertRowid);
+      return { pid, token: session(db, "participant", pid) };
+    };
+    const players = [mk("s-b1"), mk("s-b2"), mk("s-b3")];
+    const created = await routes["/api/admin/tournaments"].POST(
+      new Request("http://localhost/api/admin/tournaments", post(adminToken, { partyId: activePartyId, gameId, name: "TriCup", maxParticipants: 3 }))
+    );
+    const tourId = (await created.json()).tournament.id;
+    for (const p of players) {
+      await routes["/api/tournaments/:id/join"].POST(new Request(`http://localhost/api/tournaments/${tourId}/join`, post(p.token)));
+    }
+    expect(db.query<{ status: string }, [number]>("SELECT status FROM tournaments WHERE id = ?").get(tourId)?.status).toBe("in_progress");
+
+    // El ganador del bye ya está colocado en la final al arrancar.
+    const byeWinner = db.query<{ winner_id: number }, [number]>(
+      "SELECT winner_id FROM matches WHERE tournament_id = ? AND round = 1 AND status = 'confirmed'"
+    ).get(tourId)!.winner_id;
+    const final = db.query<{ participant_a_id: number | null; participant_b_id: number | null }, [number]>(
+      "SELECT participant_a_id, participant_b_id FROM matches WHERE tournament_id = ? AND round = 2"
+    ).get(tourId)!;
+    expect([final.participant_a_id, final.participant_b_id]).toContain(byeWinner);
+
+    // Semifinal real por acuerdo mutuo → la final queda jugable → finished.
+    const semi = db.query<{ id: number; participant_a_id: number; participant_b_id: number }, [number]>(
+      "SELECT id, participant_a_id, participant_b_id FROM matches WHERE tournament_id = ? AND round = 1 AND status = 'pending'"
+    ).get(tourId)!;
+    const tokOf = (pid: number) => players.find(p => p.pid === pid)!.token;
+    for (const pid of [semi.participant_a_id, semi.participant_b_id]) {
+      await routes["/api/matches/:id/report"].POST(
+        new Request(`http://localhost/api/matches/${semi.id}/report`, post(tokOf(pid), { winnerId: semi.participant_a_id, score: { a: 5, b: 2 } }))
+      );
+    }
+    const live = db.query<{ id: number; participant_a_id: number; participant_b_id: number }, [number]>(
+      "SELECT id, participant_a_id, participant_b_id FROM matches WHERE tournament_id = ? AND round = 2"
+    ).get(tourId)!;
+    expect(live.participant_a_id).not.toBeNull();
+    expect(live.participant_b_id).not.toBeNull();
+    for (const pid of [live.participant_a_id, live.participant_b_id]) {
+      await routes["/api/matches/:id/report"].POST(
+        new Request(`http://localhost/api/matches/${live.id}/report`, post(tokOf(pid), { winnerId: live.participant_a_id, score: { a: 5, b: 1 } }))
+      );
+    }
+    expect(db.query<{ status: string }, [number]>("SELECT status FROM tournaments WHERE id = ?").get(tourId)?.status).toBe("finished");
   });
 
   it("blocks admin_users sessions from player writes (no phantom rows)", async () => {
