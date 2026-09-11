@@ -59,25 +59,27 @@ export function checkCsrf(req: Request, allowedOrigins?: string[]): boolean {
 
   if (!header || !cookie || header !== cookie) return false;
 
-  const requestOrigin = new URL(req.url).origin;
-  const origins = [requestOrigin, ...(allowedOrigins ?? [])];
+  // Tras proxy el Host o el esquema internos pueden diferir del público
+  // (terminación TLS, reescritura de Host): comparar hosts, no origins.
+  // allowedOrigins cubre PUBLIC_ORIGIN explícito.
+  const hostOf = (value: string): string | null => {
+    try { return new URL(value).host; } catch { return null; }
+  };
+  const reqHost = hostOf(req.url);
+  const allowedHosts = new Set(
+    [reqHost, ...(allowedOrigins ?? []).map(hostOf)].filter((h): h is string => h !== null)
+  );
 
   const origin = req.headers.get("origin");
   const referer = req.headers.get("referer");
 
   if (origin) {
-    try {
-      return origins.includes(new URL(origin).origin);
-    } catch {
-      return false;
-    }
+    const h = hostOf(origin);
+    return h !== null && allowedHosts.has(h);
   }
   if (referer) {
-    try {
-      return origins.includes(new URL(referer).origin);
-    } catch {
-      return false;
-    }
+    const h = hostOf(referer);
+    return h !== null && allowedHosts.has(h);
   }
   // Spec: validar Origin cuando está presente; sin Origin ni Referer (curl, fetch mismo origen)
   // el double-submit ya acredita la petición.
