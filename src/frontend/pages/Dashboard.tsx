@@ -94,7 +94,7 @@ function ProposeActivityForm({ onSuccess }: { onSuccess: (msg: string) => void }
           {results.map((g,i) => (
             <div key={i} onClick={() => { setSelectedGame(g); setTitle(g.name); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: selectedGame?.name===g.name ? 'var(--panel-hover)' : 'var(--bg-secondary)', border: `1px solid ${selectedGame?.name===g.name ? 'var(--neon-cyan)' : 'var(--border)'}`, cursor: 'pointer', flexWrap: 'nowrap' }}>
               {g.imageUrl && <img src={g.imageUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
-              <span style={{ fontSize: '0.875rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{g.name}</span>
+              <span style={{ fontSize: '0.875rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{g.name}</span>
               {selectedGame?.name===g.name && <span style={{ color: 'var(--neon-green)', fontSize: '0.625rem', flexShrink: 0 }}>✓</span>}
             </div>
           ))}
@@ -144,7 +144,7 @@ function ProposeTournamentForm({ onSuccess }: { onSuccess: (msg: string) => void
           {results.map((g,i) => (
             <div key={i} onClick={() => { setSelectedGame(g); setName(g.name); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: selectedGame?.name===g.name ? 'var(--panel-hover)' : 'var(--bg-secondary)', border: `1px solid ${selectedGame?.name===g.name ? 'var(--neon-cyan)' : 'var(--border)'}`, cursor: 'pointer', flexWrap: 'nowrap' }}>
               {g.imageUrl && <img src={g.imageUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
-              <span style={{ fontSize: '0.875rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{g.name}</span>
+              <span style={{ fontSize: '0.875rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{g.name}</span>
               {selectedGame?.name===g.name && <span style={{ color: 'var(--neon-green)', fontSize: '0.625rem', flexShrink: 0 }}>✓</span>}
             </div>
           ))}

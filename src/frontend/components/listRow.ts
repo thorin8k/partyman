@@ -24,6 +24,8 @@ export const rowFooter: CSSProperties = {
   justifyContent: 'flex-end',
   flexWrap: 'nowrap',
   overflowX: 'auto',
+  // Sin esto el footer no encoge bajo su min-content y rompe la card en estrecho.
+  minWidth: 0,
 };
 // Cabecera de card: contenido a la izquierda + badge de estado arriba a la derecha.
 export const rowHead: CSSProperties = {
@@ -31,6 +33,8 @@ export const rowHead: CSSProperties = {
   justifyContent: 'space-between',
   alignItems: 'flex-start',
   gap: '0.75rem',
+  // Sin esto el título largo empuja el badge fuera de la card en estrecho.
+  minWidth: 0,
 };
 // Botones de página/primarios (formularios, crear, buscar): la talla grande
 // de la jerarquía.
