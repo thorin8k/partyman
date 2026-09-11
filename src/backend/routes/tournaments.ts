@@ -568,7 +568,13 @@ export function startTournamentNow(db: Database, id: number): { ok: boolean; err
     return { ok: false, error: "INVALID_PARTICIPANT_COUNT" };
   }
 
-  const bracket = generateBracket(participants.map(p => p.participant_id));
+  // Sorteo al arrancar con los inscritos: apuntarse pronto ya no da ventaja.
+  const ids = participants.map(p => p.participant_id);
+  for (let i = ids.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+  }
+  const bracket = generateBracket(ids);
 
   db.transaction(() => {
     for (const match of bracket) {

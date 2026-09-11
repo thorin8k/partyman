@@ -279,6 +279,30 @@ describe("qa fixes", () => {
     expect(db.query<{ n: number }, [number]>("SELECT COUNT(*) AS n FROM tournament_participants WHERE tournament_id = ?").get(tour2)?.n).toBe(0);
   });
 
+  it("shuffles the bracket at start (join order gives no advantage)", async () => {
+    const routes = createTournamentRoutes(db);
+    const pool: number[] = [];
+    for (let i = 1; i <= 8; i++) {
+      pool.push(Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES (?, ?)", [`s-shuf-${i}`, `F${i}`]).lastInsertRowid));
+    }
+    const sigs = new Set<string>();
+    for (let k = 0; k < 3; k++) {
+      const created = await routes["/api/admin/tournaments"].POST(
+        new Request("http://localhost/api/admin/tournaments", post(adminToken, { partyId: activePartyId, gameId, name: `Shuf${k}`, maxParticipants: 8 }))
+      );
+      const tourId = (await created.json()).tournament.id;
+      for (const pid of pool) {
+        db.run("INSERT INTO tournament_participants (tournament_id, participant_id, display_name_snapshot, seed) VALUES (?, ?, ?, ?)", [tourId, pid, `F${pid}`, pid]);
+      }
+      const started = await routes["/api/admin/tournaments/:id/start"].POST(new Request(`http://localhost/api/admin/tournaments/${tourId}/start`, post(adminToken)));
+      expect(started.status).toBe(200);
+      const r1 = db.query<{ a: number | null; b: number | null }, [number]>("SELECT participant_a_id AS a, participant_b_id AS b FROM matches WHERE tournament_id = ? AND round = 1 ORDER BY position").all(tourId);
+      sigs.add(JSON.stringify(r1));
+    }
+    // 8! = 40320 cuadros posibles: 3 arranques idénticos sería casi imposible.
+    expect(sigs.size).toBeGreaterThan(1);
+  });
+
   it("changes the admin password (rotatable) and audits role/award writes", async () => {
     const authRoutes = createAuthRoutes(db);
     db.run("UPDATE admin_users SET password_hash = ?", [await Bun.password.hash("oldpass1", { algorithm: "bcrypt", cost: 4 })]);
