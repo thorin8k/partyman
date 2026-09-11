@@ -98,9 +98,10 @@ Prerequisites: `~/.local/bin/obscura` installed, MCP server configured in
 - After every mutation: `browser_wait_for_text` for the expected feedback
   (toasts/alerts), then `browser_console_messages` (no errors) and, when
   debugging, `browser_network_requests`.
-- Viewport: MCP defaults to 1280×720. For mobile 360px checks use
-  `obscura serve --port 9222 --allow-private-network` plus `playwright-core`
-  `connectOverCDP` and `page.setViewport({ width: 360, height: 740 })`.
+- Viewport: MCP defaults to 1280×720. Mobile 360px stays a manual check on a
+  real device (§5 dry-run); only if emulation is ever needed, it is possible
+  via `obscura serve` + `playwright-core` CDP — keep that tooling out of the
+  repo for now (decision 2026-09-10).
 
 ## 5. Manual release gates (from specs/tasks/009-integration.md)
 
@@ -130,3 +131,8 @@ Not automatable, run before shipping to the real party:
   padding headroom and verify visually.
 - Obscura blocks fetches to private IPs unless `--allow-private-network`
   is passed.
+- `admin_users` and `participants` sessions live in different ID namespaces:
+  player writes require `requireRealParticipant` (403 `PARTICIPANT_ONLY` for
+  local-admin sessions: no joins, dispute votes or proposals). Exception:
+  reporting a match as admin confirms instantly (both paths: players agree,
+  admin assigns directly from anywhere).

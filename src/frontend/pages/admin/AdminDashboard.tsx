@@ -1,5 +1,6 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
+import { pageBtn, rowActions, rowBtn, rowColumn, rowFooter, rowMain, rowTitle, badge, headerBtn, rowView } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 import { PartyForm } from '../../components/PartyForm';
@@ -65,7 +66,7 @@ export function AdminDashboard() {
           <span style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>{user.displayName}</span>
           <a href="/">SITIO →</a>
           <a href="/display" target="_blank">DISPLAY →</a>
-          <button onClick={logout} style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}>SALIR</button>
+          <button onClick={logout} style={headerBtn}>SALIR</button>
         </div>
       </div>
 
@@ -80,21 +81,21 @@ export function AdminDashboard() {
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <h2>PARTIES</h2>
-            <button className="primary" style={{ fontSize: '0.5rem' }} onClick={() => setShowForm(true)}>+ NUEVA PARTY</button>
+            <button className="primary" style={pageBtn} onClick={() => setShowForm(true)}>+ NUEVA PARTY</button>
           </div>
           {parties.length === 0 ? (
             <div className="empty-state"><h3>SIN PARTIES</h3><p style={{ fontSize: '0.875rem' }}>No hay parties creadas todavía.</p></div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {parties.map(p => (
-                <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-                  <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-                    <h3 style={{ marginBottom: '0.25rem', wordBreak: 'break-word' }}>{p.name}</h3>
+                <div key={p.id} className="list-item" style={rowColumn}>
+                  <div style={rowMain}>
+                    <h3 style={rowTitle}>{p.name}</h3>
                     <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.875rem' }}>{new Date(p.startsAt).toLocaleDateString('es-ES')} - {new Date(p.endsAt).toLocaleDateString('es-ES')}</p>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
-                    <span style={{ padding: '0.25rem 0.75rem', border: `1px solid ${statusColors[p.status]}`, color: statusColors[p.status], fontFamily: 'var(--font-display)', fontSize: '0.5rem' }}>{statusLabels[p.status]}</span>
-                    <a href={`/admin/parties/${p.id}`} style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>VER →</a>
+                  <div style={rowFooter}>
+                    <span style={badge(statusColors[p.status])}>{statusLabels[p.status]}</span>
+                    <a href={`/admin/parties/${p.id}`} style={rowView}>VER →</a>
                   </div>
                 </div>
               ))}
@@ -106,21 +107,21 @@ export function AdminDashboard() {
       <details className="card" style={{ marginTop: '1rem', borderColor: 'var(--neon-cyan)' }} open={activityProposals.length + tournamentProposals.length > 0}>
         <summary style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', minHeight: '44px' }}>
           <h2>PROPUESTAS PENDIENTES</h2>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.5rem', color: 'var(--neon-cyan)', border: '1px solid var(--neon-cyan)', padding: '0.25rem 0.5rem' }}>{activityProposals.length + tournamentProposals.length} TOTAL</span>
+          <span style={badge('var(--neon-cyan)')}>{activityProposals.length + tournamentProposals.length} TOTAL</span>
         </summary>
         <div style={{ marginTop: '1rem' }}>
           <h3 style={{ fontSize: '0.75rem', color: 'var(--neon-cyan)', marginBottom: '0.5rem' }}>ACTIVIDADES ({activityProposals.length})</h3>
           {activityProposals.length === 0 ? <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Sin propuestas de actividades</p> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {activityProposals.map((p: any) => (
-                <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h3 style={{ fontSize: '0.875rem' }}>{p.title}</h3>
+                <div key={p.id} className="list-item" style={rowColumn}>
+                  <div style={rowMain}>
+                    <h3 style={{ ...rowTitle, fontSize: '0.875rem' }}>{p.title}</h3>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle || 'Sin juego'} · {new Date(p.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.25rem' }}>
-                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; const res = await fetch(`/api/admin/activity-proposals/${p.id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } }); if (res.ok) fetchProposals(); }} className="primary" style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem' }}>APROBAR</button>
-                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; await fetch(`/api/activity-proposals/${p.id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }); fetchProposals(); }} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem' }}>RECHAZAR</button>
+                  <div style={rowFooter}>
+                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; const res = await fetch(`/api/admin/activity-proposals/${p.id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } }); if (res.ok) fetchProposals(); }} className="primary" style={rowBtn}>APROBAR</button>
+                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; await fetch(`/api/activity-proposals/${p.id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }); fetchProposals(); }} style={rowBtn}>RECHAZAR</button>
                   </div>
                 </div>
               ))}
@@ -132,14 +133,14 @@ export function AdminDashboard() {
           {tournamentProposals.length === 0 ? <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Sin propuestas de torneos</p> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {tournamentProposals.map((p: any) => (
-                <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h3 style={{ fontSize: '0.875rem' }}>{p.name}</h3>
+                <div key={p.id} className="list-item" style={rowColumn}>
+                  <div style={rowMain}>
+                    <h3 style={{ ...rowTitle, fontSize: '0.875rem' }}>{p.name}</h3>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle} · Max {p.maxParticipants}</p>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.25rem' }}>
-                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; const res = await fetch(`/api/admin/tournament-proposals/${p.id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } }); if (res.ok) fetchProposals(); }} className="primary" style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem' }}>APROBAR</button>
-                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; await fetch(`/api/tournament-proposals/${p.id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }); fetchProposals(); }} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem' }}>RECHAZAR</button>
+                  <div style={rowFooter}>
+                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; const res = await fetch(`/api/admin/tournament-proposals/${p.id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } }); if (res.ok) fetchProposals(); }} className="primary" style={rowBtn}>APROBAR</button>
+                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; await fetch(`/api/tournament-proposals/${p.id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }); fetchProposals(); }} style={rowBtn}>RECHAZAR</button>
                   </div>
                 </div>
               ))}

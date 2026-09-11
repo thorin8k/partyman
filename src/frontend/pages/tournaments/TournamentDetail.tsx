@@ -1,4 +1,5 @@
 import { useAuth } from '../../components/AuthContext';
+import { headerBtn } from '../../components/listRow';
 import { useLocation, useParams } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -65,6 +66,7 @@ export function ParticipantTournamentDetail() {
   const apiMsg = (err: any, fallback: string) => {
     const code = err?.error?.code || err?.error;
     if (code === 'NOT_IN_MATCH') return 'No participas en este partido.';
+    if (code === 'PARTICIPANT_ONLY') return 'Como admin, asigna el resultado desde el panel del torneo.';
     if (code === 'INVALID_WINNER') return 'Ese jugador no juega este partido.';
     if (code === 'IN_MATCH') return 'No puedes votar en tu propia disputa.';
     if (typeof code === 'string' && code.length < 60) return code.replace(/_/g, ' ').toLowerCase();
@@ -122,7 +124,7 @@ export function ParticipantTournamentDetail() {
         <h1>PARTYMAN</h1>
         <div className="nav">
           <a href="/">VOLVER →</a>
-          <button onClick={logout} style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}>SALIR</button>
+          <button onClick={logout} style={headerBtn}>SALIR</button>
         </div>
       </div>
 

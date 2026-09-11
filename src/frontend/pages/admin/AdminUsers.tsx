@@ -1,5 +1,6 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
+import { rowBtn, rowFooter, rowMain, rowColumn, badge, headerBtn } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -48,7 +49,7 @@ export function AdminUsers() {
         <h1>ADMIN</h1>
         <div className="nav">
           <a href="/admin">VOLVER →</a>
-          <button onClick={logout} style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}>SALIR</button>
+          <button onClick={logout} style={headerBtn}>SALIR</button>
         </div>
       </div>
 
@@ -61,23 +62,25 @@ export function AdminUsers() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem' }}>
             {participants.map(p => (
-              <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div key={p.id} className="list-item" style={rowColumn}>
+                <div style={{ ...rowMain, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   {p.avatarUrl ? (
-                    <img src={p.avatarUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
+                    <img src={p.avatarUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0 }} />
                   ) : (
-                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--neon-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--bg)' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--neon-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--bg)', flexShrink: 0 }}>
                       {p.displayName.charAt(0).toUpperCase()}
                     </div>
                   )}
-                  <span style={{ fontSize: '0.875rem' }}>{p.displayName}</span>
+                  <span style={{ fontSize: '0.875rem', wordBreak: 'break-word' }}>{p.displayName}</span>
                   {p.role === 'admin' && (
-                    <span style={{ padding: '0.25rem 0.75rem', border: '1px solid var(--neon-magenta)', color: 'var(--neon-magenta)', fontFamily: 'var(--font-display)', fontSize: '0.5rem' }}>ADMIN</span>
+                    <span style={badge('var(--neon-magenta)')}>ADMIN</span>
                   )}
                 </div>
-                <button onClick={() => handleToggleRole(p)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem' }}>
-                  {p.role === 'admin' ? 'REVOCAR ADMIN' : 'HACER ADMIN'}
-                </button>
+                <div style={rowFooter}>
+                  <button onClick={() => handleToggleRole(p)} style={rowBtn}>
+                    {p.role === 'admin' ? 'REVOCAR ADMIN' : 'HACER ADMIN'}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

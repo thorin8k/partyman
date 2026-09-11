@@ -1,5 +1,6 @@
 import { useAuth } from '../components/AuthContext';
 import { confirmDialog } from '../components/ConfirmDialog';
+import { rowBtnTouch, rowColumn, rowFooter, rowMain, rowTitle, badge, headerBtn, rowViewTouch } from '../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useRef, useState } from 'react';
 
@@ -48,6 +49,7 @@ const ERROR_ES: Record<string, string> = {
   INVALID_SCORE: 'Resultado no válido: el ganador debe tener más puntos.',
   INVALID_WINNER: 'El ganador debe ser uno de los dos jugadores.',
   NOT_IN_MATCH: 'Solo los jugadores del partido pueden reportar.',
+  PARTICIPANT_ONLY: 'Solo un participante puede hacer eso. Como admin, gestiona desde el panel.',
   PROPOSAL_NOT_FOUND: 'La propuesta ya no existe.',
   VALIDATION_ERROR: 'Revisa los datos del formulario.',
 };
@@ -292,7 +294,7 @@ export function Dashboard() {
           <a href="/leaderboard">RANKING →</a>
           {user.role === 'admin' && <a href="/admin">ADMIN →</a>}
           <a href="/display" target="_blank">DISPLAY →</a>
-          <button onClick={logout} style={touchBtn}>SALIR</button>
+          <button onClick={logout} style={headerBtn}>SALIR</button>
         </div>
       </div>
 
@@ -346,13 +348,13 @@ export function Dashboard() {
                   const isFull = a.capacity != null && (a.participantCount || 0) >= a.capacity;
                   const now = new Date(); const isLive = a.status !== 'finished' && a.status !== 'cancelled' && new Date(a.startsAt) <= now && now <= new Date(a.endsAt);
                   return (
-                    <div key={a.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', borderColor: isLive ? 'var(--neon-green)' : undefined, background: isLive ? 'rgba(0,255,136,0.05)' : undefined }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        {a.gameImage && <img src={a.gameImage} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />}
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <h3 style={{ marginBottom: '0.25rem' }}>{a.title}</h3>
-                            {isLive && <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--neon-green)', border: '1px solid var(--neon-green)', padding: '0.125rem 0.375rem' }}>EN CURSO</span>}
+                    <div key={a.id} className="list-item" style={{ ...rowColumn, borderColor: isLive ? 'var(--neon-green)' : undefined, background: isLive ? 'rgba(0,255,136,0.05)' : undefined }}>
+                      <div style={{ ...rowMain, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        {a.gameImage && <img src={a.gameImage} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <h3 style={rowTitle}>{a.title}</h3>
+                            {isLive && <span style={badge('var(--neon-green)')}>EN CURSO</span>}
                           </div>
                           <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
                             {a.gameTitle ? `${a.gameTitle} · ` : ''}
@@ -362,9 +364,9 @@ export function Dashboard() {
                           {a.notes && <p style={{ margin: '0.25rem 0 0', color: 'var(--text-dim)', fontSize: '0.7rem', fontStyle: 'italic' }}>{a.notes}</p>}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <div style={{ ...rowFooter, flexWrap: 'wrap' }}>
                         {isJoined && (
-                          <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--neon-green)' }}>INSCRITO</span>
+                          <span style={badge('var(--neon-green)')}>INSCRITO</span>
                         )}
                         {isJoined ? (
                           <button onClick={() => handleLeaveActivity(a.id)} style={{ ...touchBtn, borderColor: 'var(--error)', color: 'var(--error)' }}>SALIR</button>
@@ -396,12 +398,12 @@ export function Dashboard() {
               <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Tus propuestas pendientes ({activityProposals.length}):</p>
                 {activityProposals.map((p: any) => (
-                  <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.875rem' }}>{p.title} {p.gameTitle ? `· ${p.gameTitle}` : ''} · <span style={{ color: 'var(--neon-cyan)' }}>pendiente ({p.voteCount || 0}/3)</span></span>
-                    <div style={{ display: 'flex', gap: '0.25rem' }}>
-                      <button onClick={() => handleVoteProposal('activity', p.id, !!p.voted)} style={{ ...touchBtn, borderColor: p.voted ? 'var(--neon-green)' : undefined, color: p.voted ? 'var(--neon-green)' : undefined }}>{p.voted ? 'VOTADO ✓' : 'VOTAR'}</button>
-                      <button onClick={() => handleWithdraw('activity', p.id)} style={{ ...touchBtn, borderColor: 'var(--error)', color: 'var(--error)' }}>RETIRAR</button>
-                    </div>
+                    <div key={p.id} className="list-item" style={rowColumn}>
+                      <span style={{ ...rowMain, fontSize: '0.875rem' }}>{p.title} {p.gameTitle ? `· ${p.gameTitle}` : ''} · <span style={{ color: 'var(--neon-cyan)' }}>pendiente ({p.voteCount || 0}/3)</span></span>
+                      <div style={{ ...rowFooter, flexWrap: 'wrap' }}>
+                        <button onClick={() => handleVoteProposal('activity', p.id, !!p.voted)} style={{ ...rowBtnTouch, borderColor: p.voted ? 'var(--neon-green)' : undefined, color: p.voted ? 'var(--neon-green)' : undefined }}>{p.voted ? 'VOTADO ✓' : 'VOTAR'}</button>
+                        <button onClick={() => handleWithdraw('activity', p.id)} style={{ ...rowBtnTouch, borderColor: 'var(--error)', color: 'var(--error)' }}>RETIRAR</button>
+                      </div>
                   </div>
                 ))}
               </div>
@@ -426,11 +428,11 @@ export function Dashboard() {
                   };
                   const statusInfo = statusMap[t.status] || statusMap.upcoming;
                   return (
-                    <div key={t.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: '1 1 auto' }}>
+                    <div key={t.id} className="list-item" style={rowColumn}>
+                      <div style={{ ...rowMain, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                         {t.gameImage && <img src={t.gameImage} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
-                        <div>
-                          <h3 style={{ marginBottom: '0.25rem' }}>{t.name}</h3>
+                        <div style={{ minWidth: 0 }}>
+                          <h3 style={rowTitle}>{t.name}</h3>
                           <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
                             {t.gameTitleSnapshot} · {t.participantCount || 0}/{t.maxParticipants} participantes
                           </p>
@@ -441,12 +443,12 @@ export function Dashboard() {
                           )}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: statusInfo.color }}>
+                      <div style={{ ...rowFooter, flexWrap: 'wrap' }}>
+                        <span style={badge(statusInfo.color)}>
                           {statusInfo.label}
                         </span>
                         {(t.status === 'in_progress' || t.status === 'finished') && (
-                          <a href={`/tournaments/${t.id}`} style={{ ...touchBtn, display: 'flex', alignItems: 'center', border: '1px solid var(--neon-cyan)', color: 'var(--neon-cyan)', textDecoration: 'none' }}>VER BRACKET →</a>
+                          <a href={`/tournaments/${t.id}`} style={rowViewTouch}>VER BRACKET →</a>
                         )}
                         {canJoin && (
                           isMember ? (
@@ -478,11 +480,11 @@ export function Dashboard() {
               <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Tus propuestas pendientes ({tournamentProposals.length}):</p>
                 {tournamentProposals.map((p: any) => (
-                  <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.875rem' }}>{p.name} · {p.gameTitle} · <span style={{ color: 'var(--neon-cyan)' }}>pendiente ({p.voteCount || 0}/3)</span></span>
-                    <div style={{ display: 'flex', gap: '0.25rem' }}>
-                      <button onClick={() => handleVoteProposal('tournament', p.id, !!p.voted)} style={{ ...touchBtn, borderColor: p.voted ? 'var(--neon-green)' : undefined, color: p.voted ? 'var(--neon-green)' : undefined }}>{p.voted ? 'VOTADO ✓' : 'VOTAR'}</button>
-                      <button onClick={() => handleWithdraw('tournament', p.id)} style={{ ...touchBtn, borderColor: 'var(--error)', color: 'var(--error)' }}>RETIRAR</button>
+                  <div key={p.id} className="list-item" style={rowColumn}>
+                    <span style={{ ...rowMain, fontSize: '0.875rem' }}>{p.name} · {p.gameTitle} · <span style={{ color: 'var(--neon-cyan)' }}>pendiente ({p.voteCount || 0}/3)</span></span>
+                    <div style={{ ...rowFooter, flexWrap: 'wrap' }}>
+                      <button onClick={() => handleVoteProposal('tournament', p.id, !!p.voted)} style={{ ...rowBtnTouch, borderColor: p.voted ? 'var(--neon-green)' : undefined, color: p.voted ? 'var(--neon-green)' : undefined }}>{p.voted ? 'VOTADO ✓' : 'VOTAR'}</button>
+                      <button onClick={() => handleWithdraw('tournament', p.id)} style={{ ...rowBtnTouch, borderColor: 'var(--error)', color: 'var(--error)' }}>RETIRAR</button>
                     </div>
                   </div>
                 ))}

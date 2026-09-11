@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { QrCode } from '../../components/QrCode';
 import { wifiQrString } from '../../components/qr';
+import { badge, headerBtn } from '../../components/listRow';
 
 interface Tournament {
   id: number;
@@ -115,7 +116,7 @@ export function PublicDisplay() {
           )}
           <button
             onClick={handleFullscreen}
-            style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}
+            style={headerBtn}
           >
             PANTALLA COMPLETA
           </button>
@@ -193,7 +194,7 @@ export function PublicDisplay() {
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <h3 style={{ fontSize: '1rem' }}>{t.name}</h3>
-                            <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: t.status === 'in_progress' ? 'var(--neon-orange)' : 'var(--neon-green)', border: `1px solid ${t.status === 'in_progress' ? 'var(--neon-orange)' : 'var(--neon-green)'}`, padding: '0.25rem 0.5rem' }}>
+                            <span style={badge(t.status === 'in_progress' ? 'var(--neon-orange)' : 'var(--neon-green)')}>
                               {t.status === 'in_progress' ? 'EN CURSO' : 'PRÓXIMAMENTE'}
                             </span>
                           </div>
@@ -318,7 +319,7 @@ export function PublicDisplay() {
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <h3 style={{ fontSize: '1rem' }}>{a.title}</h3>
-                        {isLive && <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--neon-green)', border: '1px solid var(--neon-green)', padding: '0.125rem 0.375rem' }}>EN CURSO</span>}
+                        {isLive && <span style={badge('var(--neon-green)')}>EN CURSO</span>}
                       </div>
                       <p style={{ fontSize: '1rem', color: 'var(--text-dim)', margin: '0.25rem 0 0' }}>
                         {a.gameTitle ? `${a.gameTitle} · ` : ''}

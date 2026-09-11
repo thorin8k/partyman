@@ -1,6 +1,7 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
 import { confirmDialog } from '../../components/ConfirmDialog';
+import { pageBtn, rowActions, rowBtn, rowColumn, rowFooter, rowMain, rowTitle, badge, headerBtn, rowView } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -111,7 +112,7 @@ export function AdminTournaments() {
         <h1>ADMIN</h1>
         <div className="nav">
           <a href="/admin">VOLVER →</a>
-          <button onClick={logout} style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}>SALIR</button>
+          <button onClick={logout} style={headerBtn}>SALIR</button>
         </div>
       </div>
 
@@ -132,14 +133,14 @@ export function AdminTournaments() {
           <h2>PROPUESTAS DE TORNEOS ({proposals.length})</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem' }}>
             {proposals.map((p: any) => (
-              <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <h3 style={{ fontSize: '0.875rem' }}>{p.name}</h3>
+              <div key={p.id} className="list-item" style={rowColumn}>
+                <div style={rowMain}>
+                  <h3 style={{ ...rowTitle, fontSize: '0.875rem' }}>{p.name}</h3>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle} · Max {p.maxParticipants}</p>
                 </div>
-                <div style={{ display: 'flex', gap: '0.25rem' }}>
-                  <button onClick={() => handleApproveProposal(p.id)} className="primary" style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>APROBAR</button>
-                  <button onClick={() => handleRejectProposal(p.id)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>RECHAZAR</button>
+                <div style={rowFooter}>
+                  <button onClick={() => handleApproveProposal(p.id)} className="primary" style={rowBtn}>APROBAR</button>
+                  <button onClick={() => handleRejectProposal(p.id)} style={rowBtn}>RECHAZAR</button>
                 </div>
               </div>
             ))}
@@ -169,25 +170,23 @@ export function AdminTournaments() {
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h2>TORNEOS ({tournaments.length})</h2>
-            <button className="primary" style={{ fontSize: '0.5rem' }} onClick={() => setShowForm(true)}>+ NUEVO TORNEO</button>
+            <button className="primary" style={pageBtn} onClick={() => setShowForm(true)}>+ NUEVO TORNEO</button>
           </div>
           {tournaments.length === 0 ? (
             <div className="empty-state"><h3>SIN TORNEOS</h3><p style={{ fontSize: '0.875rem' }}>No hay torneos creados todavía.</p></div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {tournaments.map(t => (
-                <div key={t.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-                  <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-                    <h3 style={{ marginBottom: '0.25rem', wordBreak: 'break-word' }}>{t.name}</h3>
+                <div key={t.id} className="list-item" style={rowColumn}>
+                  <div style={rowMain}>
+                    <h3 style={rowTitle}>{t.name}</h3>
                     <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>{t.gameTitleSnapshot} · Max {t.maxParticipants}</p>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexShrink: 0 }}>
-                    <span style={{ padding: '0.25rem 0.75rem', border: `1px solid ${statusColors[t.status]}`, color: statusColors[t.status], fontFamily: 'var(--font-display)', fontSize: '0.5rem' }}>
-                      {statusLabels[t.status]}
-                    </span>
-                    {t.status === 'upcoming' && <button onClick={() => handleAction(t.id, 'start')} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem', whiteSpace: 'nowrap' }}>INICIAR</button>}
-                    {t.status !== 'finished' && t.status !== 'cancelled' && <button onClick={() => handleAction(t.id, 'cancel')} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem', whiteSpace: 'nowrap', borderColor: 'var(--error)', color: 'var(--error)' }}>CANCELAR</button>}
-                    <a href={`/admin/tournaments/${t.id}`} style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>VER →</a>
+                  <div style={rowFooter}>
+                    <span style={badge(statusColors[t.status])}>{statusLabels[t.status]}</span>
+                    {t.status === 'upcoming' && <button onClick={() => handleAction(t.id, 'start')} style={rowBtn}>INICIAR</button>}
+                    {t.status !== 'finished' && t.status !== 'cancelled' && <button onClick={() => handleAction(t.id, 'cancel')} style={{ ...rowBtn, borderColor: 'var(--error)', color: 'var(--error)' }}>CANCELAR</button>}
+                    <a href={`/admin/tournaments/${t.id}`} style={rowView}>VER →</a>
                   </div>
                 </div>
               ))}

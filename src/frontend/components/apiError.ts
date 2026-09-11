@@ -27,6 +27,7 @@ const ADMIN_ES: Record<string, string> = {
   NO_CHANGES: "Sin cambios que guardar.",
   DUPLICATE_CODE: "Ese código ya existe.",
   FORBIDDEN: "Sin permiso para esta acción.",
+  PARTICIPANT_ONLY: "Solo un participante puede hacer eso. Como admin, usa el panel.",
   BACKUP_NOT_FOUND: "Esa copia ya no existe.",
   BACKUP_CORRUPT: "La copia está corrupta.",
   BACKUP_FAILED: "No se pudo crear la copia.",

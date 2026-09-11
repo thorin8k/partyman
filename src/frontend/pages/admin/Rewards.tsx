@@ -1,9 +1,8 @@
 import { useAuth } from '../../components/AuthContext';
 import { confirmDialog } from '../../components/ConfirmDialog';
+import { pageBtn, rowBtn, rowColumn, rowFooter, rowMain } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
-
-const touchBtn: React.CSSProperties = { minHeight: '44px', fontSize: '0.625rem', padding: '0.75rem 1rem' };
 
 // ponytail: etiquetas humanas para el ledger; el resto de códigos se muestra tal cual.
 const REASON_ES: Record<string, string> = {
@@ -134,7 +133,7 @@ export function Rewards() {
           </select>
           <input placeholder="Título libre (opcional)" value={award.title} onChange={e => setAward({ ...award, title: e.target.value })} maxLength={120} />
           <input placeholder="Nota (opcional)" value={award.note} onChange={e => setAward({ ...award, note: e.target.value })} maxLength={500} />
-          <button type="submit" className="primary" style={touchBtn}>OTORGAR</button>
+          <button type="submit" className="primary" style={pageBtn}>OTORGAR</button>
         </form>
       </div>
 
@@ -157,7 +156,7 @@ export function Rewards() {
                   <input type="checkbox" checked={edit.enabled} onChange={e => setRuleEdits({ ...ruleEdits, [rule.id]: { ...edit, enabled: e.target.checked } })} />
                   activa
                 </label>
-                <button onClick={() => handleRule(rule)} style={touchBtn}>GUARDAR</button>
+                <button onClick={() => handleRule(rule)} style={rowBtn}>GUARDAR</button>
               </span>
             </div>
           );
@@ -173,13 +172,13 @@ export function Rewards() {
           </select>
           {correctPid && visible.length === 0 && <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>Sin movimientos.</p>}
           {visible.map((l: any) => (
-            <div key={l.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>{reasonLabel(l)} <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>· {fmtDate(l.created_at)}</span></span>
-              <span style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <div key={l.id} className="list-item" style={rowColumn}>
+              <span style={{ ...rowMain }}>{reasonLabel(l)} <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>· {fmtDate(l.created_at)}</span></span>
+              <span style={rowFooter}>
                 <span style={{ color: l.points < 0 ? 'var(--error)' : 'var(--neon-green)' }}>{l.points > 0 ? `+${l.points}` : l.points}</span>
                 {correctedIds.has(l.id)
                   ? <span style={{ fontSize: '0.625rem', color: 'var(--text-dim)' }}>ANULADO</span>
-                  : <button onClick={() => handleUndo(l)} style={{ ...touchBtn, borderColor: 'var(--error)', color: 'var(--error)' }}>ANULAR</button>}
+                  : <button onClick={() => handleUndo(l)} style={{ ...rowBtn, borderColor: 'var(--error)', color: 'var(--error)' }}>ANULAR</button>}
               </span>
             </div>
           ))}
@@ -191,15 +190,15 @@ export function Rewards() {
         <h2>LOGROS ({achievements.length})</h2>
         <form onSubmit={handleCreate} style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
           <input placeholder="Nombre del nuevo logro…" value={newAch} onChange={e => setNewAch(e.target.value)} maxLength={120} style={{ flex: 1 }} />
-          <button type="submit" className="primary" style={touchBtn}>CREAR</button>
+          <button type="submit" className="primary" style={pageBtn}>CREAR</button>
         </form>
         <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
           {achievements.map((a: any) => (
             editAch && editAch.id === a.id ? (
               <span key={a.id} style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
                 <input value={editAch.name} onChange={e => setEditAch({ id: a.id, name: e.target.value })} maxLength={120} style={{ minHeight: '44px' }} autoFocus />
-                <button onClick={handleSaveAch} style={touchBtn}>OK</button>
-                <button onClick={() => setEditAch(null)} style={touchBtn}>X</button>
+                <button onClick={handleSaveAch} style={rowBtn}>OK</button>
+                <button onClick={() => setEditAch(null)} style={rowBtn}>X</button>
               </span>
             ) : (
               <span key={a.id} style={{ display: 'flex', gap: '0.375rem', alignItems: 'center', fontSize: '0.875rem', padding: '0.25rem 0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>

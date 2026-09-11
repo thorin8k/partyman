@@ -1,6 +1,7 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
 import { confirmDialog } from '../../components/ConfirmDialog';
+import { pageBtn, rowBtn, rowColumn, rowFooter, rowMain, rowTitle, headerBtn } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -82,7 +83,7 @@ export function AdminGames() {
         <div className="nav">
           <a href="/admin">VOLVER →</a>
           <a href="/display" target="_blank">DISPLAY →</a>
-          <button onClick={logout} style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}>SALIR</button>
+          <button onClick={logout} style={headerBtn}>SALIR</button>
         </div>
       </div>
 
@@ -95,7 +96,7 @@ export function AdminGames() {
 
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
           <input placeholder="Buscar en SteamGridDB..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />
-          <button onClick={handleSearch} disabled={searching} style={{ fontSize: '0.5rem' }}>{searching ? 'BUSCANDO...' : 'BUSCAR'}</button>
+          <button onClick={handleSearch} disabled={searching} style={pageBtn}>{searching ? 'BUSCANDO...' : 'BUSCAR'}</button>
         </div>
 
         {searchResults.length > 0 && (
@@ -103,10 +104,14 @@ export function AdminGames() {
             <h3 style={{ fontSize: '0.75rem', marginBottom: '0.5rem', color: 'var(--neon-cyan)' }}>RESULTADOS DE STEAMGRIDDB</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {searchResults.map((g, i) => (
-                <div key={i} className="list-item" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'nowrap' }}>
-                  {g.imageUrl && <img src={g.imageUrl} alt="" style={{ width: '48px', height: '48px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
-                  <div style={{ flex: 1, minWidth: 0 }}><h3 style={{ fontSize: '0.875rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.name}</h3></div>
-                  <button onClick={() => handleAddFromSearch(g)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem', flexShrink: 0 }}>AÑADIR</button>
+                <div key={i} className="list-item" style={{ ...rowColumn, alignItems: 'stretch' }}>
+                  <div style={{ ...rowMain, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    {g.imageUrl && <img src={g.imageUrl} alt="" style={{ width: '48px', height: '48px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
+                    <h3 style={{ ...rowTitle, fontSize: '0.875rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.name}</h3>
+                  </div>
+                  <div style={rowFooter}>
+                    <button onClick={() => handleAddFromSearch(g)} style={rowBtn}>AÑADIR</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -119,16 +124,18 @@ export function AdminGames() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {games.map(g => (
-              <div key={g.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  {g.imageUrl && <img src={g.imageUrl} alt="" style={{ width: '48px', height: '48px', borderRadius: '4px', objectFit: 'cover' }} />}
-                  <h3>{g.title}</h3>
+                <div key={g.id} className="list-item" style={rowColumn}>
+                  <div style={{ ...rowMain, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    {g.imageUrl && <img src={g.imageUrl} alt="" style={{ width: '48px', height: '48px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
+                    <h3 style={rowTitle}>{g.title}</h3>
+                  </div>
+                  <div style={rowFooter}>
+                    <button onClick={() => handleToggle(g)} style={{ ...rowBtn, borderColor: g.enabled ? 'var(--neon-green)' : 'var(--error)', color: g.enabled ? 'var(--neon-green)' : 'var(--error)' }}>
+                      {g.enabled ? 'ACTIVO' : 'INACTIVO'}
+                    </button>
+                    <button onClick={() => handleDelete(g.id)} className="danger" style={rowBtn}>BORRAR</button>
+                  </div>
                 </div>
-                <button onClick={() => handleToggle(g)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem', borderColor: g.enabled ? 'var(--neon-green)' : 'var(--error)', color: g.enabled ? 'var(--neon-green)' : 'var(--error)' }}>
-                  {g.enabled ? 'ACTIVO' : 'INACTIVO'}
-                </button>
-                <button onClick={() => handleDelete(g.id)} className="danger" style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem' }}>BORRAR</button>
-              </div>
             ))}
           </div>
         )}

@@ -1,6 +1,7 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
 import { confirmDialog } from '../../components/ConfirmDialog';
+import { pageBtn, rowActions, rowBtn, rowColumn, rowFooter, rowMain, rowTitle, badge, headerBtn } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -161,7 +162,7 @@ export function AdminPlanning() {
         <div className="nav">
           <a href="/admin">VOLVER →</a>
           <a href="/display" target="_blank">DISPLAY →</a>
-          <button onClick={logout} style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}>SALIR</button>
+          <button onClick={logout} style={headerBtn}>SALIR</button>
         </div>
       </div>
 
@@ -182,14 +183,14 @@ export function AdminPlanning() {
           <h2>PROPUESTAS DE ACTIVIDADES ({proposals.length})</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem' }}>
             {proposals.map((p: any) => (
-              <div key={p.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <h3 style={{ fontSize: '0.875rem' }}>{p.title}</h3>
+              <div key={p.id} className="list-item" style={rowColumn}>
+                <div style={rowMain}>
+                  <h3 style={{ ...rowTitle, fontSize: '0.875rem' }}>{p.title}</h3>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle || 'Sin juego'} · {new Date(p.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
                 </div>
-                <div style={{ display: 'flex', gap: '0.25rem' }}>
-                  <button onClick={() => handleApprove(p.id)} className="primary" style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>APROBAR</button>
-                  <button onClick={() => handleReject(p.id)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>RECHAZAR</button>
+                <div style={rowFooter}>
+                  <button onClick={() => handleApprove(p.id)} className="primary" style={rowBtn}>APROBAR</button>
+                  <button onClick={() => handleReject(p.id)} style={rowBtn}>RECHAZAR</button>
                 </div>
               </div>
             ))}
@@ -224,25 +225,24 @@ export function AdminPlanning() {
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h2>ACTIVIDADES ({activities.length})</h2>
-            <button className="primary" style={{ fontSize: '0.5rem' }} onClick={() => setShowForm(true)}>+ NUEVA ACTIVIDAD</button>
+            <button className="primary" style={pageBtn} onClick={() => setShowForm(true)}>+ NUEVA ACTIVIDAD</button>
           </div>
           {activities.length === 0 ? (
             <div className="empty-state"><h3>SIN ACTIVIDADES</h3><p style={{ fontSize: '0.875rem' }}>No hay actividades programadas.</p></div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {activities.map(a => (
-                <div key={a.id} className="list-item" style={{ padding: '0.75rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div key={a.id} className="list-item" style={{ ...rowColumn, padding: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                       {a.gameImage && <img src={a.gameImage} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />}
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <h3 style={{ marginBottom: '0.25rem' }}>{a.title}</h3>
                           {(() => {
-                            if (a.status === 'cancelled') return <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--error)', border: '1px solid var(--error)', padding: '0.125rem 0.375rem' }}>CANCELADA</span>;
-                            if (a.status === 'finished') return <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--muted)', border: '1px solid var(--muted)', padding: '0.125rem 0.375rem' }}>FINALIZADA</span>;
+                            if (a.status === 'cancelled') return <span style={badge('var(--error)')}>CANCELADA</span>;
+                            if (a.status === 'finished') return <span style={badge('var(--muted)')}>FINALIZADA</span>;
                             const now = new Date(); const live = new Date(a.startsAt) <= now && now <= new Date(a.endsAt);
-                            return live ? <span style={{ fontSize: '0.5rem', fontFamily: 'var(--font-display)', color: 'var(--neon-green)', border: '1px solid var(--neon-green)', padding: '0.125rem 0.375rem' }}>EN CURSO</span> : null;
+                            return live ? <span style={badge('var(--neon-green)')}>EN CURSO</span> : null;
                           })()}
                         </div>
                         <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
@@ -253,20 +253,6 @@ export function AdminPlanning() {
                         {a.notes && <p style={{ margin: '0.25rem 0 0', color: 'var(--text-dim)', fontSize: '0.7rem', fontStyle: 'italic' }}>{a.notes}</p>}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
-                      {(a.status === 'scheduled' || a.status === 'in_progress') && (
-                        <>
-                          <button onClick={() => handleStatus(a.id, 'finished', 'FINALIZADA')} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem', borderColor: 'var(--neon-green)', color: 'var(--neon-green)' }}>TERMINAR</button>
-                          <button onClick={() => handleStatus(a.id, 'cancelled', 'CANCELADA')} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>CANCELAR</button>
-                        </>
-                      )}
-                      {(a.status === 'finished' || a.status === 'cancelled') && (
-                        <button onClick={() => handleStatus(a.id, 'scheduled', 'REABIERTA')} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>REABRIR</button>
-                      )}
-                      <button onClick={() => handleEdit(a)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>EDITAR</button>
-                      <button className="danger" onClick={() => handleDelete(a.id)} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.5rem 0.75rem' }}>ELIMINAR</button>
-                    </div>
-                  </div>
                   {a.participants && a.participants.length > 0 && (
                     <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border)' }}>
                       <p style={{ fontSize: '0.625rem', color: 'var(--text-dim)', marginBottom: '0.25rem' }}>INSCRITOS ({a.participants.length}):</p>
@@ -277,6 +263,19 @@ export function AdminPlanning() {
                       </div>
                     </div>
                   )}
+                  <div style={{ ...rowFooter, flexWrap: 'wrap' }}>
+                    {(a.status === 'scheduled' || a.status === 'in_progress') && (
+                      <>
+                        <button onClick={() => handleStatus(a.id, 'finished', 'FINALIZADA')} style={{ ...rowBtn, borderColor: 'var(--neon-green)', color: 'var(--neon-green)' }}>TERMINAR</button>
+                        <button onClick={() => handleStatus(a.id, 'cancelled', 'CANCELADA')} style={rowBtn}>CANCELAR</button>
+                      </>
+                    )}
+                    {(a.status === 'finished' || a.status === 'cancelled') && (
+                      <button onClick={() => handleStatus(a.id, 'scheduled', 'REABIERTA')} style={rowBtn}>REABRIR</button>
+                    )}
+                    <button onClick={() => handleEdit(a)} style={rowBtn}>EDITAR</button>
+                    <button className="danger" onClick={() => handleDelete(a.id)} style={rowBtn}>ELIMINAR</button>
+                  </div>
                 </div>
               ))}
             </div>

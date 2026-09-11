@@ -1,8 +1,7 @@
 import { useAuth } from '../../components/AuthContext';
+import { pageBtn, rowViewTouch } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
-
-const touchBtn: React.CSSProperties = { minHeight: '44px', fontSize: '0.625rem', padding: '0.75rem 1rem' };
 
 interface Backup {
   id: string;
@@ -52,7 +51,7 @@ export function Backups() {
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
           <h2>COPIAS ({backups.length})</h2>
-          <button className="primary" onClick={handleCreate} disabled={creating} style={touchBtn}>{creating ? 'CREANDO…' : '+ CREAR COPIA'}</button>
+          <button className="primary" onClick={handleCreate} disabled={creating} style={pageBtn}>{creating ? 'CREANDO…' : '+ CREAR COPIA'}</button>
         </div>
         <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '0.5rem' }}>Copia transaccional con verificación. La restauración es offline y está en docs/operations.md.</p>
         {backups.length === 0 ? (
@@ -65,7 +64,7 @@ export function Backups() {
                   <h3 style={{ fontSize: '0.875rem' }}>{fmtDate(b.createdAt)}</h3>
                   <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>{fmtBytes(b.sizeBytes)} · {b.integrity === 'ok' ? 'verificada' : 'CORRUPTA'}</p>
                 </div>
-                <a href={`/api/admin/backups/${b.id}/download`} style={{ ...touchBtn, display: 'flex', alignItems: 'center', border: '1px solid var(--neon-cyan)', textDecoration: 'none' }}>DESCARGAR →</a>
+                <a href={`/api/admin/backups/${b.id}/download`} style={rowViewTouch}>DESCARGAR →</a>
               </div>
             ))}
           </div>

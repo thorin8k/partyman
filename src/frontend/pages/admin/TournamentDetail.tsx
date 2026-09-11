@@ -1,6 +1,7 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
 import { confirmDialog } from '../../components/ConfirmDialog';
+import { headerBtn, rowBtn } from '../../components/listRow';
 import { useLocation, useParams } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -98,7 +99,7 @@ export function TournamentDetail() {
         <h1>ADMIN</h1>
         <div className="nav">
           <a href="/admin/tournaments">TORNEOS →</a>
-          <button onClick={logout} style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}>SALIR</button>
+          <button onClick={logout} style={headerBtn}>SALIR</button>
         </div>
       </div>
 
@@ -141,7 +142,7 @@ export function TournamentDetail() {
           </div>
         )}
         {devTools && tournament.status === 'draft' && (
-          <button onClick={handleFillBots} style={{ marginTop: '1rem', fontSize: '0.5rem', borderColor: 'var(--neon-magenta)', color: 'var(--neon-magenta)' }}>
+          <button onClick={handleFillBots} style={{ ...rowBtn, marginTop: '1rem', borderColor: 'var(--neon-magenta)', color: 'var(--neon-magenta)' }}>
             + RELLENAR CON BOTS (DEV)
           </button>
         )}
