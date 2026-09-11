@@ -1,7 +1,7 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
 import { confirmDialog } from '../../components/ConfirmDialog';
-import { pageBtn, rowActions, rowBtn, rowColumn, rowFooter, rowHead, rowMain, rowTitle, badge, headerBtn } from '../../components/listRow';
+import { pageBtn, rowActions, rowBtn, rowBtnSmall, rowColumn, rowFooter, rowHead, rowMain, rowTitle, badge, headerBtn } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -266,15 +266,15 @@ export function AdminPlanning() {
                   <div style={rowFooter}>
                     {(a.status === 'scheduled' || a.status === 'in_progress') && (
                       <>
-                        <button onClick={() => handleStatus(a.id, 'finished', 'FINALIZADA')} style={{ ...rowBtn, borderColor: 'var(--neon-green)', color: 'var(--neon-green)' }}>TERMINAR</button>
-                        <button onClick={() => handleStatus(a.id, 'cancelled', 'CANCELADA')} style={rowBtn}>CANCELAR</button>
+                        <button onClick={() => handleStatus(a.id, 'finished', 'FINALIZADA')} style={{ ...rowBtnSmall, borderColor: 'var(--neon-green)', color: 'var(--neon-green)' }}>TERMINAR</button>
+                        <button onClick={() => handleStatus(a.id, 'cancelled', 'CANCELADA')} style={rowBtnSmall}>CANCELAR</button>
                       </>
                     )}
                     {(a.status === 'finished' || a.status === 'cancelled') && (
-                      <button onClick={() => handleStatus(a.id, 'scheduled', 'REABIERTA')} style={rowBtn}>REABRIR</button>
+                      <button onClick={() => handleStatus(a.id, 'scheduled', 'REABIERTA')} style={rowBtnSmall}>REABRIR</button>
                     )}
-                    <button onClick={() => handleEdit(a)} style={rowBtn}>EDITAR</button>
-                    <button className="danger" onClick={() => handleDelete(a.id)} style={rowBtn}>ELIMINAR</button>
+                    <button onClick={() => handleEdit(a)} style={rowBtnSmall}>EDITAR</button>
+                    <button className="danger" onClick={() => handleDelete(a.id)} style={rowBtnSmall}>ELIMINAR</button>
                   </div>
                 </div>
               ))}

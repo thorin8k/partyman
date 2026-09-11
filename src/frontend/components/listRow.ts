@@ -51,6 +51,14 @@ export const rowBtn: CSSProperties = {
   padding: '0.375rem 1rem',
   whiteSpace: 'nowrap',
 };
+// Botones compactos para footers densos (4-5 acciones en una línea).
+export const rowBtnSmall: CSSProperties = {
+  minHeight: '34px',
+  fontSize: '0.5rem',
+  padding: '0.25rem 0.625rem',
+  whiteSpace: 'nowrap',
+  flexShrink: 0,
+};
 // Botones de acción del participante (móvil, targets táctiles 44px).
 export const rowBtnTouch: CSSProperties = {
   minHeight: '44px',
