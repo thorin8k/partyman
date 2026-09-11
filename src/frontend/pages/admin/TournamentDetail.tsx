@@ -2,6 +2,7 @@ import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
 import { confirmDialog } from '../../components/ConfirmDialog';
 import { headerBtn, rowBtn } from '../../components/listRow';
+import { isByeSlot, slotLabel } from '../../components/bracket';
 import { useLocation, useParams } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -172,17 +173,20 @@ export function TournamentDetail() {
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
                           <span style={{ fontSize: '0.75rem', fontWeight: m.winner === m.participantA ? 'bold' : 'normal', color: m.winner === m.participantA ? 'var(--neon-green)' : 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {m.participantA || '—'}
+                            {slotLabel(m.participantA, m)}
                           </span>
                           {m.score && <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 'bold' }}>{m.score.a}</span>}
                         </div>
                         <div style={{ height: '1px', background: 'var(--border)', margin: '0.5rem 0' }} />
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
                           <span style={{ fontSize: '0.75rem', fontWeight: m.winner === m.participantB ? 'bold' : 'normal', color: m.winner === m.participantB ? 'var(--neon-green)' : 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {m.participantB || 'BYE'}
+                            {slotLabel(m.participantB, m)}
                           </span>
                           {m.score && <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 'bold' }}>{m.score.b}</span>}
                         </div>
+                        {m.status === 'confirmed' && m.winner && isByeSlot(m) && (
+                          <span style={{ display: 'block', textAlign: 'center', marginTop: '0.5rem', fontSize: '0.5rem', color: 'var(--neon-green)', fontFamily: 'var(--font-display)' }}>PASA DIRECTO</span>
+                        )}
                         {(m.status === 'reported' || (m.status === 'pending' && m.participantAId && m.participantBId)) && (
                           reportMatch === m.id ? (
                             <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

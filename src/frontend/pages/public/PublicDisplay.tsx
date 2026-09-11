@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { QrCode } from '../../components/QrCode';
 import { wifiQrString } from '../../components/qr';
 import { badge, headerBtn } from '../../components/listRow';
+import { isByeSlot, slotLabel } from '../../components/bracket';
 
 interface Tournament {
   id: number;
@@ -220,8 +221,8 @@ export function PublicDisplay() {
                                 <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, gap: '0.5rem' }}>
                                   {t.matches.filter(m => m.round === round).map(m => (
                                     <div key={m.id} style={{ fontSize: '0.875rem', padding: '0.375rem 0.5rem', background: 'var(--bg)', border: `1px solid ${m.status === 'confirmed' ? 'var(--neon-green)' : 'var(--border)'}`, textAlign: 'center' }}>
-                                      <div>{m.participantA ?? '—'} vs {m.participantB ?? 'BYE'}</div>
-                                      {m.winner && <div style={{ color: 'var(--neon-green)', fontFamily: 'var(--font-display)', fontSize: '0.625rem', marginTop: '0.25rem' }}>→ {m.winner}</div>}
+                                      <div>{slotLabel(m.participantA, m)} vs {slotLabel(m.participantB, m)}</div>
+                                      {m.winner && <div style={{ color: 'var(--neon-green)', fontFamily: 'var(--font-display)', fontSize: '0.625rem', marginTop: '0.25rem' }}>→ {m.winner}{isByeSlot(m) ? ' · PASA DIRECTO' : ''}</div>}
                                     </div>
                                   ))}
                                 </div>

@@ -311,8 +311,8 @@ export function createTournamentRoutes(db: Database) {
       return {
         id: m.id, round: m.round, position: m.position,
         participantAId: m.participant_a_id, participantBId: m.participant_b_id,
-        participantA: pA?.display_name_snapshot ?? (m.participant_a_id ? "BYE" : null),
-        participantB: pB?.display_name_snapshot ?? (m.participant_b_id ? "BYE" : null),
+        participantA: pA?.display_name_snapshot ?? null,
+        participantB: pB?.display_name_snapshot ?? null,
         winnerId: m.winner_id,
         winner: m.winner_id ? db.query<{ display_name_snapshot: string }, [number, number]>("SELECT display_name_snapshot FROM tournament_participants WHERE tournament_id = ? AND participant_id = ?").get(id, m.winner_id)?.display_name_snapshot ?? null : null,
         score: m.score_json ? JSON.parse(m.score_json) : null,
