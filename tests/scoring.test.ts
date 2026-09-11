@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeAll, afterAll } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createScoringRoutes } from "../src/backend/routes/scoring";
-import { seedPointRules, scoreTournamentFinished, scorePartyParticipation, getLeaderboard } from "../src/backend/scoring/service";
+import { seedPointRules, seedAchievements, scoreTournamentFinished, scorePartyParticipation, getLeaderboard } from "../src/backend/scoring/service";
 
 function makeTempDb(): { db: Database; close: () => void } {
   const db = new Database(":memory:");
@@ -156,5 +156,26 @@ describe("task 007 scoring", () => {
     expect(other.status).toBe(403);
     const own = await routes["/api/participants/:id/history"].GET(new Request(`http://localhost/api/participants/${alice}/history`, { headers: authHeaders(aliceToken) }));
     expect(own.status).toBe(200);
+  });
+
+  it("excludes corrected wins from achievement counters", async () => {
+    seedAchievements(ctx.db);
+    const carol = Number(ctx.db.run("INSERT INTO participants (steam_id, display_name) VALUES ('steam-carol', 'Carol')").lastInsertRowid);
+    const mkCup = (name: string) => {
+      const t = Number(ctx.db.run("INSERT INTO tournaments (party_id, name) VALUES (?, ?)", [party, name]).lastInsertRowid);
+      ctx.db.run("INSERT INTO tournament_participants (tournament_id, participant_id, display_name_snapshot) VALUES (?, ?, 'Carol'), (?, ?, 'bob')", [t, carol, t, bob]);
+      ctx.db.run("INSERT INTO matches (tournament_id, round, position, participant_a_id, participant_b_id, winner_id, status) VALUES (?, 1, 0, ?, ?, ?, 'confirmed')", [t, carol, bob, carol]);
+      return t;
+    };
+    scoreTournamentFinished(ctx.db, mkCup("CupA"), party);
+    const winRow = ctx.db.query<{ id: number }, [number]>("SELECT id FROM point_ledger WHERE participant_id = ? AND reason = 'tournament_win' AND correction_of IS NULL").get(carol)!;
+    const corr = await routes["/api/admin/point-corrections"].POST(jsonReq("http://localhost/api/admin/point-corrections", "POST", adminToken, { ledgerId: winRow.id, points: -10, reason: "void" }));
+    expect(corr.status).toBe(200);
+    scoreTournamentFinished(ctx.db, mkCup("CupB"), party);
+    scoreTournamentFinished(ctx.db, mkCup("CupC"), party);
+    scoreTournamentFinished(ctx.db, mkCup("CupD"), party);
+    // 3 victorias netas (1 anulada): Veterano debe existir; sin el fix el contador llegaría a 4 y nunca saltaría.
+    const vet = ctx.db.query<{ n: number }, [number, string]>("SELECT COUNT(*) AS n FROM participant_awards pa JOIN achievements a ON a.id = pa.achievement_id WHERE pa.participant_id = ? AND a.code = ?").get(carol, "veteran_3_wins")!;
+    expect(vet.n).toBe(1);
   });
 });

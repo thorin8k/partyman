@@ -105,16 +105,17 @@ describe("integration: full party flow", () => {
       );
     }
     await tournaments["/api/admin/tournaments/:id/start"].POST(new Request(`http://localhost/api/admin/tournaments/${tourId}/start`, { method: "POST", headers: cookie(adminToken) }));
-    const match = db.query<{ id: number }, [number]>("SELECT id FROM matches WHERE tournament_id = ?").get(tourId)!;
+    const match = db.query<{ id: number; a: number | null; b: number | null }, [number]>("SELECT id, participant_a_id AS a, participant_b_id AS b FROM matches WHERE tournament_id = ?").get(tourId)!;
+    const score = match.a === alice.id ? { a: 5, b: 3 } : { a: 3, b: 5 };
     const bobToken = session(db, "participant", bob.id);
     const report = await tournaments["/api/matches/:id/report"].POST(
-      new Request(`http://localhost/api/matches/${match.id}/report`, json(aliceToken, { winnerId: alice.id, score: { a: 5, b: 3 } }))
+      new Request(`http://localhost/api/matches/${match.id}/report`, json(aliceToken, { winnerId: alice.id, score }))
     );
     expect(report.status).toBe(200);
     expect((await report.json()).status).toBe("reported");
     // Both players agree → confirmed without admin.
     const confirm = await tournaments["/api/matches/:id/report"].POST(
-      new Request(`http://localhost/api/matches/${match.id}/report`, json(bobToken, { winnerId: alice.id, score: { a: 5, b: 3 } }))
+      new Request(`http://localhost/api/matches/${match.id}/report`, json(bobToken, { winnerId: alice.id, score }))
     );
     expect((await confirm.json()).status).toBe("confirmed");
     expect(db.query<{ status: string }, [number]>("SELECT status FROM tournaments WHERE id = ?").get(tourId)?.status).toBe("finished");

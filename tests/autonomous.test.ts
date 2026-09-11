@@ -117,9 +117,10 @@ describe("task 014 autonomous mode", () => {
     await routes["/api/tournaments/:id/join"].POST(new Request(`http://localhost/api/tournaments/${tourId}/join`, post(t1.token)));
     await routes["/api/tournaments/:id/join"].POST(new Request(`http://localhost/api/tournaments/${tourId}/join`, post(t2.token)));
     expect(db.query<{ status: string }, [number]>("SELECT status FROM tournaments WHERE id = ?").get(tourId)?.status).toBe("in_progress");
-    const match = db.query<{ id: number }, [number]>("SELECT id FROM matches WHERE tournament_id = ?").get(tourId)!;
+    const match = db.query<{ id: number; a: number | null; b: number | null }, [number]>("SELECT id, participant_a_id AS a, participant_b_id AS b FROM matches WHERE tournament_id = ?").get(tourId)!;
+    const score = match.a === t1.id ? { a: 5, b: 1 } : { a: 1, b: 5 };
     await routes["/api/matches/:id/report"].POST(
-      new Request(`http://localhost/api/matches/${match.id}/report`, post(t1.token, { winnerId: t1.id, score: { a: 5, b: 1 } }))
+      new Request(`http://localhost/api/matches/${match.id}/report`, post(t1.token, { winnerId: t1.id, score }))
     );
     expect(db.query<{ status: string }, [number]>("SELECT status FROM matches WHERE id = ?").get(match.id)?.status).toBe("reported");
     db.run("UPDATE matches SET reported_at = '2020-01-01T00:00:00Z' WHERE id = ?", [match.id]);
@@ -175,11 +176,13 @@ describe("task 014 autonomous mode", () => {
     const a = db.query<{ id: number }, [string]>("SELECT id FROM participants WHERE display_name = ?").get("A1")!.id;
     const b = db.query<{ id: number }, [string]>("SELECT id FROM participants WHERE display_name = ?").get("B1")!.id;
     const mid = db.query<{ id: number }, [number]>("SELECT id FROM matches WHERE tournament_id = ? LIMIT 1").get(tourId)!.id;
+    const slots = db.query<{ a: number | null; b: number | null }, [number]>("SELECT participant_a_id AS a, participant_b_id AS b FROM matches WHERE id = ?").get(mid)!;
+    const ascore = slots.a === a ? { a: 5, b: 1 } : { a: 1, b: 5 };
     await tRoutes["/api/matches/:id/report"].POST(
-      new Request(`http://localhost/api/matches/${mid}/report`, post(session(db, "participant", a), { winnerId: a, score: { a: 5, b: 1 } }))
+      new Request(`http://localhost/api/matches/${mid}/report`, post(session(db, "participant", a), { winnerId: a, score: ascore }))
     );
     await tRoutes["/api/matches/:id/report"].POST(
-      new Request(`http://localhost/api/matches/${mid}/report`, post(session(db, "participant", b), { winnerId: a, score: { a: 5, b: 1 } }))
+      new Request(`http://localhost/api/matches/${mid}/report`, post(session(db, "participant", b), { winnerId: a, score: ascore }))
     );
     expect(db.query<{ status: string }, [number]>("SELECT status FROM matches WHERE id = ?").get(mid)?.status).toBe("confirmed");
     const awards = (code: string, pid: number) => db.query<{ n: number }, [string, number]>(
