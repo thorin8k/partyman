@@ -124,4 +124,61 @@ describe("qa fixes", () => {
     const res = await routes["/api/test/validation"].GET(new Request("http://localhost/api/test/validation"));
     expect(res.status).toBe(422);
   });
+
+  it("blocks admin_users sessions from player writes (no phantom rows)", async () => {
+    const routes = createTournamentRoutes(db);
+    const mk = (steam: string) => {
+      const pid = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES (?, ?)", [steam, steam]).lastInsertRowid);
+      return { pid, token: session(db, "participant", pid) };
+    };
+    const a = mk("s-ma");
+    const b = mk("s-mb");
+    const c = mk("s-mc");
+    const d = mk("s-md");
+
+    const created = await routes["/api/admin/tournaments"].POST(
+      new Request("http://localhost/api/admin/tournaments", post(adminToken, { partyId: activePartyId, gameId, name: "AdminBlock", maxParticipants: 4 }))
+    );
+    const tourId = (await created.json()).tournament.id;
+    for (const p of [a, b, c, d]) {
+      await routes["/api/tournaments/:id/join"].POST(new Request(`http://localhost/api/tournaments/${tourId}/join`, post(p.token)));
+    }
+    expect(db.query<{ status: string }, [number]>("SELECT status FROM tournaments WHERE id = ?").get(tourId)?.status).toBe("in_progress");
+    const semis = db.query<{ id: number; participant_a_id: number; participant_b_id: number }, [number]>(
+      "SELECT id, participant_a_id, participant_b_id FROM matches WHERE tournament_id = ? AND round = 1 ORDER BY position"
+    ).all(tourId);
+    expect(semis.length).toBe(2);
+
+    // El bug reportado: la sesión admin asigna el ganador directamente
+    // (confirma al instante) sin escribir filas fantasma en match_reports.
+    const m1 = semis[0];
+    const direct = await routes["/api/matches/:id/report"].POST(
+      new Request(`http://localhost/api/matches/${m1.id}/report`, post(adminToken, { winnerId: m1.participant_b_id, score: { a: 2, b: 5 } }))
+    );
+    expect(direct.status).toBe(200);
+    expect((await direct.json()).status).toBe("confirmed");
+    expect(db.query<{ n: number }, [number]>("SELECT COUNT(*) AS n FROM match_reports WHERE match_id = ?").get(m1.id)?.n ?? 0).toBe(0);
+    expect(db.query<{ winner_id: number }, [number]>("SELECT winner_id FROM matches WHERE id = ?").get(m1.id)?.winner_id).toBe(m1.participant_b_id);
+
+    // Sin regresión: dos jugadores reales acuerdan su semifinal por el flujo normal.
+    const m2 = semis[1];
+    const tokOf = (pid: number) => [a, b, c, d].find(p => p.pid === pid)!.token;
+    for (const pid of [m2.participant_a_id, m2.participant_b_id]) {
+      await routes["/api/matches/:id/report"].POST(
+        new Request(`http://localhost/api/matches/${m2.id}/report`, post(tokOf(pid), { winnerId: m2.participant_a_id, score: { a: 5, b: 3 } }))
+      );
+    }
+    expect(db.query<{ status: string }, [number]>("SELECT status FROM matches WHERE id = ?").get(m2.id)?.status).toBe("confirmed");
+
+    // Unirse como admin_users sigue bloqueado y no crea fila fantasma.
+    const created2 = await routes["/api/admin/tournaments"].POST(
+      new Request("http://localhost/api/admin/tournaments", post(adminToken, { partyId: activePartyId, gameId, name: "AdminBlock2", maxParticipants: 4 }))
+    );
+    const tour2 = (await created2.json()).tournament.id;
+    const joinBlocked = await routes["/api/tournaments/:id/join"].POST(
+      new Request(`http://localhost/api/tournaments/${tour2}/join`, post(adminToken))
+    );
+    expect(joinBlocked.status).toBe(403);
+    expect(db.query<{ n: number }, [number]>("SELECT COUNT(*) AS n FROM tournament_participants WHERE tournament_id = ?").get(tour2)?.n).toBe(0);
+  });
 });

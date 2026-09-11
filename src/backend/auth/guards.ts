@@ -90,3 +90,16 @@ function json(data: unknown, status: number): Response {
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
 }
+
+// Writes que mutan estado de jugador: solo sesiones de participante real.
+// Una sesión admin_users no tiene fila en participants; su subjectId vive en
+// otro namespace y aceptar sus writes crearía filas fantasma (o 403
+// confusos por NOT_IN_MATCH cuando los IDs colisionan).
+export function requireRealParticipant(db: Database, req: Request): AuthContext | Response {
+  const ctx = requireSession(db, req);
+  if (ctx instanceof Response) return ctx;
+  if (ctx.session.subjectType !== "participant") {
+    return json({ error: { code: "PARTICIPANT_ONLY", message: "PARTICIPANT_ONLY" } }, 403);
+  }
+  return ctx;
+}

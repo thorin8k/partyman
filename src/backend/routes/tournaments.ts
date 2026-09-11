@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { requireAdmin, requireParticipant } from "../auth/guards";
+import { requireAdmin, requireParticipant, requireRealParticipant } from "../auth/guards";
 import { findActiveParty } from "../auth/participants";
 import { generateBracket, getNextMatchPosition, isBye } from "../tournaments/single-elimination";
 import { REPORT_TIMEOUT_MIN, logEvent, scoreTournamentFinished } from "../scoring/service";
@@ -343,7 +343,7 @@ export function createTournamentRoutes(db: Database) {
   }
 
   async function handleJoinTournament(request: Request): Promise<Response> {
-    const auth = requireParticipant(db, request);
+    const auth = requireRealParticipant(db, request);
     if (auth instanceof Response) return auth;
     const id = getTournamentId(request.url);
     if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
@@ -377,7 +377,7 @@ export function createTournamentRoutes(db: Database) {
   }
 
   async function handleLeaveTournament(request: Request): Promise<Response> {
-    const auth = requireParticipant(db, request);
+    const auth = requireRealParticipant(db, request);
     if (auth instanceof Response) return auth;
     const id = getTournamentId(request.url);
     if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
@@ -400,9 +400,6 @@ export function createTournamentRoutes(db: Database) {
     const match = db.query<MatchRow, [number]>("SELECT * FROM matches WHERE id = ?").get(id);
     if (!match) return Response.json({ error: { code: "MATCH_NOT_FOUND", message: "MATCH_NOT_FOUND" } }, { status: 404 });
     if (match.status !== "pending" && match.status !== "reported") return Response.json({ error: { code: "INVALID_MATCH_STATE", message: "INVALID_MATCH_STATE" } }, { status: 409 });
-    if (match.participant_a_id !== auth.session.subjectId && match.participant_b_id !== auth.session.subjectId) {
-      return Response.json({ error: { code: "NOT_IN_MATCH", message: "NOT_IN_MATCH" } }, { status: 403 });
-    }
 
     const body = await request.json().catch(() => null);
     if (!body || !body.winnerId || !body.score) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["winnerId and score required"] }, { status: 400 });
@@ -421,6 +418,23 @@ export function createTournamentRoutes(db: Database) {
     const expectedLoserScore = body.winnerId === match.participant_a_id ? scoreB : scoreA;
     if (expectedWinnerScore <= expectedLoserScore) {
       return Response.json({ error: { code: "INVALID_SCORE", message: "INVALID_SCORE" }, details: ["winner score must be greater"] }, { status: 400 });
+    }
+
+    // El admin gestiona todo: su reporte confirma al instante sin pasar por
+    // el acuerdo de jugadores. No escribe en match_reports porque su ID no
+    // es un participant_id válido (namespaces distintos).
+    if (auth.session.subjectType === "admin") {
+      const tournament = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(match.tournament_id);
+      if (!tournament || tournament.status === "finished" || tournament.status === "cancelled") {
+        return Response.json({ error: { code: "INVALID_TOURNAMENT_STATE", message: "INVALID_TOURNAMENT_STATE" } }, { status: 409 });
+      }
+      confirmMatchRow(db, match, body.winnerId, JSON.stringify(body.score), null);
+      console.log("[tournaments] POST /api/matches/" + id + "/report (admin direct)");
+      return Response.json({ ok: true, status: "confirmed" });
+    }
+
+    if (match.participant_a_id !== auth.session.subjectId && match.participant_b_id !== auth.session.subjectId) {
+      return Response.json({ error: { code: "NOT_IN_MATCH", message: "NOT_IN_MATCH" } }, { status: 403 });
     }
 
     // Upsert report
@@ -457,7 +471,7 @@ export function createTournamentRoutes(db: Database) {
   }
 
   async function handleDisputeVote(request: Request): Promise<Response> {
-    const auth = requireParticipant(db, request);
+    const auth = requireRealParticipant(db, request);
     if (auth instanceof Response) return auth;
     const parts = new URL(request.url).pathname.split("/");
     const id = parseInt(parts[parts.indexOf("disputes") + 1], 10);

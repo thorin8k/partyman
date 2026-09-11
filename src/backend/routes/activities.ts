@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { requireAdmin, requireParticipant } from "../auth/guards";
+import { requireAdmin, requireParticipant, requireRealParticipant } from "../auth/guards";
 import { findActiveParty } from "../auth/participants";
 import { awardActivityJoin } from "../scoring/service";
 import { pathId, parsePositiveId } from "../http/ids";
@@ -186,7 +186,7 @@ export function createActivitiesRoutes(db: Database) {
   }
 
   async function handleJoinActivity(request: Request): Promise<Response> {
-    const ctx = requireParticipant(db, request);
+    const ctx = requireRealParticipant(db, request);
     if (ctx instanceof Response) return ctx;
 
     const id = extractId(request.url, "/api/activities/");
@@ -212,7 +212,7 @@ export function createActivitiesRoutes(db: Database) {
   }
 
   async function handleLeaveActivity(request: Request): Promise<Response> {
-    const ctx = requireParticipant(db, request);
+    const ctx = requireRealParticipant(db, request);
     if (ctx instanceof Response) return ctx;
 
     const id = extractId(request.url, "/api/activities/");

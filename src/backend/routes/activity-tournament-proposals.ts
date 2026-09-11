@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { requireAdmin, requireParticipant } from "../auth/guards";
+import { requireAdmin, requireParticipant, requireRealParticipant } from "../auth/guards";
 import { findActiveParty } from "../auth/participants";
 import { AUTO_APPROVE_VOTES, logEvent } from "../scoring/service";
 import { maybeAutoStartTournament } from "./tournaments";
@@ -73,7 +73,7 @@ export function createActivityTournamentProposalRoutes(db: Database) {
   }
 
   async function handleCreateActivityProposal(request: Request): Promise<Response> {
-    const ctx = requireParticipant(db, request);
+    const ctx = requireRealParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const activeParty = findActiveParty(db);
     if (!activeParty) return Response.json({ error: { code: "NOT_ACTIVE_PARTY", message: "NOT_ACTIVE_PARTY" } }, { status: 400 });
@@ -166,7 +166,7 @@ export function createActivityTournamentProposalRoutes(db: Database) {
   }
 
   async function handleVoteActivityProposal(request: Request): Promise<Response> {
-    const ctx = requireParticipant(db, request);
+    const ctx = requireRealParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const id = extractId(request.url, "/api/activity-proposals/");
     if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
@@ -189,7 +189,7 @@ export function createActivityTournamentProposalRoutes(db: Database) {
   }
 
   async function handleUnvoteActivityProposal(request: Request): Promise<Response> {
-    const ctx = requireParticipant(db, request);
+    const ctx = requireRealParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const id = extractId(request.url, "/api/activity-proposals/");
     if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
@@ -198,7 +198,7 @@ export function createActivityTournamentProposalRoutes(db: Database) {
   }
 
   async function handleCreateTournamentProposal(request: Request): Promise<Response> {
-    const ctx = requireParticipant(db, request);
+    const ctx = requireRealParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const activeParty = findActiveParty(db);
     if (!activeParty) return Response.json({ error: { code: "NOT_ACTIVE_PARTY", message: "NOT_ACTIVE_PARTY" } }, { status: 400 });
@@ -267,7 +267,7 @@ export function createActivityTournamentProposalRoutes(db: Database) {
   }
 
   async function handleVoteTournamentProposal(request: Request): Promise<Response> {
-    const ctx = requireParticipant(db, request);
+    const ctx = requireRealParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const id = extractId(request.url, "/api/tournament-proposals/");
     if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
@@ -290,7 +290,7 @@ export function createActivityTournamentProposalRoutes(db: Database) {
   }
 
   async function handleUnvoteTournamentProposal(request: Request): Promise<Response> {
-    const ctx = requireParticipant(db, request);
+    const ctx = requireRealParticipant(db, request);
     if (ctx instanceof Response) return ctx;
     const id = extractId(request.url, "/api/tournament-proposals/");
     if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
