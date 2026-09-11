@@ -125,6 +125,9 @@ Not automatable, run before shipping to the real party:
 - The server bundles the React entry once at boot: after editing any
   `src/frontend/**` file, restart the server — a browser reload alone serves
   the stale bundle.
+- Tournament slots shuffle at start: tests must derive scores from the real
+  `participant_a/b_id` slots, never hardcode `{a: 5, b: 1}` for a fixed
+  winner (INVALID_SCORE flake).
 - Obscura can report layout metrics (offsetWidth/scrollWidth) that disagree
   with its own paint for small pixel-font buttons ("CANCELAR" clipped with
   generous padding). Don't trust engine measurements for layout bugs; prefer
