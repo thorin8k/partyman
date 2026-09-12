@@ -12,8 +12,7 @@ Plataforma web para gestionar LAN parties en red local. Diseñada para grupos pe
 
 ## Requisitos
 
-- **Bun** 1.4.0 o superior
-- **Node.js** 22.x (solo para desarrollo)
+- **Bun** 1.4.0 o superior (runtime, bundler, tests y tipos; no hace falta Node.js)
 - **SQLite** (incluido en Bun)
 - **Docker** (opcional, para despliegue)
 
@@ -30,14 +29,16 @@ bun install
 
 ## Ejecución
 
+Un solo proceso sirve API y frontend en el mismo puerto (sin cliente aparte).
+
 ### Desarrollo
 
 ```bash
 # Servidor con hot reload
 bun run dev
 
-# En otra terminal, cliente con hot reload
-bun run dev:client
+# Tras proxy o con el host check de Bun dando guerra
+bun run dev:proxy
 ```
 
 El servidor estará disponible en `http://localhost:8400`
@@ -58,13 +59,13 @@ bun run start
 # Build de la imagen
 docker build -t partyman .
 
-# Ejecutar con volúmenes persistentes
+# Ejecutar con volúmenes persistentes (PUBLIC_ORIGIN = URL que abre el navegador)
 docker run -d \
   --name partyman \
   --network host \
   -v "$PWD/data:/data" \
   -v "$PWD/uploads:/uploads" \
-  -e PUBLIC_ORIGIN=http://127.0.0.1:8400 \
+  -e PUBLIC_ORIGIN=http://192.168.1.100:8400 \
   -e ADMIN_USERNAME=admin \
   -e ADMIN_PASSWORD_HASH=<bcrypt-hash> \
   partyman
@@ -89,7 +90,11 @@ docker run -d \
 | `DATABASE_PATH` | Ruta de la base de datos | `/data/partyman.sqlite3` |
 | `UPLOADS_PATH` | Ruta de archivos subidos | `/uploads` |
 | `BACKUP_DIR` | Directorio de backups | `/data/backups` |
-| `STEAM_API_KEY` | API key de Steam (opcional) | - |
+| `BACKUP_KEEP` | Copias a conservar | `20` |
+| `JOIN_PASSWORD` | Contraseña para entrar a la party (vacía = libre) | - |
+| `STEAM_API_KEY` | API key de Steam (sin ella, nombres locales) | - |
+| `STEAM_ENABLED` | `false` desactiva el login Steam | `true` |
+| `WIFI_SSID` / `WIFI_PASSWORD` | Muestra QR WiFi en el display | - |
 | `COOKIE_SECURE` | Cookies solo HTTPS | `false` |
 
 ### Generar hash de contraseña
@@ -104,53 +109,50 @@ bun -e "console.log(await Bun.password.hash('tu-password', { algorithm: 'bcrypt'
 ```
 partyman/
 ├── src/
-│   ├── server/          # Backend (Bun)
-│   │   ├── auth/        # Autenticación y sesiones
-│   │   ├── db/          # Base de datos y migraciones
-│   │   ├── http/        # Router y utilidades HTTP
-│   │   ├── routes/      # Endpoints API
-│   │   ├── app.ts       # Configuración de la app
-│   │   └── index.ts     # Entry point
-│   ├── client/          # Frontend (React)
-│   │   ├── components/  # Componentes React
-│   │   ├── pages/       # Páginas
-│   │   ├── main.tsx     # Entry point
-│   │   └── routes.tsx   # Rutas del cliente
-│   └── shared/          # Código compartido
-│       └── contracts/   # Tipos compartidos
-├── migrations/          # Migraciones SQL
-├── tests/               # Tests
+│   ├── backend.ts           # Entry point (serve API + frontend, mismo puerto)
+│   ├── backend/             # Backend (Bun, sin frameworks)
+│   │   ├── auth/            # Steam, sesiones, guards, CSRF
+│   │   ├── db/              # Conexión y runner de migraciones
+│   │   ├── http/            # IDs y utilidades HTTP
+│   │   ├── ops/             # Backups
+│   │   ├── parties/         # Servicio de parties
+│   │   ├── scoring/         # Puntos, logros, ranking
+│   │   ├── tournaments/     # Bracket single-elimination
+│   │   ├── routes/          # Endpoints API
+│   │   └── middleware/      # CSRF global, rate limit, cabeceras
+│   ├── frontend/            # React + wouter (se empaqueta al arrancar)
+│   │   ├── components/      # AuthContext, ConfirmDialog, listRow, apiError…
+│   │   └── pages/           # Dashboard, admin/*, tournaments/*, public/*…
+│   ├── shared/              # Contratos API compartidos
+│   └── public/              # CSS, fuentes, estáticos
+├── migrations/          # Migraciones SQL (orden numérico)
+├── tests/               # Bun test por dominio
+├── scripts/             # qa-e2e.ts y utilidades
 ├── specs/               # Especificaciones del proyecto
+├── docs/                # operations.md, qa-plan.md
 ├── AGENTS.md            # Guía para agentes IA
 └── package.json
 ```
 
 ## API Endpoints
 
-### Públicos
+Contrato en `specs/README.md` (errores `{ error: { code, message } }`, CSRF
+double-submit en writes con cookie, 401/403/404/409/422). Resumen por dominio:
 
-- `GET /api/health` - Health check
-- `GET /api/ready` - Readiness check
-- `GET /api/auth/config` - Configuración pública
-
-### Autenticación
-
-- `GET /auth/steam` - Iniciar login con Steam
-- `GET /auth/steam/callback` - Callback de Steam
-- `POST /auth/admin/login` - Login de administrador
-- `POST /auth/logout` - Logout
-
-### Participantes
-
-- `GET /api/me` - Usuario actual
-- `GET /api/participants/me` - Perfil del participante
-
-### Parties (requiere admin)
-
-- `POST /api/admin/parties` - Crear party
-- `PATCH /api/admin/parties/:id` - Actualizar party
-- `POST /api/admin/parties/:id/activate` - Activar party
-- `POST /api/admin/parties/:id/finish` - Finalizar party
+- Públicos: `GET /api/health`, `GET /api/ready`, `GET /api/auth/config`,
+  `GET /api/public/state`, `GET /display` (pantalla).
+- Auth: `GET /auth/steam`, `GET /auth/steam/callback`,
+  `POST /auth/admin/login`, `POST /auth/logout`, `GET /api/me`.
+- Asistencia: `POST /api/participants/join` (con `JOIN_PASSWORD` si aplica).
+- Parties (admin): crear, activar, `finish`, archivar, borrar, wizard
+  `POST /api/admin/parties/:id/close`, participantes y roles.
+- Juegos: catálogo + búsqueda SGDB (`/api/games-search/*`).
+- Propuestas: actividades y torneos (`/api/*-proposals`, votos, aprobar).
+- Torneos: crear, unirse/salir, arrancar, `matches/:id/report`,
+  disputas (`/api/disputes/:id/vote`), confirm admin.
+- Puntos: leaderboards, historial, reglas, logros, premios, correcciones,
+  cambio de contraseña (`POST /api/admin/password`).
+- Backups: crear, listar, descargar, restaurar (`/api/admin/backups/*`).
 
 ## Tests
 
@@ -158,14 +160,11 @@ partyman/
 # Ejecutar todos los tests
 bun test
 
-# Tests con cobertura
-bun test --coverage
+# E2E contra servidor desechable (41 checks del plan QA)
+bun scripts/qa-e2e.ts
 
 # Typecheck
 bun run typecheck
-
-# Lint
-bun run lint
 ```
 
 ## Contribuir
@@ -176,7 +175,7 @@ bun run lint
 2. Revisa la tarea asignada en `specs/tasks/`
 3. Implementa siguiendo las convenciones del código
 4. Añade tests para nueva funcionalidad
-5. Asegúrate de que `bun run test`, `bun run typecheck` y `bun run lint` pasen
+5. Asegúrate de que `bun test`, `bun run typecheck` y `bun run build` pasen
 6. Crea un PR con descripción clara
 
 ### Convenciones
@@ -201,19 +200,14 @@ refactor: simplificar lógica de sesiones
 
 ### Tareas
 
-El proyecto está dividido en tareas independientes (ver `specs/tasks/`):
+El proyecto está dividido en tareas (ver `specs/tasks/`):
 
-- **001**: Bootstrap (completado)
-- **002**: Autenticación (completado)
-- **003**: Gestión de parties
-- **004**: Pantalla pública
-- **005**: Juegos y planificación
-- **006**: Torneos
-- **007**: Puntuaciones e historial
-- **008**: Backups y operaciones
-- **009**: Integración final
+- **001–009**: MVP (bootstrap, auth, parties, display, juegos, torneos, puntos, backups, integración)
+- **010–014**: Polish, seguridad, UX y modo autónomo
+- **015–019**: Formatos de torneo, check-in, porras, más logros, display rotativo
 
-Cada tarea puede implementarse en paralelo siguiendo su especificación.
+Cada tarea declara goal, acceptance criteria, ficheros y non-goals en su
+fichero, con sección `Estado actual`.
 
 ## Arquitectura
 

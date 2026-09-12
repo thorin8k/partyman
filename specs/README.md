@@ -87,7 +87,7 @@ These contracts should stay stable while tasks are developed in parallel:
 ## Environment and Volumes
 
 - Required: `PORT` (default `8400`), `HOST` (default `0.0.0.0`), `DATABASE_PATH` (default `/data/partyman.sqlite3`), `UPLOADS_PATH` (default `/uploads`), and `PUBLIC_ORIGIN` (the browser-facing origin used by Steam callbacks).
-- Optional: `BACKUP_DIR` (default `/data/backups`), `STEAM_API_KEY`, and `COOKIE_SECURE` (default `false` for HTTP LAN use). On the first startup, `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` must both be provided to provision the administrator; they are not needed on later starts.
+- Optional: `BACKUP_DIR` (default `/data/backups`), `BACKUP_KEEP` (default `20`), `JOIN_PASSWORD` (empty = open join), `STEAM_API_KEY`, `STEAM_ENABLED` (default `true`), `WIFI_SSID` / `WIFI_PASSWORD`, and `COOKIE_SECURE` (default `false` for HTTP LAN use). On the first startup, `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` must both be provided to provision the administrator; they are not needed on later starts (rotation is via `POST /api/admin/password`).
 - Mount the host's persistent directories to `/data` and `/uploads`. Never store the production database or generated uploads only in the container layer.
 
 ## Cross-domain Database Rules
@@ -118,7 +118,7 @@ Reserved migrations:
 | 008 | `008_operations.sql` |
 | 009 | `009_integration.sql` |
 
-Route registration follows `src/server/routes/{domain}.ts`, and each task registers only its own module. Frontend pages follow `src/client/pages/{domain}/`; shared DTO types live in `src/shared/contracts/{domain}.ts`. A final integration pass wires routes and verifies the public snapshot across domains.
+Route registration follows `src/backend/routes/{domain}.ts`, and each task registers only its own module. Frontend pages follow `src/frontend/pages/{domain}/`; shared DTO types live in `src/shared/contracts/{domain}.ts`. A final integration pass wires routes and verifies the public snapshot across domains.
 
 Recommended sequence:
 
