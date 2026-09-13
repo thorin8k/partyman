@@ -84,4 +84,9 @@ Un torneo declara su formato al crearse: `single` (actual) o `single_third`
 
 ## Estado actual
 
-- Pendiente de implementar.
+- Implementado y commiteado (`be6ddb3`): migración 016, validación 422/409,
+  PATCH upcoming, formato en propuestas + override al aprobar, tercer puesto
+  idempotente con round 0, finish sin bloquearlo, etiquetas y orden en las
+  3 vistas, badge 3ER PUESTO, tests (137 verdes 3× + build).
+- Verificado en vivo: tercer puesto P3 vs P1 tras semis, SEMIFINAL → FINAL
+  → TERCER PUESTO.
