@@ -17,6 +17,7 @@ How to work with the specifications in this directory. The root `AGENTS.md` cove
 - Every live task keeps an `Estado actual` section: done vs. pending, with file references.
 - A new task states: goal, acceptance criteria, files, and explicit non-goals.
 - Closing a task means: acceptance criteria pass, focused tests exist, the app builds, and found debt is recorded (not hidden).
+- Tasks touching UI list their surfaces up front (forms, cards, details, views) and close only after each surface is verified: `bun scripts/qa-ui.ts` green (extend it with the new surface when the generic invariants don't cover it) plus screenshots kept for human review.
 
 ## Parallelism
 

@@ -193,12 +193,9 @@ export function AdminTournaments() {
                   <div style={rowHead}>
                     <div style={rowMain}>
                       <h3 style={rowTitle}>{t.name}</h3>
-                      <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>{t.gameTitleSnapshot} · Max {t.maxParticipants}</p>
+                      <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>{t.gameTitleSnapshot} · Max {t.maxParticipants}{(t.format ?? 'single') === 'single_third' ? ' · 3er puesto' : ''}</p>
                     </div>
                     <span style={badge(statusColors[t.status])}>{statusLabels[t.status]}</span>
-                    {(t.format ?? 'single') === 'single_third' && (
-                      <span style={badge('var(--neon-cyan)')}>3ER PUESTO</span>
-                    )}
                   </div>
                   <div style={rowFooter}>
                     {t.status === 'upcoming' && <button onClick={() => handleAction(t.id, 'start')} style={rowBtn}>INICIAR</button>}

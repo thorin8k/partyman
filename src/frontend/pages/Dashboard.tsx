@@ -464,7 +464,7 @@ export function Dashboard() {
                           <div style={{ minWidth: 0 }}>
                             <h3 style={rowTitle}>{t.name}</h3>
                             <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>
-                              {t.gameTitleSnapshot} · {t.participantCount || 0}/{t.maxParticipants} participantes
+                              {t.gameTitleSnapshot} · {t.participantCount || 0}/{t.maxParticipants} participantes{(t.format ?? 'single') === 'single_third' ? ' · 3er puesto' : ''}
                             </p>
                             {t.participants && t.participants.length > 0 && (
                               <p style={{ margin: '0.25rem 0 0', color: 'var(--text-dim)', fontSize: '0.7rem' }}>
@@ -476,9 +476,6 @@ export function Dashboard() {
                         <span style={badge(statusInfo.color)}>
                           {statusInfo.label}
                         </span>
-                        {(t.format ?? 'single') === 'single_third' && (
-                          <span style={badge('var(--neon-cyan)')}>3ER PUESTO</span>
-                        )}
                       </div>
                       <div style={rowFooter}>
                         {(t.status === 'in_progress' || t.status === 'finished') && (

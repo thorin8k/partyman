@@ -83,8 +83,15 @@ Happy path (assert status codes):
 
 ## 4. Frontend validation (Obscura MCP browser)
 
-Prerequisites: `~/.local/bin/obscura` installed, MCP server configured in
-`opencode.json` with `--allow-private-network`. Start the app (§2), then:
+Automated first: `bun scripts/qa-ui.ts [--keep]`. It boots a disposable
+server, seeds data, drives the real UI through Obscura MCP (same stdio
+transport the agent uses) and asserts: admin login via form, card layout
+invariants (nothing escapes its card, `space-between` rows flush right,
+footers fit or scroll) at full width and simulating narrow (330px),
+participant REPORTAR end to end, and zero console errors on every page.
+Screenshots land in the temp dir (`shots/`).
+
+Then, manually with MCP tools:
 
 - Static pages: `/`, `/login`, `/admin/login`, `/display` (empty state and
   with an active party). Screenshot each; Spanish copy, retro font
@@ -98,10 +105,12 @@ Prerequisites: `~/.local/bin/obscura` installed, MCP server configured in
 - After every mutation: `browser_wait_for_text` for the expected feedback
   (toasts/alerts), then `browser_console_messages` (no errors) and, when
   debugging, `browser_network_requests`.
-- Viewport: MCP defaults to 1280×720. Mobile 360px stays a manual check on a
-  real device (§5 dry-run); only if emulation is ever needed, it is possible
-  via `obscura serve` + `playwright-core` CDP — keep that tooling out of the
-  repo for now (decision 2026-09-10).
+- Every task touching UI lists its surfaces up front (specs/AGENTS.md
+  guardrail) and extends `qa-ui.ts` when the generic invariants don't cover
+  the new surface.
+- Viewport: MCP has no emulation; `qa-ui.ts` verifies narrow by constraining
+  cards to 330px and measuring. Mobile 360px stays a manual check on a real
+  device (§5 dry-run).
 
 ## 5. Manual release gates (from specs/tasks/009-integration.md)
 

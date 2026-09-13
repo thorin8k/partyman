@@ -347,6 +347,15 @@ ul, ol {
   border-radius: var(--radius);
   margin-bottom: 0.5rem;
   transition: all 0.2s ease;
+  min-width: 0;
+}
+
+/* Guardrail de listados: ningún texto de card empuja badges ni rompe la
+   card en estrecho. No afecta a badges/botones (llevan white-space: nowrap). */
+.list-item p,
+.list-item h3 {
+  overflow-wrap: break-word;
+  min-width: 0;
 }
 
 .list-item:hover {

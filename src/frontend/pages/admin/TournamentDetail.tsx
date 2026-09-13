@@ -124,26 +124,20 @@ export function TournamentDetail() {
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <h2>{tournament.name}</h2>
-          <span style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <span style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
             {(tournament.status === 'upcoming' || tournament.status === 'draft') ? (
               <select value={tournament.format ?? 'single'} onChange={e => handleChangeFormat(e.target.value)} aria-label="Formato" style={rowBtn}>
                 <option value="single">Simple</option>
                 <option value="single_third">Simple + 3er puesto</option>
               </select>
-            ) : (
-              (tournament.format ?? 'single') === 'single_third' && (
-                <span style={{ padding: '0.25rem 0.75rem', border: '1px solid var(--neon-cyan)', color: 'var(--neon-cyan)', fontFamily: 'var(--font-display)', fontSize: '0.5rem' }}>
-                  3ER PUESTO
-                </span>
-              )
-            )}
+            ) : null}
             <span style={{ padding: '0.25rem 0.75rem', border: '1px solid var(--neon-cyan)', color: 'var(--neon-cyan)', fontFamily: 'var(--font-display)', fontSize: '0.5rem' }}>
               {STATUS_ES[tournament.status] || tournament.status}
             </span>
           </span>
         </div>
         <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>
-          {tournament.gameTitleSnapshot} · Max {tournament.maxParticipants} · {tournament.participants.length} inscritos
+          {tournament.gameTitleSnapshot} · Max {tournament.maxParticipants} · {tournament.participants.length} inscritos{(tournament.format ?? 'single') === 'single_third' ? ' · 3er puesto' : ''}
         </p>
         {tournament.status === 'finished' && (() => {
           const maxRound = Math.max(...tournament.matches.map(m => m.round));
