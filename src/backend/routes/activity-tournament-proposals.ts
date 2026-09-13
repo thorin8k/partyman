@@ -28,14 +28,15 @@ export function approveActivityProposal(db: Database, id: number): number | null
   return activityId;
 }
 
-export function approveTournamentProposal(db: Database, id: number): number | null {
+export function approveTournamentProposal(db: Database, id: number, formatOverride?: string): number | null {
   const proposal = db.query<any, [number]>("SELECT * FROM tournament_proposals WHERE id = ?").get(id);
   if (!proposal) return null;
   const game = db.query<{ title: string }, [number]>("SELECT title FROM games WHERE id = ?").get(proposal.game_id)!;
+  const format = formatOverride ?? proposal.format ?? "single";
   let tournamentId: number | null = null;
   db.transaction(() => {
-    const res = db.run("INSERT INTO tournaments (party_id, game_id, game_title_snapshot, name, max_participants, status) VALUES (?, ?, ?, ?, ?, 'upcoming')",
-      [proposal.party_id, proposal.game_id, game.title, proposal.name, proposal.max_participants]);
+    const res = db.run("INSERT INTO tournaments (party_id, game_id, game_title_snapshot, name, format, max_participants, status) VALUES (?, ?, ?, ?, ?, ?, 'upcoming')",
+      [proposal.party_id, proposal.game_id, game.title, proposal.name, format, proposal.max_participants]);
     tournamentId = Number(res.lastInsertRowid);
     try { db.run("DELETE FROM tournament_proposal_votes WHERE proposal_id = ?", [id]); } catch { /* pre-014 DBs */ }
     db.run("DELETE FROM tournament_proposals WHERE id = ?", [id]);
@@ -227,6 +228,9 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     if (String(body.name).trim().length === 0 || String(body.name).length > 120) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["name must be 1-120 characters"] }, { status: 422 });
     const maxParticipants = body.maxParticipants ?? 16;
     if (!Number.isInteger(maxParticipants) || maxParticipants < 2 || maxParticipants > 16) return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["maxParticipants must be 2-16"] }, { status: 422 });
+    const format = body.format ?? "single";
+    if (format !== "single" && format !== "single_third" && format !== "double") return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["format must be single, single_third or double"] }, { status: 422 });
+    if (format === "double") return Response.json({ error: { code: "FORMAT_NOT_SUPPORTED", message: "FORMAT_NOT_SUPPORTED" } }, { status: 409 });
     const title = body.gameName.trim().slice(0, 120);
     let gameId: number;
     const existing = db.query<{ id: number }, [string]>("SELECT id FROM games WHERE LOWER(title) = LOWER(?) LIMIT 1").get(title);
@@ -237,8 +241,8 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     }
     let proposalId: number;
     try {
-      const res = db.run("INSERT INTO tournament_proposals (party_id, game_id, name, max_participants, created_by_participant_id) VALUES (?, ?, ?, ?, ?)",
-        [activeParty.id, gameId, body.name.trim(), maxParticipants, ctx.session.subjectId]);
+      const res = db.run("INSERT INTO tournament_proposals (party_id, game_id, name, format, max_participants, created_by_participant_id) VALUES (?, ?, ?, ?, ?, ?)",
+        [activeParty.id, gameId, body.name.trim(), format, maxParticipants, ctx.session.subjectId]);
       proposalId = Number(res.lastInsertRowid);
     } catch {
       return Response.json({ error: { code: "DUPLICATE_PROPOSAL", message: "DUPLICATE_PROPOSAL" } }, { status: 409 });
@@ -257,6 +261,7 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     return Response.json({
       proposals: rows.map((r: any) => ({
         id: r.id, gameId: r.game_id, gameTitle: r.game_title, gameImage: r.image_url, name: r.name,
+        format: r.format ?? "single",
         maxParticipants: r.max_participants, createdBy: r.created_by_participant_id,
         voteCount: voteCount("tournament_proposal_votes", r.id), voted: hasVoted("tournament_proposal_votes", r.id, ctx.session.subjectId),
       })),
@@ -283,7 +288,15 @@ export function createActivityTournamentProposalRoutes(db: Database) {
     if (auth instanceof Response) return auth;
     const id = extractId(request.url, "/api/admin/tournament-proposals/");
     if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
-    const created = approveTournamentProposal(db, id);
+    const body = await request.json().catch(() => null);
+    const formatOverride = body?.format;
+    if (formatOverride !== undefined && formatOverride !== "single" && formatOverride !== "single_third" && formatOverride !== "double") {
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["format must be single, single_third or double"] }, { status: 422 });
+    }
+    if (formatOverride === "double") {
+      return Response.json({ error: { code: "FORMAT_NOT_SUPPORTED", message: "FORMAT_NOT_SUPPORTED" } }, { status: 409 });
+    }
+    const created = approveTournamentProposal(db, id, formatOverride);
     if (!created) return Response.json({ error: { code: "NOT_FOUND", message: "NOT_FOUND" } }, { status: 404 });
     const started = maybeAutoStartTournament(db, created);
     console.log("[proposals] POST /api/admin/tournament-proposals/" + id + "/approve → tournament#" + created);

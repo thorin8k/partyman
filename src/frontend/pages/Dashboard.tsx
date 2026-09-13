@@ -33,6 +33,7 @@ interface Tournament {
   gameTitleSnapshot: string;
   gameImage: string | null;
   status: string;
+  format?: string;
   maxParticipants: number;
   participantCount: number;
   participants: Array<{ id: number; displayName: string; seed: number }>;
@@ -120,6 +121,7 @@ function ProposeTournamentForm({ onSuccess }: { onSuccess: (msg: string) => void
   const [q, setQ] = useState(''); const [results, setResults] = useState<any[]>([]); const [searching, setSearching] = useState(false);
   const [selectedGame, setSelectedGame] = useState<any | null>(null);
   const [name, setName] = useState(''); const [maxParticipants, setMaxParticipants] = useState('8');
+  const [format, setFormat] = useState('single');
   const [localError, setLocalError] = useState<string | null>(null);
   const handleSearch = async () => { if (!q.trim()) return; setSearching(true); const r = await fetch(`/api/games/search?q=${encodeURIComponent(q)}`); if (r.ok) setResults((await r.json()).games || []); setSearching(false); };
   const handleSubmit = async () => {
@@ -129,7 +131,7 @@ function ProposeTournamentForm({ onSuccess }: { onSuccess: (msg: string) => void
     const mp = parseInt(maxParticipants) || 0;
     if (mp < 2 || mp > 16) { setLocalError('Máximo entre 2 y 16 participantes.'); return; }
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    const res = await fetch('/api/tournament-proposals', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify({ gameName: selectedGame.name, imageUrl: selectedGame.imageUrl, name: name.trim(), maxParticipants: mp }) });
+    const res = await fetch('/api/tournament-proposals', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify({ gameName: selectedGame.name, imageUrl: selectedGame.imageUrl, name: name.trim(), maxParticipants: mp, format }) });
     if (res.ok) { onSuccess('Torneo propuesto, pendiente de aprobación.'); setSelectedGame(null); setName(''); setQ(''); setResults([]); }
     else { const d = await res.json().catch(() => ({})); setLocalError(humanError(d.error?.code || d.error)); }
   };
@@ -155,6 +157,10 @@ function ProposeTournamentForm({ onSuccess }: { onSuccess: (msg: string) => void
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
         <input placeholder="Nombre del torneo *" value={name} onChange={e => setName(e.target.value)} maxLength={120} />
         <input type="number" min="2" max="16" placeholder="Max participantes (2-16)" value={maxParticipants} onChange={e => setMaxParticipants(e.target.value)} />
+        <select value={format} onChange={e => setFormat(e.target.value)} aria-label="Formato">
+          <option value="single">Simple</option>
+          <option value="single_third">Simple + 3er puesto</option>
+        </select>
         <button onClick={handleSubmit} className="primary" style={touchBtn}>PROPONER TORNEO</button>
       </div>
     </div>
@@ -470,6 +476,9 @@ export function Dashboard() {
                         <span style={badge(statusInfo.color)}>
                           {statusInfo.label}
                         </span>
+                        {(t.format ?? 'single') === 'single_third' && (
+                          <span style={badge('var(--neon-cyan)')}>3ER PUESTO</span>
+                        )}
                       </div>
                       <div style={rowFooter}>
                         {(t.status === 'in_progress' || t.status === 'finished') && (

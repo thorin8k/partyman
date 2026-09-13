@@ -204,9 +204,11 @@ export function PublicDisplay() {
                       </div>
                       {t.matches && t.matches.length > 0 && (() => {
                         const rounds = [...new Set(t.matches.map(m => m.round))].sort((a, b) => a - b);
+                        const orderedRounds = [...rounds.filter(r => r !== 0), ...(rounds.includes(0) ? [0] : [])];
                         const max = Math.max(...rounds);
                         // ponytail: etiquetas relativas a la final, como en las páginas de torneo.
                         const roundText = (round: number) => {
+                          if (round === 0) return 'TERCER PUESTO';
                           const fromEnd = max - round;
                           if (fromEnd === 0) return 'FINAL';
                           if (fromEnd === 1) return 'SEMIFINAL';
@@ -215,7 +217,7 @@ export function PublicDisplay() {
                         };
                         return (
                           <div style={{ marginTop: '0.75rem', display: 'flex', gap: '1.5rem', overflowX: 'auto' }}>
-                            {rounds.map(round => (
+                            {orderedRounds.map(round => (
                               <div key={round} style={{ minWidth: '160px', flex: '0 0 auto', display: 'flex', flexDirection: 'column' }}>
                                 <div style={{ fontSize: '0.625rem', color: 'var(--neon-cyan)', textAlign: 'center', marginBottom: '0.25rem', fontFamily: 'var(--font-display)' }}>{roundText(round)}</div>
                                 <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, gap: '0.5rem' }}>

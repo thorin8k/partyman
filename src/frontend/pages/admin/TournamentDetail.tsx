@@ -85,9 +85,11 @@ export function TournamentDetail() {
   if (!tournament) return <div className="container"><div className="loading">Cargando torneo...</div></div>;
 
   const rounds = [...new Set(tournament.matches.map(m => m.round))].sort((a, b) => a - b);
-  const TOTAL_ROUNDS = rounds.length;
+  const orderedRounds = [...rounds.filter(r => r !== 0), ...(rounds.includes(0) ? [0] : [])];
+  const TOTAL_ROUNDS = rounds.filter(r => r !== 0).length;
   // ponytail: etiquetas relativas a la final (funciona con 2-16 jugadores).
   const roundLabel = (round: number) => {
+    if (round === 0) return 'TERCER PUESTO';
     const fromEnd = TOTAL_ROUNDS - round;
     if (fromEnd === 0) return 'FINAL';
     if (fromEnd === 1) return 'SEMIFINAL';
@@ -155,7 +157,7 @@ export function TournamentDetail() {
         <div className="card" style={{ marginTop: '1rem', overflow: 'hidden' }}>
           <h2>BRACKET</h2>
           <div style={{ display: 'flex', gap: '2rem', overflowX: 'auto', marginTop: '1rem', padding: '1rem 0', alignItems: 'stretch' }}>
-            {rounds.map(round => {
+            {orderedRounds.map(round => {
               const roundMatches = tournament.matches.filter(m => m.round === round);
               const isLastRound = round === Math.max(...rounds);
               return (

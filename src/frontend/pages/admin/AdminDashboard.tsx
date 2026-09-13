@@ -22,6 +22,7 @@ export function AdminDashboard() {
   const [showForm, setShowForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [propFormats, setPropFormats] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (!loading && !user) navigate('/admin/login');
@@ -138,10 +139,14 @@ export function AdminDashboard() {
                 <div key={p.id} className="list-item" style={rowColumn}>
                   <div style={rowMain}>
                     <h3 style={{ ...rowTitle, fontSize: '0.875rem' }}>{p.name}</h3>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle} · Max {p.maxParticipants}</p>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle} · Max {p.maxParticipants}{(p.format ?? 'single') === 'single_third' ? ' · 3er puesto' : ''}</p>
                   </div>
                   <div style={rowFooter}>
-                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; const res = await fetch(`/api/admin/tournament-proposals/${p.id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } }); if (res.ok) fetchProposals(); }} className="primary" style={rowBtn}>APROBAR</button>
+                    <select value={propFormats[p.id] ?? p.format ?? 'single'} onChange={e => setPropFormats({ ...propFormats, [p.id]: e.target.value })} aria-label="Formato" style={rowBtn}>
+                      <option value="single">Simple</option>
+                      <option value="single_third">Simple + 3er puesto</option>
+                    </select>
+                    <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; const res = await fetch(`/api/admin/tournament-proposals/${p.id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify({ format: propFormats[p.id] ?? p.format ?? 'single' }) }); if (res.ok) fetchProposals(); }} className="primary" style={rowBtn}>APROBAR</button>
                     <button onClick={async () => { const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1]; await fetch(`/api/tournament-proposals/${p.id}`, { method: 'DELETE', headers: { 'X-Partyman-CSRF': csrf || '' } }); fetchProposals(); }} style={rowBtn}>RECHAZAR</button>
                   </div>
                 </div>

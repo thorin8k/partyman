@@ -10,6 +10,7 @@ interface Tournament {
   name: string;
   gameTitleSnapshot: string;
   status: string;
+  format?: string;
   maxParticipants: number;
 }
 
@@ -25,7 +26,7 @@ export function AdminTournaments() {
   const [parties, setParties] = useState<any[]>([]);
   const [partyId, setPartyId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: '', gameId: '', maxParticipants: '16' });
+  const [form, setForm] = useState({ name: '', gameId: '', maxParticipants: '16', format: 'single' });
 
   useEffect(() => {
     if (!loading && !user) navigate('/admin/login');
@@ -86,9 +87,9 @@ export function AdminTournaments() {
     const res = await fetch('/api/admin/tournaments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
-      body: JSON.stringify({ partyId: parseInt(partyId), gameId: parseInt(form.gameId), name: form.name, maxParticipants: parseInt(form.maxParticipants) }),
+      body: JSON.stringify({ partyId: parseInt(partyId), gameId: parseInt(form.gameId), name: form.name, maxParticipants: parseInt(form.maxParticipants), format: form.format }),
     });
-    if (res.ok) { setShowForm(false); setForm({ name: '', gameId: '', maxParticipants: '16' }); fetchTournaments(partyId); }
+    if (res.ok) { setShowForm(false); setForm({ name: '', gameId: '', maxParticipants: '16', format: 'single' }); fetchTournaments(partyId); }
     else { const err = await res.json(); setError(apiError(err)); }
   };
 
@@ -160,6 +161,12 @@ export function AdminTournaments() {
               </select>
             </div>
             <div className="form-group"><label>MÁX. PARTICIPANTES</label><input type="number" min="2" max="16" value={form.maxParticipants} onChange={e => setForm({...form, maxParticipants: e.target.value})} /></div>
+            <div className="form-group"><label>FORMATO</label>
+              <select value={form.format} onChange={e => setForm({...form, format: e.target.value})}>
+                <option value="single">Simple</option>
+                <option value="single_third">Simple + 3er puesto</option>
+              </select>
+            </div>
             <div style={{ display: 'flex', gap: '1rem' }}>
               <button type="submit" className="primary">CREAR</button>
               <button type="button" onClick={() => setShowForm(false)}>CANCELAR</button>
@@ -184,6 +191,9 @@ export function AdminTournaments() {
                       <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>{t.gameTitleSnapshot} · Max {t.maxParticipants}</p>
                     </div>
                     <span style={badge(statusColors[t.status])}>{statusLabels[t.status]}</span>
+                    {(t.format ?? 'single') === 'single_third' && (
+                      <span style={badge('var(--neon-cyan)')}>3ER PUESTO</span>
+                    )}
                   </div>
                   <div style={rowFooter}>
                     {t.status === 'upcoming' && <button onClick={() => handleAction(t.id, 'start')} style={rowBtn}>INICIAR</button>}

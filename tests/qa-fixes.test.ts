@@ -15,7 +15,7 @@ const migrationsDir = join(import.meta.dir, "..", "migrations");
 
 async function fullSchema(db: Database) {
   db.exec("CREATE TABLE IF NOT EXISTS migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)");
-  const files = ["001_core.sql", "002_auth_participants.sql", "003_parties_audit.sql", "004_public_views.sql", "005_games_planning.sql", "006_tournaments.sql", "007_history_rewards.sql", "008_operations.sql", "010_steam_admin_role.sql", "011_activity_tournament_proposals.sql", "014_autonomous.sql", "015_optional_scores.sql"];
+  const files = ["001_core.sql", "002_auth_participants.sql", "003_parties_audit.sql", "004_public_views.sql", "005_games_planning.sql", "006_tournaments.sql", "007_history_rewards.sql", "008_operations.sql", "010_steam_admin_role.sql", "011_activity_tournament_proposals.sql", "014_autonomous.sql", "015_optional_scores.sql", "016_tournament_formats.sql"];
   for (const file of files) db.exec(await Bun.file(join(migrationsDir, file)).text());
 }
 
@@ -420,6 +420,84 @@ describe("qa fixes", () => {
       new Request(`http://localhost/api/admin/matches/${m3.id}/confirm`, post(adminToken, { winnerId: m3.b }))
     );
     expect(adm.status).toBe(200);
+  });
+
+  it("validates tournament format on create, proposal and PATCH", async () => {
+    const routes = createTournamentRoutes(db);
+    const propRoutes = createActivityTournamentProposalRoutes(db);
+    const bad = await routes["/api/admin/tournaments"].POST(
+      new Request("http://localhost/api/admin/tournaments", post(adminToken, { partyId: activePartyId, gameId, name: "BadFmt", format: "double" }))
+    );
+    expect(bad.status).toBe(409);
+    const bad2 = await routes["/api/admin/tournaments"].POST(
+      new Request("http://localhost/api/admin/tournaments", post(adminToken, { partyId: activePartyId, gameId, name: "BadFmt2", format: "roundrobin" }))
+    );
+    expect(bad2.status).toBe(422);
+    const okRes = await routes["/api/admin/tournaments"].POST(
+      new Request("http://localhost/api/admin/tournaments", post(adminToken, { partyId: activePartyId, gameId, name: "FmtOk", maxParticipants: 4, format: "single_third" }))
+    );
+    expect(okRes.status).toBe(201);
+    const tourId = (await okRes.json()).tournament.id;
+    expect(db.query<{ format: string }, [number]>("SELECT format FROM tournaments WHERE id = ?").get(tourId)?.format).toBe("single_third");
+    const patchOk = await routes["/api/admin/tournaments/:id/format"].PATCH(
+      new Request(`http://localhost/api/admin/tournaments/${tourId}/format`, { method: "PATCH", headers: { ...cookie(adminToken), "content-type": "application/json" }, body: JSON.stringify({ format: "single" }) })
+    );
+    expect(patchOk.status).toBe(200);
+    expect(db.query<{ format: string }, [number]>("SELECT format FROM tournaments WHERE id = ?").get(tourId)?.format).toBe("single");
+    // La propuesta traslada el formato al aprobar.
+    const pid = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES ('s-fmt-p', 'FP')").lastInsertRowid);
+    db.run("INSERT INTO party_memberships (party_id, participant_id, display_name_snapshot) VALUES (?, ?, 'FP')", [activePartyId, pid]);
+    const pTok = session(db, "participant", pid);
+    const created = await propRoutes["/api/tournament-proposals"].POST(
+      new Request("http://localhost/api/tournament-proposals", post(pTok, { gameName: "Quake", name: "PropFmt", maxParticipants: 4, format: "single_third" }))
+    );
+    expect(created.status).toBe(201);
+    const propId = (await created.json()).proposal.id;
+    const approved = await propRoutes["/api/admin/tournament-proposals/:id/approve"].POST(
+      new Request(`http://localhost/api/admin/tournament-proposals/${propId}/approve`, post(adminToken, {}))
+    );
+    expect(approved.status).toBe(200);
+    const approvedTourId = (await approved.json()).tournamentId;
+    expect(db.query<{ format: string }, [number]>("SELECT format FROM tournaments WHERE id = ?").get(approvedTourId)?.format).toBe("single_third");
+  });
+
+  it("creates a third-place match from semifinal losers without blocking finish", async () => {
+    const routes = createTournamentRoutes(db);
+    const pool: Array<{ pid: number; token: string }> = [];
+    for (let i = 1; i <= 4; i++) {
+      const pid = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES (?, ?)", [`s-3rd-${i}`, `T${i}`]).lastInsertRowid);
+      pool.push({ pid, token: session(db, "participant", pid) });
+    }
+    const tokOf = (pid: number) => pool.find(p => p.pid === pid)!.token;
+    const created = await routes["/api/admin/tournaments"].POST(
+      new Request("http://localhost/api/admin/tournaments", post(adminToken, { partyId: activePartyId, gameId, name: "Tercero", maxParticipants: 4, format: "single_third" }))
+    );
+    const tourId = (await created.json()).tournament.id;
+    for (const p of pool) {
+      await routes["/api/tournaments/:id/join"].POST(new Request(`http://localhost/api/tournaments/${tourId}/join`, post(p.token)));
+    }
+    const r1 = db.query<{ id: number; a: number | null; b: number | null }, [number]>("SELECT id, participant_a_id AS a, participant_b_id AS b FROM matches WHERE tournament_id = ? AND round = 1").all(tourId);
+    expect(r1.length).toBe(2);
+    for (const m of r1) {
+      for (const pid of [m.a!, m.b!]) {
+        await routes["/api/matches/:id/report"].POST(
+          new Request(`http://localhost/api/matches/${m.id}/report`, post(tokOf(pid), { winnerId: m.a, score: { a: 5, b: 2 } }))
+        );
+      }
+    }
+    // Tercer puesto con los dos perdedores (los slot b).
+    const third = db.query<{ id: number; a: number | null; b: number | null; status: string }, [number]>("SELECT id, participant_a_id AS a, participant_b_id AS b, status FROM matches WHERE tournament_id = ? AND round = 0").get(tourId);
+    expect(third).toBeTruthy();
+    expect([third!.a, third!.b].sort()).toEqual([r1[0].b, r1[1].b].sort());
+    // La final cierra el torneo aunque el tercer puesto siga pendiente.
+    const fin = db.query<{ id: number; a: number | null; b: number | null }, [number]>("SELECT id, participant_a_id AS a, participant_b_id AS b FROM matches WHERE tournament_id = ? AND round = 2").get(tourId)!;
+    for (const pid of [fin.a!, fin.b!]) {
+      await routes["/api/matches/:id/report"].POST(
+        new Request(`http://localhost/api/matches/${fin.id}/report`, post(tokOf(pid), { winnerId: fin.a, score: { a: 5, b: 1 } }))
+      );
+    }
+    expect(db.query<{ status: string }, [number]>("SELECT status FROM tournaments WHERE id = ?").get(tourId)?.status).toBe("finished");
+    expect(db.query<{ status: string }, [number]>("SELECT status FROM matches WHERE id = ?").get(third!.id)?.status).toBe("pending");
   });
 
   it("gates party join behind JOIN_PASSWORD when set", async () => {

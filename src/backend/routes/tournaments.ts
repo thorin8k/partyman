@@ -29,6 +29,7 @@ export function createTournamentRoutes(db: Database) {
     "/api/admin/tournaments/:id/cancel": { POST: handleCancel },
     "/api/admin/tournaments/:id/participants": { POST: handleAddParticipant },
     "/api/admin/tournaments/:id/delete": { POST: handleDeleteTournament },
+    "/api/admin/tournaments/:id/format": { PATCH: handleSetFormat },
     "/api/admin/tournaments/:id/fill-bots": { POST: handleFillBots },
     "/api/admin/dev/seed-participants": { POST: handleSeedParticipants },
     "/api/tournaments": { GET: handleGetTournaments },
@@ -71,6 +72,13 @@ export function createTournamentRoutes(db: Database) {
     if (!Number.isInteger(maxParticipants) || maxParticipants < 2 || maxParticipants > 16) {
       return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["maxParticipants must be 2-16"] }, { status: 422 });
     }
+    const format = body.format ?? "single";
+    if (format !== "single" && format !== "single_third" && format !== "double") {
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["format must be single, single_third or double"] }, { status: 422 });
+    }
+    if (format === "double") {
+      return Response.json({ error: { code: "FORMAT_NOT_SUPPORTED", message: "FORMAT_NOT_SUPPORTED" } }, { status: 409 });
+    }
     const game = db.query<{ id: number; title: string; enabled: number }, [number]>("SELECT id, title, enabled FROM games WHERE id = ?").get(body.gameId);
     if (!game || !game.enabled) return Response.json({ error: { code: "GAME_NOT_FOUND", message: "GAME_NOT_FOUND" } }, { status: 404 });
 
@@ -82,8 +90,8 @@ export function createTournamentRoutes(db: Database) {
 
     // Task 014: creation publishes directly (no draft state for new tournaments).
     const result = db.run(
-      "INSERT INTO tournaments (party_id, game_id, game_title_snapshot, activity_id, name, max_participants, status) VALUES (?, ?, ?, ?, ?, ?, 'upcoming')",
-      [body.partyId, body.gameId, game.title, body.activityId ?? null, body.name.trim(), maxParticipants]
+      "INSERT INTO tournaments (party_id, game_id, game_title_snapshot, activity_id, name, format, max_participants, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'upcoming')",
+      [body.partyId, body.gameId, game.title, body.activityId ?? null, body.name.trim(), format, maxParticipants]
     );
     const tournament = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(Number(result.lastInsertRowid))!;
     console.log("[tournaments] POST /api/admin/tournaments → created #" + tournament.id);
@@ -134,6 +142,29 @@ export function createTournamentRoutes(db: Database) {
     db.run("DELETE FROM tournaments WHERE id = ?", [id]);
     console.log("[tournaments] POST /api/admin/tournaments/" + id + "/delete");
     return Response.json({ ok: true });
+  }
+
+  async function handleSetFormat(request: Request): Promise<Response> {
+    const auth = requireAdmin(db, request);
+    if (auth instanceof Response) return auth;
+    const id = getTournamentId(request.url);
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
+    const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
+    if (!t) return Response.json({ error: { code: "TOURNAMENT_NOT_FOUND", message: "TOURNAMENT_NOT_FOUND" } }, { status: 404 });
+    if (t.status !== "upcoming" && t.status !== "draft") {
+      return Response.json({ error: { code: "INVALID_TOURNAMENT_STATE", message: "INVALID_TOURNAMENT_STATE" } }, { status: 409 });
+    }
+    const body = await request.json().catch(() => null);
+    const format = body?.format;
+    if (format !== "single" && format !== "single_third" && format !== "double") {
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["format must be single, single_third or double"] }, { status: 422 });
+    }
+    if (format === "double") {
+      return Response.json({ error: { code: "FORMAT_NOT_SUPPORTED", message: "FORMAT_NOT_SUPPORTED" } }, { status: 409 });
+    }
+    db.run("UPDATE tournaments SET format = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [format, id]);
+    console.log("[tournaments] PATCH /api/admin/tournaments/" + id + "/format →", format);
+    return Response.json({ ok: true, format });
   }
 
   async function handleAddParticipant(request: Request): Promise<Response> {
@@ -633,7 +664,27 @@ export function confirmMatchRow(db: Database, match: MatchRow, winnerId: number,
   db.run("UPDATE matches SET winner_id = ?, score_json = ?, status = 'confirmed', reported_by = COALESCE(?, reported_by), reported_at = COALESCE(reported_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), confirmed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), version = version + 1 WHERE id = ?",
     [winnerId, scoreJson, confirmedBy, match.id]);
   advanceWinner(db, { ...match, winner_id: winnerId });
+  ensureThirdPlace(db, match.tournament_id);
   checkTournamentFinished(db, match.tournament_id);
+}
+
+// single_third: al confirmarse ambas semifinales (con dos jugadores reales)
+// nace el partido por el tercer puesto (round 0). Una sola vez, honorífico.
+function ensureThirdPlace(db: Database, tournamentId: number): void {
+  const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(tournamentId);
+  if (!t || (t.format ?? "single") !== "single_third") return;
+  const existing = db.query<{ n: number }, [number]>("SELECT COUNT(*) AS n FROM matches WHERE tournament_id = ? AND round = 0").get(tournamentId)!;
+  if (existing.n > 0) return;
+  const maxRound = db.query<{ m: number | null }, [number]>("SELECT MAX(round) AS m FROM matches WHERE tournament_id = ? AND round != 0").get(tournamentId)?.m ?? 0;
+  if (maxRound < 2) return;
+  const semis = db.query<MatchRow, [number, number]>(
+    "SELECT * FROM matches WHERE tournament_id = ? AND round = ? AND status = 'confirmed' AND participant_a_id IS NOT NULL AND participant_b_id IS NOT NULL"
+  ).all(tournamentId, maxRound - 1);
+  if (semis.length !== 2) return;
+  const losers = semis.map(s => (s.winner_id === s.participant_a_id ? s.participant_b_id : s.participant_a_id)!);
+  db.run("INSERT INTO matches (tournament_id, round, position, participant_a_id, participant_b_id, status) VALUES (?, 0, 0, ?, ?, 'pending')",
+    [tournamentId, losers[0], losers[1]]);
+  console.log("[tournaments] third-place match created for tournament #" + tournamentId);
 }
 
 // Acuerdo: mismo ganador y puntuaciones compatibles (al menos una ausente
@@ -681,7 +732,8 @@ function advanceWinner(db: Database, match: MatchRow) {
 }
 
 function checkTournamentFinished(db: Database, tournamentId: number) {
-  const pending = db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM matches WHERE tournament_id = ? AND status != 'confirmed'").get(tournamentId)!;
+  // El tercer puesto (round 0) es honorífico: no bloquea el fin.
+  const pending = db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM matches WHERE tournament_id = ? AND round != 0 AND status != 'confirmed'").get(tournamentId)!;
   if (pending.count === 0) {
     db.run("UPDATE tournaments SET status = 'finished', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", [tournamentId]);
     const partyId = db.query<{ party_id: number }, [number]>("SELECT party_id FROM tournaments WHERE id = ?").get(tournamentId)?.party_id;
