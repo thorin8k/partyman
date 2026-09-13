@@ -11,6 +11,7 @@ interface Tournament {
   name: string;
   gameTitleSnapshot: string;
   status: string;
+  format?: string;
   maxParticipants: number;
   participants: Array<{ id: number; displayName: string; seed: number }>;
   matches: Array<{ id: number; round: number; position: number; participantAId: number | null; participantBId: number | null; participantA: string | null; participantB: string | null; winnerId: number | null; winner: string | null; score: { a: number; b: number } | null; status: string }>;
@@ -54,6 +55,16 @@ export function TournamentDetail() {
   const handleFillBots = async () => {
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch(`/api/admin/tournaments/${tournamentId}/fill-bots`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
+    if (!res.ok) { const err = await res.json(); setError(apiError(err)); }
+    fetchTournament();
+  };
+
+  const handleChangeFormat = async (format: string) => {
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    const res = await fetch(`/api/admin/tournaments/${tournamentId}/format`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
+      body: JSON.stringify({ format }),
+    });
     if (!res.ok) { const err = await res.json(); setError(apiError(err)); }
     fetchTournament();
   };
@@ -113,8 +124,22 @@ export function TournamentDetail() {
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <h2>{tournament.name}</h2>
-          <span style={{ padding: '0.25rem 0.75rem', border: '1px solid var(--neon-cyan)', color: 'var(--neon-cyan)', fontFamily: 'var(--font-display)', fontSize: '0.5rem' }}>
-            {STATUS_ES[tournament.status] || tournament.status}
+          <span style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            {(tournament.status === 'upcoming' || tournament.status === 'draft') ? (
+              <select value={tournament.format ?? 'single'} onChange={e => handleChangeFormat(e.target.value)} aria-label="Formato" style={rowBtn}>
+                <option value="single">Simple</option>
+                <option value="single_third">Simple + 3er puesto</option>
+              </select>
+            ) : (
+              (tournament.format ?? 'single') === 'single_third' && (
+                <span style={{ padding: '0.25rem 0.75rem', border: '1px solid var(--neon-cyan)', color: 'var(--neon-cyan)', fontFamily: 'var(--font-display)', fontSize: '0.5rem' }}>
+                  3ER PUESTO
+                </span>
+              )
+            )}
+            <span style={{ padding: '0.25rem 0.75rem', border: '1px solid var(--neon-cyan)', color: 'var(--neon-cyan)', fontFamily: 'var(--font-display)', fontSize: '0.5rem' }}>
+              {STATUS_ES[tournament.status] || tournament.status}
+            </span>
           </span>
         </div>
         <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>

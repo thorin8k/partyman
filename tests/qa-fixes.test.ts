@@ -459,6 +459,17 @@ describe("qa fixes", () => {
     expect(approved.status).toBe(200);
     const approvedTourId = (await approved.json()).tournamentId;
     expect(db.query<{ format: string }, [number]>("SELECT format FROM tournaments WHERE id = ?").get(approvedTourId)?.format).toBe("single_third");
+    // Override del admin al aprobar.
+    const created2 = await propRoutes["/api/tournament-proposals"].POST(
+      new Request("http://localhost/api/tournament-proposals", post(pTok, { gameName: "Quake", name: "PropFmt2", maxParticipants: 4, format: "single_third" }))
+    );
+    const propId2 = (await created2.json()).proposal.id;
+    const approved2 = await propRoutes["/api/admin/tournament-proposals/:id/approve"].POST(
+      new Request(`http://localhost/api/admin/tournament-proposals/${propId2}/approve`, post(adminToken, { format: "single" }))
+    );
+    expect(approved2.status).toBe(200);
+    const approvedTourId2 = (await approved2.json()).tournamentId;
+    expect(db.query<{ format: string }, [number]>("SELECT format FROM tournaments WHERE id = ?").get(approvedTourId2)?.format).toBe("single");
   });
 
   it("creates a third-place match from semifinal losers without blocking finish", async () => {

@@ -27,6 +27,7 @@ export function AdminTournaments() {
   const [partyId, setPartyId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', gameId: '', maxParticipants: '16', format: 'single' });
+  const [propFormats, setPropFormats] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (!loading && !user) navigate('/admin/login');
@@ -55,7 +56,7 @@ export function AdminTournaments() {
 
   const handleApproveProposal = async (id: number) => {
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    const res = await fetch(`/api/admin/tournament-proposals/${id}/approve`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
+    const res = await fetch(`/api/admin/tournament-proposals/${id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' }, body: JSON.stringify({ format: propFormats[id] ?? proposals.find((p: any) => p.id === id)?.format ?? 'single' }) });
     if (res.ok) { fetchProposals(); if (partyId) fetchTournaments(partyId); }
   };
 
@@ -137,9 +138,13 @@ export function AdminTournaments() {
               <div key={p.id} className="list-item" style={rowColumn}>
                 <div style={rowMain}>
                   <h3 style={{ ...rowTitle, fontSize: '0.875rem' }}>{p.name}</h3>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle} · Max {p.maxParticipants}</p>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.gameTitle} · Max {p.maxParticipants}{(p.format ?? 'single') === 'single_third' ? ' · 3er puesto' : ''}</p>
                 </div>
                 <div style={rowFooter}>
+                  <select value={propFormats[p.id] ?? p.format ?? 'single'} onChange={e => setPropFormats({ ...propFormats, [p.id]: e.target.value })} aria-label="Formato" style={rowBtn}>
+                    <option value="single">Simple</option>
+                    <option value="single_third">Simple + 3er puesto</option>
+                  </select>
                   <button onClick={() => handleApproveProposal(p.id)} className="primary" style={rowBtn}>APROBAR</button>
                   <button onClick={() => handleRejectProposal(p.id)} style={rowBtn}>RECHAZAR</button>
                 </div>

@@ -9,6 +9,7 @@ interface Tournament {
   name: string;
   gameTitleSnapshot: string;
   status: string;
+  format?: string;
   maxParticipants: number;
   participants: Array<{ id: number; displayName: string; seed: number }>;
   matches: Array<{ id: number; round: number; position: number; participantAId: number | null; participantBId: number | null; participantA: string | null; participantB: string | null; winnerId: number | null; winner: string | null; score: { a: number; b: number } | null; status: string; disputed?: boolean; reportCount?: number; disputeVotes?: Array<{ participantId: number; displayName: string; winnerId: number }> }>;
@@ -141,7 +142,7 @@ export function ParticipantTournamentDetail() {
       <div className="card">
         <h2>{tournament.name}</h2>
         <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-          {tournament.gameTitleSnapshot} · {STATUS_ES[tournament.status] || tournament.status} · {tournament.participants.length}/{tournament.maxParticipants}
+          {tournament.gameTitleSnapshot} · {STATUS_ES[tournament.status] || tournament.status} · {tournament.participants.length}/{tournament.maxParticipants}{(tournament.format ?? 'single') === 'single_third' ? ' · 3er puesto' : ''}
         </p>
         {tournament.status === 'finished' && (() => {
           const maxRound = Math.max(...tournament.matches.map(m => m.round));
