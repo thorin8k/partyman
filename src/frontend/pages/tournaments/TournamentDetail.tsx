@@ -12,7 +12,7 @@ interface Tournament {
   format?: string;
   maxParticipants: number;
   participants: Array<{ id: number; displayName: string; seed: number }>;
-  matches: Array<{ id: number; round: number; position: number; participantAId: number | null; participantBId: number | null; participantA: string | null; participantB: string | null; winnerId: number | null; winner: string | null; score: { a: number; b: number } | null; status: string; disputed?: boolean; reportCount?: number; disputeVotes?: Array<{ participantId: number; displayName: string; winnerId: number }> }>;
+  matches: Array<{ id: number; round: number; position: number; participantAId: number | null; participantBId: number | null; participantA: string | null; participantB: string | null; winnerId: number | null; winner: string | null; score: { a: number; b: number } | null; status: string; disputed?: boolean; reportCount?: number; reportedByParticipantId?: number | null; reportedWinnerId?: number | null; disputeVotes?: Array<{ participantId: number; displayName: string; winnerId: number }> }>;
 }
 
 export function ParticipantTournamentDetail() {
@@ -76,6 +76,9 @@ export function ParticipantTournamentDetail() {
     if (code === 'PARTICIPANT_ONLY') return 'Como admin, asigna el resultado desde el panel del torneo.';
     if (code === 'INVALID_WINNER') return 'Ese jugador no juega este partido.';
     if (code === 'IN_MATCH') return 'No puedes votar en tu propia disputa.';
+    if (code === 'NO_PENDING_REPORT') return 'Ya no hay un resultado pendiente.';
+    if (code === 'ALREADY_REPORTED') return 'Tú ya reportaste este partido; espera a tu rival.';
+    if (code === 'DISPUTE_OPEN') return 'Hay reportes contradictorios: resolvedlo por disputa.';
     if (typeof code === 'string' && code.length < 60) return code.replace(/_/g, ' ').toLowerCase();
     return fallback;
   };
@@ -114,6 +117,22 @@ export function ParticipantTournamentDetail() {
 
   const isOutsider = (m: { participantAId: number | null; participantBId: number | null }) => {
     return !isMyMatch(m) && tournament?.participants.some(p => p.id === user.id);
+  };
+
+  // El rival (no el reportero) puede aceptar el reporte de un toque.
+  const canConfirm = (m: Tournament['matches'][number]) =>
+    m.status === 'reported' && !m.disputed && isMyMatch(m) &&
+    !!m.reportedByParticipantId && m.reportedByParticipantId !== user.id;
+
+  const reportedWinnerName = (m: Tournament['matches'][number]) =>
+    m.reportedWinnerId === m.participantAId ? m.participantA
+      : m.reportedWinnerId === m.participantBId ? m.participantB : null;
+
+  const handleConfirmMatch = async (matchId: number) => {
+    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
+    const res = await fetch(`/api/matches/${matchId}/confirm`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
+    if (!res.ok) { const err = await res.json().catch(() => ({})); setError(apiMsg(err, 'No se pudo confirmar')); }
+    else { setError(null); fetchTournament(); }
   };
 
   const handleDisputeVote = async (matchId: number, winnerId: number) => {
@@ -190,9 +209,17 @@ export function ParticipantTournamentDetail() {
                         {m.score && <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 'bold' }}>{m.score.b}</span>}
                       </div>
                       {(m.status === 'pending' || m.status === 'reported') && isMyMatch(m) && (
-                        <button onClick={() => setReportMatch(m.id)} style={{ width: '100%', marginTop: '0.75rem', fontSize: '0.625rem', padding: '0.375rem' }}>REPORTAR</button>
+                        <button onClick={() => setReportMatch(m.id)} style={{ width: '100%', marginTop: '0.75rem' }}>REPORTAR</button>
                       )}
-                      {m.status === 'reported' && !m.disputed && (
+                      {canConfirm(m) && (
+                        <>
+                          <p style={{ margin: '0.75rem 0 0', fontSize: '0.75rem', color: 'var(--neon-orange)' }}>
+                            Tu rival dice que gana <strong>{reportedWinnerName(m)}</strong>. ¿Confirmas?
+                          </p>
+                          <button onClick={() => handleConfirmMatch(m.id)} className="primary" style={{ width: '100%', marginTop: '0.5rem' }}>CONFIRMAR RESULTADO</button>
+                        </>
+                      )}
+                      {m.status === 'reported' && !m.disputed && !canConfirm(m) && (
                         <span style={{ display: 'block', textAlign: 'center', marginTop: '0.5rem', fontSize: '0.5rem', color: 'var(--neon-orange)', fontFamily: 'var(--font-display)' }}>ESPERANDO CONFIRMACIÓN</span>
                       )}
                       {m.status === 'reported' && m.disputed && (
@@ -200,8 +227,8 @@ export function ParticipantTournamentDetail() {
                       )}
                       {m.status === 'reported' && m.disputed && isOutsider(m) && (
                         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                          {m.participantAId && <button onClick={() => handleDisputeVote(m.id, m.participantAId!)} style={{ flex: 1, fontSize: '0.5rem', padding: '0.375rem' }}>A GANA</button>}
-                          {m.participantBId && <button onClick={() => handleDisputeVote(m.id, m.participantBId!)} style={{ flex: 1, fontSize: '0.5rem', padding: '0.375rem' }}>B GANA</button>}
+                          {m.participantAId && <button onClick={() => handleDisputeVote(m.id, m.participantAId!)} style={{ flex: 1 }}>A GANA</button>}
+                          {m.participantBId && <button onClick={() => handleDisputeVote(m.id, m.participantBId!)} style={{ flex: 1 }}>B GANA</button>}
                         </div>
                       )}
                       {m.status === 'confirmed' && m.winner && (

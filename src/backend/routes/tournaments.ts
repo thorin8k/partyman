@@ -2,8 +2,8 @@ import type { Database } from "bun:sqlite";
 import { requireAdmin, requireParticipant, requireRealParticipant } from "../auth/guards";
 import { findActiveParty } from "../auth/participants";
 import { generateBracket, getNextMatchPosition, isBye } from "../tournaments/single-elimination";
-import { REPORT_TIMEOUT_MIN, logEvent, scoreTournamentFinished } from "../scoring/service";
-import { pathId, parsePositiveId } from "../http/ids";
+import { REPORT_TIMEOUT_MIN, awardAuto, logEvent, scoreTournamentFinished } from "../scoring/service";
+import { parsePositiveId } from "../http/ids";
 
 interface TournamentRow {
   id: number; party_id: number; game_id: number; game_title_snapshot: string;
@@ -18,10 +18,6 @@ interface MatchRow {
   reported_by: number | null; reported_at: string | null; confirmed_at: string | null; version: number;
 }
 
-function extractId(url: string, prefix: string): number | null {
-  return pathId(url, prefix);
-}
-
 export function createTournamentRoutes(db: Database) {
   return {
     "/api/admin/tournaments": { POST: handleCreateTournament },
@@ -31,12 +27,12 @@ export function createTournamentRoutes(db: Database) {
     "/api/admin/tournaments/:id/delete": { POST: handleDeleteTournament },
     "/api/admin/tournaments/:id/format": { PATCH: handleSetFormat },
     "/api/admin/tournaments/:id/fill-bots": { POST: handleFillBots },
-    "/api/admin/dev/seed-participants": { POST: handleSeedParticipants },
     "/api/tournaments": { GET: handleGetTournaments },
     "/api/tournaments/:id": { GET: handleGetTournament },
     "/api/tournaments/:id/join": { POST: handleJoinTournament },
     "/api/tournaments/:id/leave": { DELETE: handleLeaveTournament },
     "/api/matches/:id/report": { POST: handleReportMatch },
+    "/api/matches/:id/confirm": { POST: handleConfirmByOpponent },
     "/api/admin/matches/:id/confirm": { POST: handleConfirmMatch },
     "/api/disputes/:id/vote": { POST: handleDisputeVote },
   };
@@ -236,27 +232,6 @@ export function createTournamentRoutes(db: Database) {
     return Response.json({ ok: true });
   }
 
-  async function handleSeedParticipants(request: Request): Promise<Response> {
-    const dev = devOnly();
-    if (dev) return dev;
-    const auth = requireAdmin(db, request);
-    if (auth instanceof Response) return auth;
-    const body = await request.json().catch(() => ({}));
-    const count = Math.min(10, Math.max(1, body.count ?? 3));
-    const activeParty = findActiveParty(db);
-    const created: number[] = [];
-    for (let i = 0; i < count; i++) {
-      const steamId = `fake-seed-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`;
-      const name = `Bot ${Math.random().toString(36).slice(2, 6)}`;
-      const res = db.run("INSERT INTO participants (steam_id, display_name, role) VALUES (?, ?, 'participant')", [steamId, name]);
-      const pid = Number(res.lastInsertRowid);
-      if (activeParty) db.run("INSERT OR IGNORE INTO party_memberships (party_id, participant_id, display_name_snapshot) VALUES (?, ?, ?)", [activeParty.id, pid, name]);
-      created.push(pid);
-    }
-    console.log("[tournaments] POST /api/admin/dev/seed-participants →", created.length);
-    return Response.json({ created });
-  }
-
   async function handleGetTournaments(request: Request): Promise<Response> {
     const ctx = requireParticipant(db, request);
     if (ctx instanceof Response) return ctx;
@@ -293,6 +268,14 @@ export function createTournamentRoutes(db: Database) {
       const count = db.query<{ count: number }, [number]>("SELECT COUNT(*) AS count FROM tournament_participants WHERE tournament_id = ?").get(t.id)!;
       const participants = db.query<{ participant_id: number; display_name_snapshot: string }, [number]>("SELECT participant_id, display_name_snapshot FROM tournament_participants WHERE tournament_id = ? ORDER BY seed").all(t.id).map(p => ({ id: p.participant_id, displayName: p.display_name_snapshot }));
       const gameImage = db.query<{ image_url: string | null }, [number]>("SELECT image_url FROM games WHERE id = ?").get(t.game_id)?.image_url ?? null;
+      // Partidos reportados por el rival que este jugador puede confirmar de un toque.
+      const pendingConfirmation = isAdmin ? 0 : db.query<{ n: number }, [number, number, number, number]>(
+        `SELECT COUNT(*) AS n FROM matches m
+         WHERE m.tournament_id = ? AND m.status = 'reported'
+           AND (m.participant_a_id = ? OR m.participant_b_id = ?)
+           AND NOT EXISTS (SELECT 1 FROM match_reports r WHERE r.match_id = m.id AND r.reporter_participant_id = ?)
+           AND (SELECT COUNT(DISTINCT r.winner_id) FROM match_reports r WHERE r.match_id = m.id) <= 1`
+      ).get(t.id, ctx.session.subjectId, ctx.session.subjectId, ctx.session.subjectId)?.n ?? 0;
       return {
         id: t.id,
         partyId: t.party_id,
@@ -308,6 +291,7 @@ export function createTournamentRoutes(db: Database) {
         updatedAt: t.updated_at,
         participantCount: count.count,
         participants,
+        pendingConfirmation,
       };
     });
 
@@ -355,6 +339,8 @@ export function createTournamentRoutes(db: Database) {
         status: m.status,
         disputed: m.status === "reported" && new Set(reps.map(r => `${r.winner_id}`)).size > 1,
         reportCount: reps.length,
+        reportedByParticipantId: reps.length === 1 ? reps[0].reporter_participant_id : null,
+        reportedWinnerId: reps.length === 1 ? reps[0].winner_id : null,
         disputeVotes: votes,
       };
     });
@@ -510,6 +496,44 @@ export function createTournamentRoutes(db: Database) {
     return Response.json({ ok: true, status: fresh?.status ?? "reported" });
   }
 
+  // Confirmación de un toque: el rival acepta el reporte existente sin volver a
+  // elegir ganador ni marcador. El reportero no puede confirmarse a sí mismo.
+  async function handleConfirmByOpponent(request: Request): Promise<Response> {
+    const auth = requireRealParticipant(db, request);
+    if (auth instanceof Response) return auth;
+    const id = getMatchId(request.url);
+    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
+
+    const match = db.query<MatchRow, [number]>("SELECT * FROM matches WHERE id = ?").get(id);
+    if (!match) return Response.json({ error: { code: "MATCH_NOT_FOUND", message: "MATCH_NOT_FOUND" } }, { status: 404 });
+    const tournament = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(match.tournament_id);
+    if (!tournament || tournament.status === "finished" || tournament.status === "cancelled") {
+      return Response.json({ error: { code: "INVALID_TOURNAMENT_STATE", message: "INVALID_TOURNAMENT_STATE" } }, { status: 409 });
+    }
+    if (auth.session.subjectId !== match.participant_a_id && auth.session.subjectId !== match.participant_b_id) {
+      return Response.json({ error: { code: "NOT_IN_MATCH", message: "NOT_IN_MATCH" } }, { status: 403 });
+    }
+    if (match.status !== "reported") {
+      return Response.json({ error: { code: "NO_PENDING_REPORT", message: "NO_PENDING_REPORT" } }, { status: 409 });
+    }
+
+    const reps = db.query<{ reporter_participant_id: number; winner_id: number; score_json: string | null }, [number]>(
+      "SELECT reporter_participant_id, winner_id, score_json FROM match_reports WHERE match_id = ?"
+    ).all(id);
+    if (reps.length === 0) return Response.json({ error: { code: "NO_PENDING_REPORT", message: "NO_PENDING_REPORT" } }, { status: 409 });
+    if (reps.some(r => r.reporter_participant_id === auth.session.subjectId)) {
+      return Response.json({ error: { code: "ALREADY_REPORTED", message: "ALREADY_REPORTED" } }, { status: 403 });
+    }
+    if (!reportsAgree(reps)) {
+      return Response.json({ error: { code: "DISPUTE_OPEN", message: "DISPUTE_OPEN" } }, { status: 409 });
+    }
+
+    confirmMatchRow(db, match, reps[0].winner_id, agreedScore(reps), auth.session.subjectId);
+    logEvent(db, tournament.party_id, auth.session.subjectId, "match_confirmed", `Resultado confirmado en ${tournament.name}`);
+    console.log("[tournaments] POST /api/matches/" + id + "/confirm");
+    return Response.json({ ok: true, status: "confirmed" });
+  }
+
   async function handleDisputeVote(request: Request): Promise<Response> {
     const auth = requireRealParticipant(db, request);
     if (auth instanceof Response) return auth;
@@ -602,7 +626,7 @@ export function createTournamentRoutes(db: Database) {
 }
 
 // Task 014: shared start logic (admin button, auto-start when full, proposal approval).
-export function startTournamentNow(db: Database, id: number): { ok: boolean; error?: string } {
+function startTournamentNow(db: Database, id: number): { ok: boolean; error?: string } {
   const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(id);
   if (!t) return { ok: false, error: "TOURNAMENT_NOT_FOUND" };
   if (t.status !== "upcoming") return { ok: false, error: "INVALID_TOURNAMENT_STATE" };
@@ -663,9 +687,26 @@ export function maybeAutoStartTournament(db: Database, id: number): boolean {
 export function confirmMatchRow(db: Database, match: MatchRow, winnerId: number, scoreJson: string | null, confirmedBy: number | null) {
   db.run("UPDATE matches SET winner_id = ?, score_json = ?, status = 'confirmed', reported_by = COALESCE(?, reported_by), reported_at = COALESCE(reported_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), confirmed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), version = version + 1 WHERE id = ?",
     [winnerId, scoreJson, confirmedBy, match.id]);
+  awardGoleada(db, match, winnerId, scoreJson);
   advanceWinner(db, { ...match, winner_id: winnerId });
   ensureThirdPlace(db, match.tournament_id);
   checkTournamentFinished(db, match.tournament_id);
+}
+
+// Task 018: goleada al confirmar un partido con puntuación y diferencia >= 8.
+function awardGoleada(db: Database, match: MatchRow, winnerId: number, scoreJson: string | null): void {
+  if (!scoreJson) return;
+  try {
+    const score = JSON.parse(scoreJson);
+    const winnerIsA = winnerId === match.participant_a_id;
+    const winnerScore = winnerIsA ? score?.a : score?.b;
+    const loserScore = winnerIsA ? score?.b : score?.a;
+    if (!Number.isFinite(winnerScore) || !Number.isFinite(loserScore) || winnerScore - loserScore < 8) return;
+    const t = db.query<{ party_id: number }, [number]>("SELECT party_id FROM tournaments WHERE id = ?").get(match.tournament_id);
+    if (t && awardAuto(db, winnerId, "goleada", t.party_id, `Goleada ${winnerScore}-${loserScore}`)) {
+      logEvent(db, t.party_id, winnerId, "achievement", `Goleada ${winnerScore}-${loserScore}`);
+    }
+  } catch { /* score inválido nunca rompe la confirmación */ }
 }
 
 // single_third: al confirmarse ambas semifinales (con dos jugadores reales)
