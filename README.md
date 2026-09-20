@@ -92,6 +92,7 @@ docker run -d \
 | `BACKUP_DIR` | Directorio de backups | `/data/backups` |
 | `BACKUP_KEEP` | Copias a conservar | `20` |
 | `JOIN_PASSWORD` | Contraseña para entrar a la party (vacía = libre) | - |
+| `REPORT_TIMEOUT_MIN` | Minutos hasta auto-confirmar un resultado sin respuesta | `5` |
 | `STEAM_API_KEY` | API key de Steam (sin ella, nombres locales) | - |
 | `STEAM_ENABLED` | `false` desactiva el login Steam | `true` |
 | `WIFI_SSID` / `WIFI_PASSWORD` | Muestra QR WiFi en el display | - |
@@ -149,7 +150,9 @@ double-submit en writes con cookie, 401/403/404/409/422). Resumen por dominio:
 - Juegos: catálogo + búsqueda SGDB (`/api/games-search/*`).
 - Propuestas: actividades y torneos (`/api/*-proposals`, votos, aprobar).
 - Torneos: crear, unirse/salir, arrancar, `matches/:id/report`,
-  disputas (`/api/disputes/:id/vote`), confirm admin.
+  confirmación de un toque del rival (`matches/:id/confirm`),
+  disputas (`/api/disputes/:id/vote`), confirm admin. Un reporte sin
+  respuesta se auto-confirma tras `REPORT_TIMEOUT_MIN` minutos.
 - Puntos: leaderboards, historial, reglas, logros, premios, correcciones,
   cambio de contraseña (`POST /api/admin/password`).
 - Backups: crear, listar, descargar, restaurar (`/api/admin/backups/*`).

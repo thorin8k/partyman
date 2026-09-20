@@ -49,4 +49,7 @@ cuadro se genera únicamente con los presentes.
 
 ## Estado actual
 
-- Pendiente de implementar.
+- **OBSOLETA / DESCARTADA** (decisión de producto, 2026-09-19). Con login
+  Steam, unirse al torneo ya es la asistencia; el check-in añade fricción
+  para un grupo de 10-15 personas. No se implementa. No reservar la
+  migración `017_checkin.sql`.

@@ -55,4 +55,7 @@ ganador. Al finalizar, el bote se reparte entre los acertantes en puntos.
 
 ## Estado actual
 
-- Pendiente de implementar.
+- **OBSOLETA / DESCARTADA** (decisión de producto, 2026-09-19). Las porras
+  añaden economía de puntos y bastante superficie (tabla, liquidación, UI)
+  para dos eventos al año. No se implementa. No reservar la migración
+  `018_porras.sql`.

@@ -13,6 +13,9 @@ RUN bun compile
 
 # Production stage
 FROM oven/bun:1-slim
+# El bundle ya congela NODE_ENV=production, pero lo forzamos también en runtime:
+# desactiva HMR, oculta herramientas dev y devuelve 404 en endpoints dev-only.
+ENV NODE_ENV=production
 WORKDIR /usr/src/app
 COPY --from=base /usr/src/app/dist ./
 # Las migraciones no van en el bundle: copiarlas para el runner (migrate.ts las busca junto al binario o en cwd).
