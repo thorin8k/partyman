@@ -64,6 +64,9 @@
 
 html {
   font-size: 16px;
+  /* Controles nativos (datetime-local, number, select) en oscuro: sin esto los
+     pickers de fecha salen invisibles sobre el fondo negro. */
+  color-scheme: dark;
 }
 
 body {
@@ -154,11 +157,16 @@ a:hover {
   box-shadow: var(--glow-sm) var(--neon-cyan);
 }
 
-/* Botones */
-button {
+/* Botones: una sola talla en toda la app (44px, touch). `.btn` comparte la
+   misma base para enlaces que deben parecer botones. Variantes por clase. */
+button, .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--font-display);
   font-size: 0.625rem;
-  padding: 0.875rem 1.5rem;
+  min-height: 44px;
+  padding: 0.625rem 1rem;
   border: 2px solid var(--neon-cyan);
   border-radius: var(--radius);
   background: transparent;
@@ -166,19 +174,21 @@ button {
   cursor: pointer;
   text-transform: uppercase;
   letter-spacing: 0.1em;
+  white-space: nowrap;
   transition: all 0.2s ease;
+  text-decoration: none;
   position: relative;
   overflow: hidden;
 }
 
-button:hover:not(:disabled) {
+button:hover:not(:disabled), .btn:hover {
   background: var(--neon-cyan);
   color: var(--bg);
   box-shadow: var(--glow-md) var(--neon-cyan);
   transform: translateY(-2px);
 }
 
-button:active:not(:disabled) {
+button:active:not(:disabled), .btn:active {
   transform: translateY(0);
 }
 
@@ -187,23 +197,23 @@ button:disabled {
   cursor: not-allowed;
 }
 
-button.primary {
+button.primary, .btn.primary {
   background: var(--neon-cyan);
   color: var(--bg);
 }
 
-button.primary:hover:not(:disabled) {
+button.primary:hover:not(:disabled), .btn.primary:hover {
   background: var(--neon-green);
   border-color: var(--neon-green);
   box-shadow: var(--glow-md) var(--neon-green);
 }
 
-button.danger {
+button.danger, .btn.danger {
   border-color: var(--error);
   color: var(--error);
 }
 
-button.danger:hover:not(:disabled) {
+button.danger:hover:not(:disabled), .btn.danger:hover {
   background: var(--error);
   color: var(--bg);
   box-shadow: var(--glow-md) var(--error);
@@ -329,12 +339,6 @@ form {
   color: var(--success);
 }
 
-.alert.info {
-  background: rgba(0, 212, 255, 0.1);
-  border-color: var(--info);
-  color: var(--info);
-}
-
 /* Listas */
 ul, ol {
   list-style: none;
@@ -381,7 +385,7 @@ ul, ol {
 
 .nav a {
   font-family: var(--font-display);
-  font-size: 0.5rem;
+  font-size: 0.625rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
@@ -433,14 +437,6 @@ ul, ol {
   gap: 1rem;
 }
 
-.grid-2 {
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-}
-
-.grid-3 {
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-}
-
 /* Responsive - Tablet */
 @media (max-width: 768px) {
   html {
@@ -477,10 +473,6 @@ ul, ol {
     padding: 1.25rem;
   }
 
-  .grid-2,
-  .grid-3 {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Responsive - Móvil */

@@ -1,7 +1,7 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
 import { confirmDialog } from '../../components/ConfirmDialog';
-import { pageBtn, rowActions, rowBtn, rowColumn, rowFooter, rowHead, rowMain, rowTitle, badge, headerBtn, rowView } from '../../components/listRow';
+import { pageBtn, rowBtn, rowColumn, rowFooter, rowHead, rowMain, rowTitle, badge, headerBtn } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -200,7 +200,7 @@ export function AdminTournaments() {
                   <div style={rowFooter}>
                     {t.status === 'upcoming' && <button onClick={() => handleAction(t.id, 'start')} style={rowBtn}>INICIAR</button>}
                     {t.status !== 'finished' && t.status !== 'cancelled' && <button onClick={() => handleAction(t.id, 'cancel')} style={{ ...rowBtn, borderColor: 'var(--error)', color: 'var(--error)' }}>CANCELAR</button>}
-                    <a href={`/admin/tournaments/${t.id}`} style={rowView}>VER →</a>
+                    <a href={`/admin/tournaments/${t.id}`} className="btn">VER →</a>
                   </div>
                 </div>
               ))}

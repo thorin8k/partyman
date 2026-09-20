@@ -72,7 +72,12 @@ export function ParticipantLogin() {
           Al iniciar sesión, te unirás automáticamente a la party activa.
         </p>
 
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.25rem', display: 'flex', justifyContent: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+          <a href="/display" style={{ fontSize: '0.75rem' }}>PANTALLA PÚBLICA →</a>
+          <a href="/leaderboard" style={{ fontSize: '0.75rem' }}>RANKING →</a>
+        </div>
+
+        <div style={{ borderTop: '1px solid var(--border)', marginTop: '1.25rem', paddingTop: '1.25rem' }}>
           <a href="/admin/login" style={{ fontSize: '0.75rem' }}>
             ACCESO ADMINISTRADOR →
           </a>

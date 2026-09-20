@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react';
 // botones para no desentonar (antes: badges minis + botones grandes).
 export const rowMain: CSSProperties = { flex: '1 1 auto', minWidth: 0 };
 export const rowTitle: CSSProperties = { marginBottom: '0.25rem', wordBreak: 'break-word' };
-export const rowActions: CSSProperties = {
+const rowActions: CSSProperties = {
   display: 'flex',
   gap: '0.75rem',
   alignItems: 'center',
@@ -36,57 +36,16 @@ export const rowHead: CSSProperties = {
   // Sin esto el título largo empuja el badge fuera de la card en estrecho.
   minWidth: 0,
 };
-// Botones de página/primarios (formularios, crear, buscar): la talla grande
-// de la jerarquía.
-export const pageBtn: CSSProperties = {
-  minHeight: '44px',
-  fontSize: '0.625rem',
-  padding: '0.75rem 1rem',
-  whiteSpace: 'nowrap',
-};
-// Listas admin (desktop): compacto pero legible.
-export const rowBtn: CSSProperties = {
-  minHeight: '40px',
-  fontSize: '0.625rem',
-  padding: '0.375rem 1rem',
-  whiteSpace: 'nowrap',
-};
-// Botones compactos para footers densos (4-5 acciones en una línea).
-export const rowBtnSmall: CSSProperties = {
-  minHeight: '34px',
-  fontSize: '0.5rem',
-  padding: '0.25rem 0.625rem',
-  whiteSpace: 'nowrap',
-  flexShrink: 0,
-};
-// Botones de acción del participante (móvil, targets táctiles 44px).
-export const rowBtnTouch: CSSProperties = {
-  minHeight: '44px',
-  fontSize: '0.625rem',
-  padding: '0.375rem 1rem',
-  whiteSpace: 'nowrap',
-};
-// Enlaces «ver detalle» al final del footer: siempre fantasmas cyan,
-// misma talla que los botones de fila.
-export const rowView: CSSProperties = {
-  ...rowBtn,
-  display: 'inline-flex',
-  alignItems: 'center',
-  border: '1px solid var(--neon-cyan)',
-  color: 'var(--neon-cyan)',
-  textDecoration: 'none',
-};
-export const rowViewTouch: CSSProperties = {
-  ...rowView,
-  minHeight: '44px',
-};
-// Botones de cabecera (SALIR…): la talla pequeña de la jerarquía.
-export const headerBtn: CSSProperties = {
-  minHeight: '36px',
-  fontSize: '0.5rem',
-  padding: '0.5rem 1rem',
-  whiteSpace: 'nowrap',
-};
+// Una sola talla de botón en toda la app: la define el <button> global (44px,
+// touch). Estos aliases existen para no tocar cada pantalla y sólo conservan
+// overrides de layout puntuales; el color va por clase (.primary / .danger).
+export const pageBtn: CSSProperties = {};
+export const rowBtn: CSSProperties = {};
+export const rowBtnSmall: CSSProperties = {};
+export const rowBtnTouch: CSSProperties = {};
+export const headerBtn: CSSProperties = { flexShrink: 0 };
+// Botones de icono dentro de chips (editar ✎): no fuerzan la talla 44px.
+export const iconBtn: CSSProperties = { minHeight: 'auto', padding: '0.25rem 0.5rem', fontSize: '0.625rem', whiteSpace: 'nowrap' };
 export function badge(color: string): CSSProperties {
   return {
     padding: '0.375rem 0.75rem',

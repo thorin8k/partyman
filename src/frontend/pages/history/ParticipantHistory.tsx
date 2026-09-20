@@ -52,7 +52,15 @@ export function ParticipantHistory() {
         <>
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-              <h2>TOTAL</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                {data.participant?.avatarUrl
+                  ? <img src={data.participant.avatarUrl} alt="" style={{ width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0 }} />
+                  : <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--neon-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: 'var(--bg)', flexShrink: 0 }}>{String(data.participant?.displayName ?? '?').charAt(0).toUpperCase()}</div>}
+                <div>
+                  <h2>{data.participant?.displayName ?? 'HISTORIAL'}</h2>
+                  <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>TOTAL</p>
+                </div>
+              </div>
               <span style={{ fontFamily: 'var(--font-display)', color: 'var(--neon-green)' }}>{total} PTS · {wins} {wins === 1 ? 'victoria' : 'victorias'}</span>
             </div>
           </div>

@@ -1,4 +1,5 @@
 import { useAuth } from '../../components/AuthContext';
+import { headerBtn } from '../../components/listRow';
 import { apiError } from '../../components/apiError';
 import { confirmDialog } from '../../components/ConfirmDialog';
 import { useLocation, useParams } from 'wouter';
@@ -204,7 +205,7 @@ export function PartyDetail() {
             {user.displayName}
           </span>
           <a href="/admin">VOLVER →</a>
-          <button onClick={logout} style={{ fontSize: '0.5rem', padding: '0.5rem 1rem' }}>
+          <button onClick={logout} style={headerBtn}>
             SALIR
           </button>
         </div>

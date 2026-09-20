@@ -1,7 +1,7 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
 import { confirmDialog } from '../../components/ConfirmDialog';
-import { pageBtn, rowActions, rowBtn, rowBtnSmall, rowColumn, rowFooter, rowHead, rowMain, rowTitle, badge, headerBtn } from '../../components/listRow';
+import { pageBtn, rowBtn, rowBtnSmall, rowColumn, rowFooter, rowHead, rowMain, rowTitle, badge, headerBtn } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 

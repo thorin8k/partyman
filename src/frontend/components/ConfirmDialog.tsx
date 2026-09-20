@@ -33,11 +33,10 @@ export function ConfirmHost() {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <p style={{ marginBottom: '1.25rem', lineHeight: 1.5 }}>{req.message}</p>
         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-          <button type="button" style={{ minHeight: '44px' }} onClick={() => close(false)}>CANCELAR</button>
+          <button type="button" onClick={() => close(false)}>CANCELAR</button>
           <button
             type="button"
-            className={req.danger ? undefined : 'primary'}
-            style={{ minHeight: '44px', ...(req.danger ? { borderColor: 'var(--error)', color: 'var(--error)' } : {}) }}
+            className={req.danger ? 'danger' : 'primary'}
             onClick={() => close(true)}
             autoFocus
           >

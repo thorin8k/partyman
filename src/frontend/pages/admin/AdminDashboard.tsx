@@ -1,6 +1,6 @@
 import { useAuth } from '../../components/AuthContext';
 import { apiError } from '../../components/apiError';
-import { pageBtn, rowActions, rowBtn, rowColumn, rowFooter, rowHead, rowMain, rowTitle, badge, headerBtn, rowView } from '../../components/listRow';
+import { pageBtn, rowBtn, rowColumn, rowFooter, rowHead, rowMain, rowTitle, badge, headerBtn } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 import { PartyForm } from '../../components/PartyForm';
@@ -98,7 +98,7 @@ export function AdminDashboard() {
                     <span style={badge(statusColors[p.status])}>{statusLabels[p.status]}</span>
                   </div>
                   <div style={rowFooter}>
-                    <a href={`/admin/parties/${p.id}`} style={rowView}>VER →</a>
+                    <a href={`/admin/parties/${p.id}`} className="btn">VER →</a>
                   </div>
                 </div>
               ))}

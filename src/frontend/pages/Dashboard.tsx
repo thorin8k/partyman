@@ -1,6 +1,6 @@
 import { useAuth } from '../components/AuthContext';
 import { confirmDialog } from '../components/ConfirmDialog';
-import { rowBtnTouch, rowColumn, rowFooter, rowHead, rowMain, rowTitle, badge, headerBtn, rowViewTouch } from '../components/listRow';
+import { rowBtnTouch, rowColumn, rowFooter, rowHead, rowMain, rowTitle, badge, headerBtn } from '../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useRef, useState } from 'react';
 
@@ -37,6 +37,7 @@ interface Tournament {
   maxParticipants: number;
   participantCount: number;
   participants: Array<{ id: number; displayName: string; seed: number }>;
+  pendingConfirmation?: number;
 }
 
 // ponytail: mapa central de errores técnicos -> ES humano. Ampliar aquí, no en cada handler.
@@ -473,13 +474,14 @@ export function Dashboard() {
                             )}
                           </div>
                         </div>
-                        <span style={badge(statusInfo.color)}>
-                          {statusInfo.label}
+                        <span style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', alignItems: 'flex-end', flexShrink: 0 }}>
+                          <span style={badge(statusInfo.color)}>{statusInfo.label}</span>
+                          {(t.pendingConfirmation ?? 0) > 0 && <span style={badge('var(--neon-orange)')}>POR CONFIRMAR ({t.pendingConfirmation})</span>}
                         </span>
                       </div>
                       <div style={rowFooter}>
                         {(t.status === 'in_progress' || t.status === 'finished') && (
-                          <a href={`/tournaments/${t.id}`} style={rowViewTouch}>VER BRACKET →</a>
+                          <a href={`/tournaments/${t.id}`} className="btn">VER BRACKET →</a>
                         )}
                         {canJoin && (
                           isMember ? (

@@ -14,7 +14,6 @@ import { createPartyRoutes } from "./backend/routes/parties";
 import { createPublicRoutes } from "./backend/routes/public";
 import { createGamesRoutes } from "./backend/routes/games";
 import { createActivitiesRoutes } from "./backend/routes/activities";
-import { createProposalsRoutes } from "./backend/routes/proposals";
 import { createGamesSearchRoutes } from "./backend/routes/games-search";
 import { createTournamentRoutes } from "./backend/routes/tournaments";
 import { createActivityTournamentProposalRoutes } from "./backend/routes/activity-tournament-proposals";
@@ -42,10 +41,9 @@ const healthRoutes = createHealthRoutes(db, { dirs: [config.uploadsPath, config.
 const authRoutes = createAuthRoutes(db);
 const participantRoutes = createParticipantRoutes(db);
 const partyRoutes = createPartyRoutes(db);
-const publicRoutes = createPublicRoutes(db);
+const publicRoutes = createPublicRoutes(db, { publicOrigin: config.publicOrigin });
 const gamesRoutes = createGamesRoutes(db);
 const activitiesRoutes = createActivitiesRoutes(db);
-const proposalsRoutes = createProposalsRoutes(db);
 const gamesSearchRoutes = createGamesSearchRoutes(db);
 const tournamentRoutes = createTournamentRoutes(db);
 const proposalRoutes2 = createActivityTournamentProposalRoutes(db);
@@ -70,7 +68,6 @@ const server = serve({
       ...publicRoutes,
       ...gamesRoutes,
       ...activitiesRoutes,
-      ...proposalsRoutes,
       ...gamesSearchRoutes,
       ...tournamentRoutes,
       ...proposalRoutes2,

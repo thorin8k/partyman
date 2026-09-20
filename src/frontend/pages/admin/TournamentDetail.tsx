@@ -42,16 +42,6 @@ export function TournamentDetail() {
     if (res.ok) setTournament((await res.json()).tournament);
   };
 
-  const handleAddParticipant = async (participantId: number) => {
-    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    const res = await fetch(`/api/admin/tournaments/${tournamentId}/participants`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
-      body: JSON.stringify({ participantId }),
-    });
-    if (!res.ok) { const err = await res.json(); setError(apiError(err)); }
-    fetchTournament();
-  };
-
   const handleFillBots = async () => {
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
     const res = await fetch(`/api/admin/tournaments/${tournamentId}/fill-bots`, { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' } });
@@ -223,12 +213,12 @@ export function TournamentDetail() {
                                 <input type="number" min="0" max="99" placeholder={m.participantB ?? 'B'} value={scoreB} onChange={e => setScoreB(e.target.value)} style={{ flex: 1, fontSize: '0.7rem', padding: '0.375rem' }} />
                               </div>
                               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <button onClick={handleConfirmMatch} style={{ flex: 1, fontSize: '0.625rem', padding: '0.375rem' }} className="primary">ENVIAR</button>
-                                <button onClick={() => setReportMatch(null)} style={{ flex: 1, fontSize: '0.625rem', padding: '0.375rem' }}>CANCELAR</button>
+                                <button onClick={handleConfirmMatch} style={{ flex: 1 }} className="primary">ENVIAR</button>
+                                <button onClick={() => setReportMatch(null)} style={{ flex: 1 }}>CANCELAR</button>
                               </div>
                             </div>
                           ) : (
-                            <button onClick={() => setReportMatch(m.id)} style={{ width: '100%', marginTop: '0.75rem', fontSize: '0.625rem', padding: '0.375rem' }}>{m.status === 'pending' ? 'RELLENAR' : 'CONFIRMAR'}</button>
+                            <button onClick={() => setReportMatch(m.id)} style={{ width: '100%', marginTop: '0.75rem' }}>{m.status === 'pending' ? 'RELLENAR' : 'CONFIRMAR'}</button>
                           )
                         )}
                         {m.status === 'confirmed' && (
@@ -244,12 +234,12 @@ export function TournamentDetail() {
                                 <input type="number" min="0" max="99" placeholder={m.participantB ?? 'B'} value={scoreB} onChange={e => setScoreB(e.target.value)} style={{ flex: 1, fontSize: '0.7rem', padding: '0.375rem' }} />
                               </div>
                               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <button onClick={handleConfirmMatch} style={{ flex: 1, fontSize: '0.625rem', padding: '0.375rem' }} className="primary">GUARDAR</button>
-                                <button onClick={() => setReportMatch(null)} style={{ flex: 1, fontSize: '0.625rem', padding: '0.375rem' }}>CANCELAR</button>
+                                <button onClick={handleConfirmMatch} style={{ flex: 1 }} className="primary">GUARDAR</button>
+                                <button onClick={() => setReportMatch(null)} style={{ flex: 1 }}>CANCELAR</button>
                               </div>
                             </div>
                           ) : (
-                            <button onClick={() => setReportMatch(m.id)} style={{ width: '100%', marginTop: '0.5rem', fontSize: '0.625rem', padding: '0.25rem', borderColor: 'var(--neon-magenta)', color: 'var(--neon-magenta)' }}>EDITAR</button>
+                            <button onClick={() => setReportMatch(m.id)} style={{ width: '100%', marginTop: '0.5rem' }}>EDITAR</button>
                           )
                         )}
                         {!isLastRound && (

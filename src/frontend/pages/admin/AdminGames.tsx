@@ -115,7 +115,7 @@ export function AdminGames() {
                 </div>
               ))}
             </div>
-            <button onClick={() => { setSearchResults([]); setSearchQuery(''); }} style={{ minHeight: '44px', fontSize: '0.625rem', padding: '0.375rem 1rem', marginTop: '0.5rem' }}>CERRAR</button>
+            <button onClick={() => { setSearchResults([]); setSearchQuery(''); }} style={{ ...pageBtn, marginTop: '0.5rem' }}>CERRAR</button>
           </div>
         )}
 

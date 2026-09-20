@@ -2,7 +2,10 @@ import type { Database } from "bun:sqlite";
 import { getLeaderboard } from "../scoring/service";
 import { sweepDueReports } from "./tournaments";
 
-export function createPublicRoutes(db: Database) {
+export function createPublicRoutes(db: Database, opts?: { publicOrigin?: string }) {
+  // URL canónica para el QR de unión: la que abre el móvil, no la del navegador
+  // que muestra el display (proyector suele abrir por localhost).
+  const joinUrl = (opts?.publicOrigin ?? process.env.PUBLIC_ORIGIN ?? "").replace(/\/$/, "") || null;
   return {
     "/api/public/state": {
       GET: handleGetPublicState,
@@ -102,16 +105,11 @@ export function createPublicRoutes(db: Database) {
     if (party) {
       try { leaderboard = getLeaderboard(db, party.id).slice(0, 10); } catch { leaderboard = []; }
     }
-    const now = Date.now();
-    const schedule = (activities as Array<{ id: number; title: string; gameTitle: string | null; startsAt: string; endsAt: string; status: string }>).map(a => {
-      const s = +new Date(a.startsAt); const e = +new Date(a.endsAt);
-      return { id: a.id, title: a.title, gameTitle: a.gameTitle, startsAt: a.startsAt, endsAt: a.endsAt, status: a.status === "finished" ? "finished" : s <= now && now <= e ? "current" : e < now ? "finished" : "upcoming" };
-    });
     let activity: unknown[] = [];
     try {
-      activity = db.query<{ id: number; message: string; created_at: string }, [number]>(
-        "SELECT id, message, created_at FROM activity_events WHERE party_id = ? ORDER BY id DESC LIMIT 20"
-      ).all(party?.id ?? -1).map(r => ({ id: r.id, message: r.message, createdAt: r.created_at }));
+      activity = db.query<{ id: number; message: string; event_type: string; created_at: string }, [number]>(
+        "SELECT id, message, event_type, created_at FROM activity_events WHERE party_id = ? ORDER BY id DESC LIMIT 20"
+      ).all(party?.id ?? -1).map(r => ({ id: r.id, message: r.message, eventType: r.event_type, createdAt: r.created_at }));
     } catch { activity = []; }
 
     // WiFi de la party para el QR: LAN privada, SSID + password en el estado público (sin auth).
@@ -122,12 +120,12 @@ export function createPublicRoutes(db: Database) {
         : null,
       attendees,
       activities,
-      schedule,
       tournaments,
       recentTournaments,
       leaderboard,
       activity,
       wifi: wifiSsid ? { ssid: wifiSsid, password: process.env.WIFI_PASSWORD ?? null } : null,
+      joinUrl,
       generatedAt: new Date().toISOString(),
     });
   }
@@ -139,7 +137,7 @@ export function createPublicRoutes(db: Database) {
       )
       .get();
 
-    if (!party) return Response.json({ party: null, activities: [], proposals: [] });
+    if (!party) return Response.json({ party: null, activities: [] });
 
     const activities = db
       .query<{ id: number; title: string; game_title_snapshot: string | null; starts_at: string; ends_at: string; capacity: number | null; notes: string | null; status: string; game_id: number | null }, [number]>(
@@ -170,14 +168,7 @@ export function createPublicRoutes(db: Database) {
         };
       });
 
-    const proposals = db
-      .query<{ id: number; game_id: number; title: string; image_url: string | null; vote_count: number }, [number]>(
-        "SELECT ppg.id, ppg.game_id, g.title, g.image_url, (SELECT COUNT(*) FROM proposal_votes pv WHERE pv.proposal_id = ppg.id) AS vote_count FROM party_game_proposals ppg JOIN games g ON g.id = ppg.game_id WHERE ppg.party_id = ? ORDER BY vote_count DESC"
-      )
-      .all(party.id)
-      .map((r) => ({ id: r.id, gameId: r.game_id, gameTitle: r.title, gameImage: r.image_url, voteCount: r.vote_count }));
-
-    console.log("[public] GET /api/planning →", activities.length, "activities,", proposals.length, "proposals");
-    return Response.json({ party: { id: party.id, name: party.name }, activities, proposals });
+    console.log("[public] GET /api/planning →", activities.length, "activities");
+    return Response.json({ party: { id: party.id, name: party.name }, activities });
   }
 }

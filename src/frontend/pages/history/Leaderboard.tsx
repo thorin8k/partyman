@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useAuth } from '../../components/AuthContext';
 
 export function Leaderboard() {
+  const { user } = useAuth();
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [partyId, setPartyId] = useState<string>('');
   const [parties, setParties] = useState<any[]>([]);
@@ -41,7 +43,9 @@ export function Leaderboard() {
                   {p.avatarUrl
                     ? <img src={p.avatarUrl} alt={`Avatar de ${p.displayName}`} style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
                     : <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--neon-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: 'var(--bg)', flexShrink: 0 }}>{String(p.displayName).charAt(0).toUpperCase()}</div>}
-                  <a href={`/history/${p.participantId}`}>{p.displayName}</a>
+                  {(user?.role === 'admin' || user?.id === p.participantId)
+                    ? <a href={`/history/${p.participantId}`}>{p.displayName} <span style={{ color: 'var(--text-dim)', fontSize: '0.7rem' }}>#{p.participantId}</span></a>
+                    : <span>{p.displayName} <span style={{ color: 'var(--text-dim)', fontSize: '0.7rem' }}>#{p.participantId}</span></span>}
                 </div>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                   <span style={{ color: 'var(--neon-green)', fontFamily: 'var(--font-display)', fontSize: '0.625rem' }}>{p.points} PTS</span>

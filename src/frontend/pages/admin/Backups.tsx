@@ -1,5 +1,5 @@
 import { useAuth } from '../../components/AuthContext';
-import { pageBtn, rowColumn, rowFooter, rowMain, rowViewTouch } from '../../components/listRow';
+import { pageBtn, rowColumn, rowFooter, rowMain } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -65,7 +65,7 @@ export function Backups() {
                   <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.75rem' }}>{fmtBytes(b.sizeBytes)} · {b.integrity === 'ok' ? 'verificada' : 'CORRUPTA'}</p>
                 </div>
                 <div style={rowFooter}>
-                  <a href={`/api/admin/backups/${b.id}/download`} style={rowViewTouch}>DESCARGAR →</a>
+                  <a href={`/api/admin/backups/${b.id}/download`} className="btn">DESCARGAR →</a>
                 </div>
               </div>
             ))}
