@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { requireAdmin, requireParticipant, requireRealParticipant } from "../auth/guards";
+import { requireAdmin, requireRealParticipant } from "../auth/guards";
 import { findActiveParty } from "../auth/participants";
 import { awardActivityJoin } from "../scoring/service";
 import { pathId, parsePositiveId } from "../http/ids";
@@ -114,6 +114,12 @@ export function createActivitiesRoutes(db: Database) {
       return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["capacity must be 1-100"] }, { status: 400 });
     }
 
+    const startMs = Date.parse(body.startsAt);
+    const endMs = Date.parse(body.endsAt);
+    if (isNaN(startMs) || isNaN(endMs) || startMs >= endMs) {
+      return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["startsAt must be before endsAt"] }, { status: 400 });
+    }
+
     let gameTitleSnapshot = null;
     if (body.gameId) {
       const game = db.query<{ title: string; enabled: number }, [number]>("SELECT title, enabled FROM games WHERE id = ?").get(body.gameId);
@@ -143,6 +149,16 @@ export function createActivitiesRoutes(db: Database) {
 
     const body = await request.json().catch(() => null);
     if (!body) return Response.json({ error: { code: "INVALID_REQUEST", message: "INVALID_REQUEST" } }, { status: 400 });
+
+    // Solo valida el rango si el PATCH toca horas; así no bloquea cambios de
+    // estado sobre actividades antiguas con datos ya inválidos.
+    if (body.startsAt !== undefined || body.endsAt !== undefined) {
+      const startMs = Date.parse(body.startsAt ?? existing.starts_at);
+      const endMs = Date.parse(body.endsAt ?? existing.ends_at);
+      if (isNaN(startMs) || isNaN(endMs) || startMs >= endMs) {
+        return Response.json({ error: { code: "VALIDATION_ERROR", message: "VALIDATION_ERROR" }, details: ["startsAt must be before endsAt"] }, { status: 400 });
+      }
+    }
 
     const updates: string[] = [];
     const values: unknown[] = [];

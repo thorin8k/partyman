@@ -69,6 +69,18 @@ describe("activities", () => {
     expect(body.activity.capacity).toBe(4);
   });
 
+  it("rejects an activity whose end is not after its start", async () => {
+    const res = await routes["/api/admin/parties/:partyId/activities"].POST(
+      new Request("http://localhost/api/admin/parties/1/activities", {
+        method: "POST",
+        headers: { cookie: `partyman_session=${adminToken}`, "content-type": "application/json", "x-partyman-csrf": "csrf", origin: "http://localhost:8400" },
+        body: JSON.stringify({ title: "Bad Activity", startsAt: "2026-01-01T11:00:00Z", endsAt: "2026-01-01T11:00:00Z" }),
+      })
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("VALIDATION_ERROR");
+  });
+
   it("participant joins activity", async () => {
     const res = await routes["/api/activities/:id/join"].PUT(
       new Request("http://localhost/api/activities/1/join", {
