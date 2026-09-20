@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { accessSync, constants, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-export interface BackupMeta {
+interface BackupMeta {
   id: string;
   filename: string;
   sizeBytes: number;
@@ -21,7 +21,7 @@ export const BACKUP_PATTERN = /^partyman-\d{8}T\d{6}Z-[A-Za-z0-9]+\.sqlite3$/;
 
 const VACUUM_RETRY_DELAYS_MS = [250, 500, 1000];
 
-export function ensureBackupDir(dir: string): void {
+function ensureBackupDir(dir: string): void {
   try {
     mkdirSync(dir, { recursive: true });
     accessSync(dir, constants.W_OK);
@@ -30,17 +30,17 @@ export function ensureBackupDir(dir: string): void {
   }
 }
 
-export function buildBackupName(now: Date = new Date()): string {
+function buildBackupName(now: Date = new Date()): string {
   const stamp = now.toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z";
   const rand = Math.random().toString(36).slice(2, 10);
   return `partyman-${stamp}-${rand}.sqlite3`;
 }
 
-export function isBackupId(id: string): boolean {
+function isBackupId(id: string): boolean {
   return BACKUP_PATTERN.test(id);
 }
 
-export function createdAtFromName(name: string): string {
+function createdAtFromName(name: string): string {
   const m = /^partyman-(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z-/.exec(name);
   if (!m) return new Date().toISOString();
   return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`;
@@ -105,7 +105,7 @@ export function listBackups(dir: string): BackupMeta[] {
   return metas;
 }
 
-export function pruneBackups(dir: string, keep: number): number {
+function pruneBackups(dir: string, keep: number): number {
   const all = listBackups(dir);
   const extra = all.slice(Math.max(0, keep));
   for (const b of extra) {

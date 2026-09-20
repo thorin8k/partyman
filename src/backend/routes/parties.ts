@@ -45,9 +45,6 @@ export function createPartyRoutes(db: Database) {
     "/api/admin/parties/:id/close": {
       POST: handleCloseParty,
     },
-    "/api/admin/audit-log": {
-      GET: handleGetAuditLog,
-    },
     "/api/admin/participants": {
       GET: handleGetParticipants,
     },
@@ -258,19 +255,6 @@ export function createPartyRoutes(db: Database) {
     }
     console.log("[parties] POST /api/admin/parties/" + id + "/delete → deleted");
     return Response.json({ ok: true });
-  }
-
-  async function handleGetAuditLog(request: Request): Promise<Response> {
-    const auth = requireAdmin(db, request);
-    if (auth instanceof Response) return auth;
-
-    const url = new URL(request.url);
-    const targetType = url.searchParams.get("targetType") ?? undefined;
-    const targetIdStr = url.searchParams.get("targetId");
-    const targetId = targetIdStr ? parseInt(targetIdStr, 10) : undefined;
-
-    const entries = service.getAuditLog({ targetType, targetId });
-    return Response.json({ entries });
   }
 
   function validatePartyInput(input: CreatePartyInput): string[] {

@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { accessSync, constants } from "node:fs";
 
-export interface HealthOptions {
+interface HealthOptions {
   // Directorios que deben existir y ser escribibles para estar ready.
   // Vacío por defecto: solo DB + migraciones (comportamiento histórico).
   dirs?: string[];

@@ -4,7 +4,7 @@ import { requireAdmin } from "../auth/guards";
 import { checkCsrf } from "../auth/guards";
 import { BackupError, createBackup, listBackups, resolveBackupPath } from "../ops/backup";
 
-export interface OperationsOptions {
+interface OperationsOptions {
   backupDir?: string;
   backupKeep?: number;
   publicOrigin?: string;

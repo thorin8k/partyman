@@ -5,36 +5,10 @@ import { joinPasswordRequired, verifyJoinPassword } from "../auth/password";
 
 export function createParticipantRoutes(db: Database) {
   return {
-    "/api/participants/me": {
-      GET: handleGetParticipant,
-    },
     "/api/participants/join": {
       POST: handleJoinActiveParty,
     },
   };
-
-  async function handleGetParticipant(request: Request): Promise<Response> {
-    const ctx = requireParticipant(db, request);
-    if (ctx instanceof Response) return ctx;
-
-    const participant = findParticipantById(db, ctx.session.subjectId);
-    if (!participant) {
-      console.log("[participants] GET /api/participants/me → NOT_FOUND");
-      return Response.json(
-        { error: { code: "NOT_FOUND", message: "Participant not found" } },
-        { status: 404 }
-      );
-    }
-
-    console.log("[participants] GET /api/participants/me →", participant.displayName);
-    return Response.json({
-      participant: {
-        id: participant.id,
-        displayName: participant.displayName,
-        avatarUrl: participant.avatarUrl,
-      },
-    });
-  }
 
   async function handleJoinActiveParty(request: Request): Promise<Response> {
     const ctx = requireParticipant(db, request);

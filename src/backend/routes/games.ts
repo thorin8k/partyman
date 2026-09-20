@@ -155,7 +155,7 @@ export function createGamesRoutes(db: Database) {
     // ponytail: referenciado → desactivar en vez de borrar (el histórico usa snapshots).
     let referenced = false;
     try {
-      referenced = (["activities", "tournaments", "party_game_proposals", "activity_proposals", "tournament_proposals"] as const)
+      referenced = (["activities", "tournaments", "activity_proposals", "tournament_proposals"] as const)
         .some(t => (db.query<{ n: number }, [number]>(`SELECT COUNT(*) AS n FROM ${t} WHERE game_id = ?`).get(id)?.n ?? 0) > 0);
     } catch { referenced = false; }
     if (referenced) {

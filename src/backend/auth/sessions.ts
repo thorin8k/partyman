@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { Database } from "bun:sqlite";
 
-export type SubjectType = "admin" | "participant";
+type SubjectType = "admin" | "participant";
 
 export interface SessionInfo {
   subjectType: SubjectType;
@@ -14,7 +14,7 @@ export function sha256Hex(input: string): string {
   return new Bun.CryptoHasher("sha256").update(input).digest("hex");
 }
 
-export function newToken(bytes = 32): string {
+function newToken(bytes = 32): string {
   return randomBytes(bytes).toString("hex");
 }
 
@@ -46,10 +46,6 @@ export function getSession(db: Database, token: string): SessionInfo | null {
     csrfToken: row.csrf_token,
     token: "",
   };
-}
-
-export function deleteSession(db: Database, token: string): void {
-  db.run("DELETE FROM sessions WHERE id_hash = ?", [sha256Hex(token)]);
 }
 
 // Limpieza periódica: sesiones y estados de login Steam caducados.

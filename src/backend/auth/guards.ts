@@ -15,10 +15,6 @@ function getCookie(req: Request, name: string): string | null {
   return null;
 }
 
-export function getBearerOrCookie(req: Request, name: string): string | null {
-  return getCookie(req, name);
-}
-
 export function requireSession(db: Database, req: Request): AuthContext | Response {
   const token = getCookie(req, "partyman_session");
   if (!token) return json({ error: { code: "UNAUTHENTICATED", message: "Session required" } }, 401);

@@ -1,6 +1,6 @@
 // ponytail: in-memory fixed-window limiter. LAN scale: a Map is enough.
 
-export interface RateLimitRule {
+interface RateLimitRule {
   limit: number;
   windowMs: number;
 }

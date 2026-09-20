@@ -391,7 +391,7 @@ describe("qa fixes", () => {
       }
       return tourId;
     };
-    const rep = (tourId: number, mid: number, tok: string, body: unknown) =>
+    const rep = (_tourId: number, mid: number, tok: string, body: unknown) =>
       routes["/api/matches/:id/report"].POST(new Request(`http://localhost/api/matches/${mid}/report`, post(tok, body)));
     const matchOf = (tourId: number) =>
       db.query<{ id: number; a: number | null; b: number | null }, [number]>("SELECT id, participant_a_id AS a, participant_b_id AS b FROM matches WHERE tournament_id = ?").get(tourId)!;

@@ -199,10 +199,6 @@ export class PartyService {
       if (existing.has("activities")) actIds = this.db.query<{ id: number }, [number]>("SELECT id FROM activities WHERE party_id = ?").all(id);
       for (const a of actIds) run("activity_participants", "DELETE FROM activity_participants WHERE activity_id = ?", [a.id]);
       run("activities", "DELETE FROM activities WHERE party_id = ?", [id]);
-      let propIds: { id: number }[] = [];
-      if (existing.has("party_game_proposals")) propIds = this.db.query<{ id: number }, [number]>("SELECT id FROM party_game_proposals WHERE party_id = ?").all(id);
-      for (const p of propIds) run("proposal_votes", "DELETE FROM proposal_votes WHERE proposal_id = ?", [p.id]);
-      run("party_game_proposals", "DELETE FROM party_game_proposals WHERE party_id = ?", [id]);
       if (existing.has("activity_proposal_votes") && existing.has("activity_proposals")) this.db.run("DELETE FROM activity_proposal_votes WHERE proposal_id IN (SELECT id FROM activity_proposals WHERE party_id = ?)", [id]);
       run("activity_proposals", "DELETE FROM activity_proposals WHERE party_id = ?", [id]);
       if (existing.has("tournament_proposal_votes") && existing.has("tournament_proposals")) this.db.run("DELETE FROM tournament_proposal_votes WHERE proposal_id IN (SELECT id FROM tournament_proposals WHERE party_id = ?)", [id]);

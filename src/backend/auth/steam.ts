@@ -1,12 +1,12 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
-export interface SteamConfig {
+interface SteamConfig {
   realm: string;
   returnTo: string;
   apiKey: string | null;
 }
 
-export interface SteamCallbackResult {
+interface SteamCallbackResult {
   steamId: string;
 }
 
@@ -56,7 +56,7 @@ async function realVerifySteamCallback(params: URLSearchParams): Promise<SteamCa
   return { steamId: match[1] };
 }
 
-export interface SteamProfile {
+interface SteamProfile {
   nickname: string;
   avatarUrl: string | null;
 }
@@ -81,7 +81,7 @@ export async function fetchSteamProfile(apiKey: string | null, steamId: string):
   }
 }
 
-export type SteamVerifier = (params: URLSearchParams) => Promise<SteamCallbackResult>;
+type SteamVerifier = (params: URLSearchParams) => Promise<SteamCallbackResult>;
 
 let verifier: SteamVerifier = realVerifySteamCallback;
 
@@ -93,6 +93,3 @@ export function verifySteamCallback(params: URLSearchParams): Promise<SteamCallb
   return verifier(params);
 }
 
-export function randomBytesHex(bytes = 16): string {
-  return randomBytes(bytes).toString("hex");
-}

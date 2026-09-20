@@ -1,4 +1,4 @@
-export interface MatchInput {
+interface MatchInput {
   round: number;
   position: number;
   participantAId: number | null;

@@ -45,7 +45,7 @@ describe("integration: public display", () => {
         expect(json).not.toContain(secret);
       }
       expect(body.attendees[0]).toEqual({ id: 1, displayName: "Alice", avatarUrl: "http://x/y.png", joinedAt: "2026-01-01T00:00:00Z" });
-      expect(body.schedule[0].status).toBe("finished");
+      expect(body.activities[0].status).toBe("scheduled");
     } finally {
       db.close();
     }

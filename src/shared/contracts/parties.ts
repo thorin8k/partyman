@@ -43,3 +43,4 @@ export interface AuditLogFilter {
   targetType?: string;
   targetId?: number;
 }
+

@@ -1,7 +1,7 @@
 // Etiquetas humanas para huecos del bracket. "BYE" no significa nada para
 // quien mira la TV: un hueco vacío es "Por decidir" si el partido sigue
 // abierto, o "—" si ya está decidido (era un pase directo resuelto).
-export interface BracketSlot {
+interface BracketSlot {
   participantAId: number | null;
   participantBId: number | null;
   winnerId: number | null;

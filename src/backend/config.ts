@@ -1,4 +1,4 @@
-export interface Config {
+interface Config {
   host: string;
   port: number;
   databasePath: string;
