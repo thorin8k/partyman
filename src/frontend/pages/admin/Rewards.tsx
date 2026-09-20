@@ -1,6 +1,6 @@
 import { useAuth } from '../../components/AuthContext';
 import { confirmDialog } from '../../components/ConfirmDialog';
-import { pageBtn, rowBtn, rowColumn, rowFooter, rowHead, rowMain, badge } from '../../components/listRow';
+import { pageBtn, rowBtn, rowColumn, rowFooter, rowHead, rowMain, badge, iconBtn } from '../../components/listRow';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 
@@ -110,6 +110,7 @@ export function Rewards() {
   if (!user || user.role !== 'admin') return <div className="container"><div className="loading">Redirigiendo…</div></div>;
 
   const filtered = participants.filter(p => !query.trim() || p.displayName.toLowerCase().includes(query.toLowerCase()));
+  const autoAch = achievements.filter((a: any) => a.auto);
   const correctedIds = new Set(ledger.filter(l => l.correction_of).map(l => l.correction_of));
   const visible = ledger.filter(l => !l.correction_of);
 
@@ -135,6 +136,23 @@ export function Rewards() {
           <input placeholder="Nota (opcional)" value={award.note} onChange={e => setAward({ ...award, note: e.target.value })} maxLength={500} />
           <button type="submit" className="primary" style={pageBtn}>OTORGAR</button>
         </form>
+      </div>
+
+      <div className="card" style={{ marginTop: '1rem' }}>
+        <h2>CÓMO SE CONSIGUEN</h2>
+        <p style={{ color: 'var(--text-dim)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+          Estos logros se conceden solos al puntuar. Los demás se otorgan a mano desde «OTORGAR LOGRO».
+        </p>
+        {autoAch.length === 0 ? <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>Sin logros automáticos.</p> : (
+          <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {autoAch.map((a: any) => (
+              <div key={a.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                <span>{a.name}</span>
+                <span style={{ color: 'var(--text-dim)', fontSize: '0.8125rem', textAlign: 'right' }}>{a.description}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ marginTop: '1rem' }}>
@@ -208,7 +226,7 @@ export function Rewards() {
             ) : (
               <span key={a.id} style={{ display: 'flex', gap: '0.375rem', alignItems: 'center', fontSize: '0.875rem', padding: '0.25rem 0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
                 {a.name}
-                <button onClick={() => setEditAch({ id: a.id, name: a.name })} style={{ padding: '0 0.25rem', minHeight: 'auto', fontSize: '0.75rem' }} title="Editar">✎</button>
+                <button onClick={() => setEditAch({ id: a.id, name: a.name })} style={iconBtn} title="Editar">✎</button>
               </span>
             )
           ))}

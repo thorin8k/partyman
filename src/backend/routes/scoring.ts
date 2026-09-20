@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { requireAdmin, requireParticipant } from "../auth/guards";
-import { getLeaderboard, scorePartyParticipation } from "../scoring/service";
+import { AUTO_ACHIEVEMENT_CODES, getLeaderboard } from "../scoring/service";
 import { pathId, parsePositiveId } from "../http/ids";
 
 export function createScoringRoutes(db: Database) {
@@ -14,7 +14,6 @@ export function createScoringRoutes(db: Database) {
     "/api/admin/achievements/:id": { PATCH: handleUpdateAchievement },
     "/api/admin/awards": { POST: handleCreateAward },
     "/api/admin/point-corrections": { POST: handlePointCorrection },
-    "/api/admin/parties/:id/score": { POST: handleScoreParty },
   };
 
   function extractId(url: string, prefix: string): number | null {
@@ -49,11 +48,15 @@ export function createScoringRoutes(db: Database) {
       const isAdmin = ctx.session.subjectType === "admin" || db.query<{ role: string }, [number]>("SELECT role FROM participants WHERE id = ?").get(ctx.session.subjectId)?.role === "admin";
       if (!isAdmin) return Response.json({ error: { code: "FORBIDDEN", message: "FORBIDDEN" } }, { status: 403 });
     }
-    const participant = db.query<{ id: number }, [number]>("SELECT id FROM participants WHERE id = ?").get(id);
+    const participant = db.query<{ id: number; display_name: string; avatar_url: string | null }, [number]>("SELECT id, display_name, avatar_url FROM participants WHERE id = ?").get(id);
     if (!participant) return Response.json({ error: { code: "PARTICIPANT_NOT_FOUND", message: "PARTICIPANT_NOT_FOUND" } }, { status: 404 });
     const ledger = db.query<any, [number]>("SELECT * FROM point_ledger WHERE participant_id = ? ORDER BY created_at DESC").all(id);
     const awards = db.query<any, [number]>("SELECT * FROM participant_awards WHERE participant_id = ? ORDER BY created_at DESC").all(id);
-    return Response.json({ ledger, awards });
+    return Response.json({
+      participant: { id: participant.id, displayName: participant.display_name, avatarUrl: participant.avatar_url },
+      ledger,
+      awards,
+    });
   }
 
   async function handleGetPointRules(request: Request): Promise<Response> {
@@ -97,7 +100,8 @@ export function createScoringRoutes(db: Database) {
   async function handleGetAchievements(request: Request): Promise<Response> {
     const auth = requireAdmin(db, request);
     if (auth instanceof Response) return auth;
-    const achievements = db.query<any, []>("SELECT * FROM achievements ORDER BY name").all();
+    const achievements = db.query<any, []>("SELECT * FROM achievements ORDER BY name").all()
+      .map((a: any) => ({ ...a, auto: AUTO_ACHIEVEMENT_CODES.has(a.code) }));
     return Response.json({ achievements });
   }
 
@@ -173,7 +177,7 @@ export function createScoringRoutes(db: Database) {
     // La anulación revoca los auto-logros que colgaban de esa fila; el próximo
     // scoring los re-concede si siguen ganados (contadores ya excluyen anuladas).
     const affected = original.reason === "tournament_win"
-      ? ["first_win", "veteran_3_wins", "undefeated_party", "party_mvp"]
+      ? ["first_win", "veteran_3_wins", "undefeated_party", "party_mvp", "goleada", "intocable"]
       : original.reason === "party_participation" ? ["debut"] : [];
     for (const code of affected) {
       const achId = db.query<{ id: number }, [string]>("SELECT id FROM achievements WHERE code = ?").get(code)?.id;
@@ -181,18 +185,5 @@ export function createScoringRoutes(db: Database) {
         [original.participant_id, achId, original.party_id, original.party_id]);
     }
     return Response.json({ ok: true });
-  }
-
-  async function handleScoreParty(request: Request): Promise<Response> {
-    const auth = requireAdmin(db, request);
-    if (auth instanceof Response) return auth;
-    const id = extractId(request.url, "/api/admin/parties/");
-    if (!id) return Response.json({ error: { code: "INVALID_ID", message: "INVALID_ID" } }, { status: 400 });
-    const party = db.query<any, [number]>("SELECT id FROM parties WHERE id = ?").get(id);
-    if (!party) return Response.json({ error: { code: "PARTY_NOT_FOUND", message: "Party not found" } }, { status: 404 });
-    scorePartyParticipation(db, id);
-    const run = db.query<any, [number]>("SELECT * FROM party_scoring_runs WHERE party_id = ?").get(id);
-    if (run?.status === "failed") return Response.json({ ok: false, error: { code: "SCORING_FAILED", message: run.last_error } }, { status: 500 });
-    return Response.json({ ok: true, run });
   }
 }

@@ -10,7 +10,8 @@ export function seedPointRules(db: Database) {
 
 // Task 014: thresholds are code constants until a real party proves otherwise.
 export const AUTO_APPROVE_VOTES = 3;
-export const REPORT_TIMEOUT_MIN = 15;
+// Minutos hasta auto-confirmar un reporte sin respuesta; configurable por env.
+export const REPORT_TIMEOUT_MIN = Number(process.env.REPORT_TIMEOUT_MIN ?? 5);
 
 const AUTO_ACHIEVEMENTS: Array<[string, string, string]> = [
   ["debut", "Debut", "Primera party"],
@@ -20,7 +21,14 @@ const AUTO_ACHIEVEMENTS: Array<[string, string, string]> = [
   ["social_3_activities", "Sociable", "Unirse a 3 actividades de una party"],
   ["undefeated_party", "Invicto", "Ganar todos los torneos jugados de una party (mín. 2)"],
   ["party_mvp", "MVP", "Más puntos de la party"],
+  ["goleada", "Goleada", "Ganar un partido por 8+ puntos con puntuación registrada"],
+  ["intocable", "Intocable", "Ganar un torneo sin perder ningún partido"],
+  ["fiel", "Fiel", "Jugar 5 torneos finalizados"],
+  ["ideologo", "Ideólogo", "Que aprueben una propuesta tuya (actividad o torneo)"],
 ];
+
+// Cómo se consiguen los automáticos: única fuente de verdad para el catálogo de admin.
+export const AUTO_ACHIEVEMENT_CODES = new Set(AUTO_ACHIEVEMENTS.map(([code]) => code));
 
 export function seedAchievements(db: Database) {
   for (const [code, name, desc] of AUTO_ACHIEVEMENTS) {
@@ -33,7 +41,7 @@ function achievementId(db: Database, code: string): number | null {
 }
 
 // ponytail: exactly-once por (achievement, party, participant); el título es el nombre del logro. Devuelve true si concede ahora.
-function awardAuto(db: Database, participantId: number, code: string, partyId: number | null, note: string): boolean {
+export function awardAuto(db: Database, participantId: number, code: string, partyId: number | null, note: string): boolean {
   const achId = achievementId(db, code);
   if (!achId) return false;
   const exists = db.query<{ n: number }, [number, number, number | null, number | null]>(
@@ -100,12 +108,17 @@ export function scoreTournamentFinished(db: Database, tournamentId: number, part
     const wins = db.query<{ n: number }, [number]>("SELECT COUNT(*) AS n FROM point_ledger WHERE participant_id = ? AND reason = 'tournament_win' AND correction_of IS NULL AND NOT EXISTS (SELECT 1 FROM point_ledger c WHERE c.correction_of = point_ledger.id)").get(winner.winner_id)?.n ?? 0;
     if (wins >= 1 && awardAuto(db, winner.winner_id, "first_win", partyId, `Primer torneo ganado: ${tournament.name}`)) logEvent(db, partyId, winner.winner_id, "achievement", `Primera victoria en ${tournament.name}`);
     if (wins >= 3 && awardAuto(db, winner.winner_id, "veteran_3_wins", partyId, "3 victorias en torneos")) logEvent(db, partyId, winner.winner_id, "achievement", "3 victorias en torneos");
+    const lost = db.query<{ n: number }, [number, number, number, number]>(
+      "SELECT COUNT(*) AS n FROM matches WHERE tournament_id = ? AND status = 'confirmed' AND winner_id IS NOT NULL AND winner_id != ? AND (participant_a_id = ? OR participant_b_id = ?)"
+    ).get(tournamentId, winner.winner_id, winner.winner_id, winner.winner_id)?.n ?? 0;
+    if (lost === 0 && awardAuto(db, winner.winner_id, "intocable", partyId, `Ganó ${tournament.name} sin perder ningún partido`)) logEvent(db, partyId, winner.winner_id, "achievement", `Intocable en ${tournament.name}`);
   }
   for (const p of listed) {
     const played = db.query<{ n: number }, [number]>(
       "SELECT COUNT(DISTINCT tp.tournament_id) AS n FROM tournament_participants tp JOIN tournaments t ON t.id = tp.tournament_id WHERE tp.participant_id = ? AND t.status = 'finished'"
     ).get(p.participant_id)?.n ?? 0;
     if (played >= 3 && awardAuto(db, p.participant_id, "regular_3_tournaments", null, "3 torneos jugados")) logEvent(db, partyId, p.participant_id, "achievement", "3 torneos jugados");
+    if (played >= 5 && awardAuto(db, p.participant_id, "fiel", null, "5 torneos jugados")) logEvent(db, partyId, p.participant_id, "achievement", "Fiel: 5 torneos jugados");
   }
   console.log("[scoring] Tournament #" + tournamentId + " scored");
 }

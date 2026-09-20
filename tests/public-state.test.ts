@@ -12,8 +12,6 @@ function makeDb(): Database {
   db.exec("CREATE TABLE games (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, min_players INTEGER, max_players INTEGER, duration_minutes INTEGER, setup_notes TEXT, image_path TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
   db.exec("CREATE TABLE activities (id INTEGER PRIMARY KEY, party_id INTEGER NOT NULL, game_id INTEGER, game_title_snapshot TEXT, tournament_id INTEGER, title TEXT NOT NULL, starts_at TEXT NOT NULL, ends_at TEXT NOT NULL, capacity INTEGER, notes TEXT, status TEXT NOT NULL DEFAULT 'scheduled', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
   db.exec("CREATE TABLE activity_participants (activity_id INTEGER NOT NULL, participant_id INTEGER NOT NULL, joined_at TEXT NOT NULL, PRIMARY KEY(activity_id, participant_id))");
-  db.exec("CREATE TABLE party_game_proposals (id INTEGER PRIMARY KEY, party_id INTEGER NOT NULL, game_id INTEGER NOT NULL, created_by_participant_id INTEGER NOT NULL, created_at TEXT NOT NULL, UNIQUE(party_id, game_id))");
-  db.exec("CREATE TABLE proposal_votes (proposal_id INTEGER NOT NULL, participant_id INTEGER NOT NULL, value INTEGER NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(proposal_id, participant_id))");
   db.exec("CREATE TABLE tournaments (id INTEGER PRIMARY KEY, party_id INTEGER NOT NULL, game_id INTEGER NOT NULL, game_title_snapshot TEXT NOT NULL, activity_id INTEGER, name TEXT NOT NULL, format TEXT NOT NULL DEFAULT 'single_elimination', status TEXT NOT NULL DEFAULT 'draft', max_participants INTEGER NOT NULL DEFAULT 16, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
   db.exec("CREATE TABLE tournament_participants (tournament_id INTEGER NOT NULL, participant_id INTEGER NOT NULL, display_name_snapshot TEXT NOT NULL, seed INTEGER NOT NULL, PRIMARY KEY(tournament_id, participant_id))");
   db.exec("CREATE TABLE matches (id INTEGER PRIMARY KEY, tournament_id INTEGER NOT NULL, round INTEGER NOT NULL, position INTEGER NOT NULL, participant_a_id INTEGER, participant_b_id INTEGER, winner_id INTEGER, score_json TEXT, status TEXT NOT NULL DEFAULT 'pending', reported_by INTEGER, reported_at TEXT, confirmed_at TEXT, version INTEGER DEFAULT 0, UNIQUE(tournament_id, round, position))");
@@ -29,6 +27,15 @@ describe("public state", () => {
     expect(body.party).toBeNull();
     expect(body.attendees).toEqual([]);
     expect(body.generatedAt).toBeTruthy();
+  });
+
+  it("exposes the canonical join URL for the display QR", async () => {
+    const db = makeDb();
+    const withOrigin = await (await createPublicRoutes(db, { publicOrigin: "http://192.168.1.100:8400/" })["/api/public/state"].GET()).json();
+    expect(withOrigin.joinUrl).toBe("http://192.168.1.100:8400");
+
+    const noOrigin = await (await createPublicRoutes(db, { publicOrigin: "" })["/api/public/state"].GET()).json();
+    expect(noOrigin.joinUrl).toBeNull();
   });
 
   it("returns active party with attendees", async () => {
@@ -51,7 +58,7 @@ describe("public state", () => {
     expect(body.attendees[1].displayName).toBe("Player2");
   });
 
-  it("exposes schedule statuses and the activity feed", async () => {
+  it("exposes activities and the activity feed", async () => {
     const db = makeDb();
     db.run("INSERT INTO parties (name, starts_at, ends_at, status, created_at, updated_at) VALUES ('P', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z', 'active', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')");
     const past = new Date(Date.now() - 7200_000).toISOString();
@@ -62,8 +69,8 @@ describe("public state", () => {
     db.run("INSERT INTO activity_events (party_id, event_type, message, created_at) VALUES (1, 'tournament_win', 'Ganó torneo Cup', ?)", [past]);
 
     const body = await (await createPublicRoutes(db)["/api/public/state"].GET()).json();
-    const byTitle = Object.fromEntries(body.schedule.map((s: any) => [s.title, s.status]));
-    expect(byTitle).toEqual({ Live: "current", Old: "finished" });
+    const byTitle = Object.fromEntries(body.activities.map((a: any) => [a.title, a.status]));
+    expect(byTitle).toEqual({ Live: "scheduled", Old: "finished" });
     expect(body.activity).toHaveLength(1);
     expect(body.activity[0].message).toBe("Ganó torneo Cup");
   });

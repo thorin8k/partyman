@@ -3,6 +3,7 @@ import { QrCode } from '../../components/QrCode';
 import { wifiQrString } from '../../components/qr';
 import { badge, headerBtn } from '../../components/listRow';
 import { isByeSlot, slotLabel } from '../../components/bracket';
+import { nextMoment, eventIcon, eventLabel, type FeedEvent } from '../../components/activityFeed';
 
 interface Tournament {
   id: number;
@@ -21,8 +22,9 @@ interface PublicState {
   tournaments: Tournament[];
   recentTournaments: Array<{ id: number; name: string; gameTitle: string; winner: string | null }>;
   leaderboard: Array<{ participantId: number; displayName: string; avatarUrl: string | null; points: number; wins: number }>;
-  activity: unknown[];
+  activity: FeedEvent[];
   wifi: { ssid: string; password: string | null } | null;
+  joinUrl: string | null;
   generatedAt: string;
 }
 
@@ -32,6 +34,8 @@ export function PublicDisplay() {
   const [error, setError] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [tournamentIdx, setTournamentIdx] = useState(0);
+  const [moment, setMoment] = useState<{ id: number; message: string; eventType: string } | null>(null);
+  const seenEventIdRef = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -47,6 +51,11 @@ export function PublicDisplay() {
         setState(data);
         setLastUpdated(new Date());
         setError(false);
+        // Los eventos llegan ordenados por id desc; el primero es el más nuevo.
+        const events: FeedEvent[] = Array.isArray(data.activity) ? data.activity : [];
+        const { seenId, moment: fresh } = nextMoment(seenEventIdRef.current, events);
+        seenEventIdRef.current = seenId;
+        if (fresh) setMoment({ id: fresh.id, message: fresh.message, eventType: fresh.eventType });
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
@@ -72,6 +81,12 @@ export function PublicDisplay() {
   }, [state?.tournaments.length]);
 
   useEffect(() => { setTournamentIdx(0); }, [state?.tournaments.length]);
+
+  useEffect(() => {
+    if (!moment) return;
+    const id = setTimeout(() => setMoment(null), 8000);
+    return () => clearTimeout(id);
+  }, [moment]);
 
   const handleFullscreen = () => {
     document.documentElement.requestFullscreen?.();
@@ -100,6 +115,18 @@ export function PublicDisplay() {
           .public-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
+      {moment && (
+        <div data-moment style={{
+          position: 'fixed', top: '1.5rem', left: '50%', transform: 'translateX(-50%)', zIndex: 50,
+          background: 'var(--panel)', border: '3px solid var(--neon-yellow)', boxShadow: '0 0 28px var(--neon-yellow)',
+          padding: '1.25rem 2.5rem', textAlign: 'center', maxWidth: '90vw',
+        }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.75rem', color: 'var(--neon-yellow)', marginBottom: '0.75rem' }}>
+            {eventLabel(moment.eventType)}
+          </div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{moment.message}</div>
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--neon-cyan)' }}>
           PARTYMAN
@@ -117,7 +144,9 @@ export function PublicDisplay() {
           )}
           <button
             onClick={handleFullscreen}
-            style={headerBtn}
+            // La métrica de la fuente pixel subestima el ancho del texto y el
+            // overflow del botón lo recortaba ("NTALLA COMPLE"); ancho mínimo fijo.
+            style={{ ...headerBtn, minWidth: '200px' }}
           >
             PANTALLA COMPLETA
           </button>
@@ -146,6 +175,23 @@ export function PublicDisplay() {
               </span>
             </div>
           </div>
+
+          {state.activity.length > 0 && (
+            <div className="card" style={{ gridColumn: '1 / -1' }}>
+              <h2 style={{ marginBottom: '1rem' }}>NOVEDADES</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {state.activity.slice(0, 8).map(e => (
+                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+                    <span style={{ fontSize: '1.125rem' }}>{eventIcon(e.eventType)}</span>
+                    <span style={{ flex: 1, fontSize: '1rem' }}>{e.message}</span>
+                    <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                      {new Date(e.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="card">
             <h2 style={{ marginBottom: '1rem' }}>ASISTENTES ({state.attendees.length})</h2>
@@ -294,8 +340,8 @@ export function PublicDisplay() {
             <h2 style={{ marginBottom: '0.5rem' }}>ÚNETE</h2>
             <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
               <div style={{ textAlign: 'center' }}>
-                {typeof window !== 'undefined' && <QrCode text={window.location.origin} size={160} />}
-                <p style={{ fontSize: '1rem', fontWeight: 'bold', wordBreak: 'break-all', marginTop: '0.5rem' }}>{typeof window !== 'undefined' ? window.location.origin : ''}</p>
+                {typeof window !== 'undefined' && <QrCode text={state.joinUrl || window.location.origin} size={160} />}
+                <p style={{ fontSize: '1rem', fontWeight: 'bold', wordBreak: 'break-all', marginTop: '0.5rem' }}>{state.joinUrl || (typeof window !== 'undefined' ? window.location.origin : '')}</p>
                 <p style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>Escanea y entra con Steam</p>
               </div>
               {state.wifi && (

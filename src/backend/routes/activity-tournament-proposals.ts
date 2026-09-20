@@ -1,12 +1,12 @@
 import type { Database } from "bun:sqlite";
 import { requireAdmin, requireParticipant, requireRealParticipant } from "../auth/guards";
 import { findActiveParty } from "../auth/participants";
-import { AUTO_APPROVE_VOTES, logEvent } from "../scoring/service";
+import { AUTO_APPROVE_VOTES, awardAuto, logEvent } from "../scoring/service";
 import { maybeAutoStartTournament } from "./tournaments";
 import { pathId } from "../http/ids";
 
 // Task 014: shared approve paths (admin button and vote-threshold auto-approve create the same rows).
-export function approveActivityProposal(db: Database, id: number): number | null {
+function approveActivityProposal(db: Database, id: number): number | null {
   const proposal = db.query<any, [number]>("SELECT * FROM activity_proposals WHERE id = ?").get(id);
   if (!proposal) return null;
   const gameTitle = proposal.game_id ? db.query<{ title: string }, [number]>("SELECT title FROM games WHERE id = ?").get(proposal.game_id)?.title ?? null : null;
@@ -25,10 +25,21 @@ export function approveActivityProposal(db: Database, id: number): number | null
     try { db.run("DELETE FROM activity_proposal_votes WHERE proposal_id = ?", [id]); } catch { /* pre-014 DBs */ }
     db.run("DELETE FROM activity_proposals WHERE id = ?", [id]);
   })();
+  awardIdeologo(db, proposal, `Propuesta aprobada: ${proposal.title}`);
   return activityId;
 }
 
-export function approveTournamentProposal(db: Database, id: number, formatOverride?: string): number | null {
+// Task 018: ideólogo al proponente cuando le aprueban una propuesta (admin o votos).
+function awardIdeologo(db: Database, proposal: { party_id: number; created_by_participant_id: number | null }, label: string): void {
+  if (!proposal.created_by_participant_id) return;
+  try {
+    if (awardAuto(db, proposal.created_by_participant_id, "ideologo", proposal.party_id, label)) {
+      logEvent(db, proposal.party_id, proposal.created_by_participant_id, "achievement", "Ideólogo: propuesta aprobada");
+    }
+  } catch { /* logros nunca rompen la aprobación */ }
+}
+
+function approveTournamentProposal(db: Database, id: number, formatOverride?: string): number | null {
   const proposal = db.query<any, [number]>("SELECT * FROM tournament_proposals WHERE id = ?").get(id);
   if (!proposal) return null;
   const game = db.query<{ title: string }, [number]>("SELECT title FROM games WHERE id = ?").get(proposal.game_id)!;
@@ -41,6 +52,7 @@ export function approveTournamentProposal(db: Database, id: number, formatOverri
     try { db.run("DELETE FROM tournament_proposal_votes WHERE proposal_id = ?", [id]); } catch { /* pre-014 DBs */ }
     db.run("DELETE FROM tournament_proposals WHERE id = ?", [id]);
   })();
+  awardIdeologo(db, proposal, `Torneo aprobado: ${proposal.name}`);
   return tournamentId;
 }
 

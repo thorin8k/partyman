@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PartyService } from "../src/backend/parties/service";
 import { scoreTournamentFinished, seedAchievements, seedPointRules } from "../src/backend/scoring/service";
-import { createTournamentRoutes } from "../src/backend/routes/tournaments";
+import { confirmMatchRow, createTournamentRoutes } from "../src/backend/routes/tournaments";
 import { createActivityTournamentProposalRoutes } from "../src/backend/routes/activity-tournament-proposals";
 import { createPartyRoutes } from "../src/backend/routes/parties";
 
@@ -130,6 +130,39 @@ describe("task 014 autonomous mode", () => {
     expect((await detail.json()).tournament.matches[0].status).toBe("confirmed");
   });
 
+  it("lets the opponent confirm a report in one tap, but not the reporter", async () => {
+    const routes = createTournamentRoutes(db);
+    const gameId = db.query<{ id: number }, []>("SELECT id FROM games LIMIT 1").get()!.id;
+    const created = await routes["/api/admin/tournaments"].POST(
+      new Request("http://localhost/api/admin/tournaments", post(adminToken, { partyId, gameId, name: "ConfirmCup", maxParticipants: 2 }))
+    );
+    const tourId = (await created.json()).tournament.id;
+    const c1 = member(db, "steam-c1", "C1", partyId);
+    const c2 = member(db, "steam-c2", "C2", partyId);
+    await routes["/api/tournaments/:id/join"].POST(new Request(`http://localhost/api/tournaments/${tourId}/join`, post(c1.token)));
+    await routes["/api/tournaments/:id/join"].POST(new Request(`http://localhost/api/tournaments/${tourId}/join`, post(c2.token)));
+    const match = db.query<{ id: number; a: number | null; b: number | null }, [number]>("SELECT id, participant_a_id AS a, participant_b_id AS b FROM matches WHERE tournament_id = ?").get(tourId)!;
+    const score = match.a === c1.id ? { a: 5, b: 2 } : { a: 2, b: 5 };
+    await routes["/api/matches/:id/report"].POST(
+      new Request(`http://localhost/api/matches/${match.id}/report`, post(c1.token, { winnerId: c1.id, score }))
+    );
+    expect(db.query<{ status: string }, [number]>("SELECT status FROM matches WHERE id = ?").get(match.id)?.status).toBe("reported");
+    const self = await routes["/api/matches/:id/confirm"].POST(
+      new Request(`http://localhost/api/matches/${match.id}/confirm`, post(c1.token))
+    );
+    expect(self.status).toBe(403);
+    const ok = await routes["/api/matches/:id/confirm"].POST(
+      new Request(`http://localhost/api/matches/${match.id}/confirm`, post(c2.token))
+    );
+    expect(ok.status).toBe(200);
+    expect(db.query<{ status: string }, [number]>("SELECT status FROM matches WHERE id = ?").get(match.id)?.status).toBe("confirmed");
+    expect(db.query<{ winner_id: number }, [number]>("SELECT winner_id FROM matches WHERE id = ?").get(match.id)?.winner_id).toBe(c1.id);
+    const again = await routes["/api/matches/:id/confirm"].POST(
+      new Request(`http://localhost/api/matches/${match.id}/confirm`, post(c2.token))
+    );
+    expect(again.status).toBe(409);
+  });
+
   it("resolves conflicting reports by outsider majority", async () => {
     const routes = createTournamentRoutes(db);
     const gameId = db.query<{ id: number }, []>("SELECT id FROM games LIMIT 1").get()!.id;
@@ -209,5 +242,65 @@ describe("task 014 autonomous mode", () => {
     expect(body.steps.map((s: any) => s.key)).toEqual(["cancel", "finish", "backup"]);
     expect(service.getById(partyId)?.status).toBe("finished");
     expect(db.query<{ n: number }, [string]>("SELECT COUNT(*) AS n FROM participant_awards pa JOIN achievements a ON a.id = pa.achievement_id WHERE a.code = 'party_mvp'").get("party_mvp")?.n ?? 0).toBeGreaterThan(0);
+  });
+
+  const awardCount = (code: string, pid: number) => db.query<{ n: number }, [string, number]>(
+    "SELECT COUNT(*) AS n FROM participant_awards pa JOIN achievements a ON a.id = pa.achievement_id WHERE a.code = ? AND pa.participant_id = ?"
+  ).get(code, pid)?.n ?? 0;
+
+  const mkTournament = (name: string, status: string) => Number(db.run(
+    "INSERT INTO tournaments (party_id, game_id, game_title_snapshot, name, status) VALUES (?, ?, 'Game', ?, ?)",
+    [partyId, db.query<{ id: number }, []>("SELECT id FROM games LIMIT 1").get()!.id, name, status]
+  ).lastInsertRowid);
+
+  it("awards goleada only on an 8+ margin with a recorded score", () => {
+    const g1 = member(db, "steam-gol1", "Gol1", partyId);
+    const g2 = member(db, "steam-gol2", "Gol2", partyId);
+    const t = mkTournament("GolCup", "in_progress");
+    db.run("INSERT INTO matches (tournament_id, round, position, participant_a_id, participant_b_id, status) VALUES (?, 1, 0, ?, ?, 'pending')", [t, g1.id, g2.id]);
+    const match = db.query<any, [number]>("SELECT * FROM matches WHERE tournament_id = ?").get(t)!;
+    confirmMatchRow(db, match, g1.id, JSON.stringify({ a: 10, b: 2 }), null);
+    expect(awardCount("goleada", g1.id)).toBe(1);
+    confirmMatchRow(db, match, g1.id, JSON.stringify({ a: 10, b: 2 }), null);
+    expect(awardCount("goleada", g1.id)).toBe(1);
+
+    const g3 = member(db, "steam-gol3", "Gol3", partyId);
+    const t2 = mkTournament("SmallCup", "in_progress");
+    db.run("INSERT INTO matches (tournament_id, round, position, participant_a_id, participant_b_id, status) VALUES (?, 1, 0, ?, ?, 'pending')", [t2, g3.id, g2.id]);
+    const match2 = db.query<any, [number]>("SELECT * FROM matches WHERE tournament_id = ?").get(t2)!;
+    confirmMatchRow(db, match2, g3.id, JSON.stringify({ a: 5, b: 3 }), null);
+    expect(awardCount("goleada", g3.id)).toBe(0);
+  });
+
+  it("awards intocable and fiel when scoring, idempotently", () => {
+    const p = member(db, "steam-fiel", "Fiel", partyId);
+    const opp = member(db, "steam-fielopp", "FielOpp", partyId);
+    for (let i = 0; i < 4; i++) {
+      const prev = mkTournament(`Prev${i}`, "finished");
+      db.run("INSERT INTO tournament_participants (tournament_id, participant_id, display_name_snapshot, seed) VALUES (?, ?, 'Fiel', 1)", [prev, p.id]);
+    }
+    const t = mkTournament("FielCup", "finished");
+    db.run("INSERT INTO tournament_participants (tournament_id, participant_id, display_name_snapshot, seed) VALUES (?, ?, 'Fiel', 1), (?, ?, 'FielOpp', 2)", [t, p.id, t, opp.id]);
+    db.run("INSERT INTO matches (tournament_id, round, position, participant_a_id, participant_b_id, winner_id, status) VALUES (?, 1, 0, ?, ?, ?, 'confirmed')", [t, p.id, opp.id, p.id]);
+    scoreTournamentFinished(db, t, partyId);
+    expect(awardCount("intocable", p.id)).toBe(1);
+    expect(awardCount("fiel", p.id)).toBe(1);
+    scoreTournamentFinished(db, t, partyId);
+    expect(awardCount("intocable", p.id)).toBe(1);
+    expect(awardCount("fiel", p.id)).toBe(1);
+  });
+
+  it("awards ideologo to the proposer on admin approval", async () => {
+    const routes = createActivityTournamentProposalRoutes(db);
+    const p = member(db, "steam-ideo", "Ideo", partyId);
+    const pid = Number(db.run(
+      "INSERT INTO activity_proposals (party_id, title, starts_at, ends_at, created_by_participant_id) VALUES (?, 'Taller', '2026-01-01T12:00:00Z', '2026-01-01T13:00:00Z', ?)",
+      [partyId, p.id]
+    ).lastInsertRowid);
+    const res = await routes["/api/admin/activity-proposals/:id/approve"].POST(
+      new Request(`http://localhost/api/admin/activity-proposals/${pid}/approve`, post(adminToken))
+    );
+    expect(res.status).toBe(200);
+    expect(awardCount("ideologo", p.id)).toBe(1);
   });
 });
