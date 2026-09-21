@@ -8,3 +8,8 @@ dist/
 /backups/
 .env
 .DS_Store
+
+# Historial local del editor y config de la herramienta (no publicar)
+.history/
+opencode.json
+.opencode/
