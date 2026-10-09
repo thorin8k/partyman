@@ -14,7 +14,7 @@ Single-container LAN deployment. SQLite + uploads live in mounted host directori
 | `BACKUP_KEEP` | `20` | Max backups kept; oldest pruned after each success |
 | `PUBLIC_ORIGIN` | (required) | Browser-facing origin, used by Steam callbacks and CSRF |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` | (required on first boot) | Admin provisioning only; rotation via Admin → Usuarios → Contraseña |
-| `JOIN_PASSWORD` | (optional, empty = open) | When set, Steam users must enter it on the dashboard to join the active party |
+| `ACCESS_PASSWORD` | (optional, empty = open) | When set, the whole app is gated behind this access password; joining the active party is automatic after Steam login |
 | `STEAM_API_KEY` | (optional) | Without it, display names fall back to `Participant #id` |
 | `STEAM_ENABLED` | `true` | Set `false` to disable Steam login (`/auth/steam` → 503) |
 | `WIFI_SSID` / `WIFI_PASSWORD` | (optional) | Shows a WiFi QR on the display next to the join QR; omit for no WiFi QR |

@@ -87,7 +87,7 @@ These contracts should stay stable while tasks are developed in parallel:
 ## Environment and Volumes
 
 - Required: `PORT` (default `8400`), `HOST` (default `0.0.0.0`), `DATABASE_PATH` (default `/data/partyman.sqlite3`), `UPLOADS_PATH` (default `/uploads`), and `PUBLIC_ORIGIN` (the browser-facing origin used by Steam callbacks).
-- Optional: `BACKUP_DIR` (default `/data/backups`), `BACKUP_KEEP` (default `20`), `JOIN_PASSWORD` (empty = open join), `STEAM_API_KEY`, `STEAM_ENABLED` (default `true`), `WIFI_SSID` / `WIFI_PASSWORD`, and `COOKIE_SECURE` (default `false` for HTTP LAN use). On the first startup, `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` must both be provided to provision the administrator; they are not needed on later starts (rotation is via `POST /api/admin/password`).
+- Optional: `BACKUP_DIR` (default `/data/backups`), `BACKUP_KEEP` (default `20`), `ACCESS_PASSWORD` (empty = open access; when set it gates the whole app and party join stays automatic), `STEAM_API_KEY`, `STEAM_ENABLED` (default `true`), `WIFI_SSID` / `WIFI_PASSWORD`, and `COOKIE_SECURE` (default `false` for HTTP LAN use). On the first startup, `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` must both be provided to provision the administrator; they are not needed on later starts (rotation is via `POST /api/admin/password`).
 - Mount the host's persistent directories to `/data` and `/uploads`. Never store the production database or generated uploads only in the container layer.
 
 ## Cross-domain Database Rules

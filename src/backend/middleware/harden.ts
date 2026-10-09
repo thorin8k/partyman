@@ -10,7 +10,7 @@ type RouteMap = Record<string, Record<string, Handler>>;
 
 // Single composition point: body limit + rate limit before, headers after.
 // Bun.serve has no middleware chain, so backend.ts wraps the merged route map.
-export function hardenRoutes<T extends RouteMap>(routes: T, opts?: { dev?: boolean; limiter?: ReturnType<typeof createRateLimiter>; csrfOrigins?: string[] }): T {
+export function hardenRoutes<T extends RouteMap>(routes: T, opts?: { dev?: boolean; limiter?: ReturnType<typeof createRateLimiter>; csrfOrigins?: string[]; accessGate?: (req: Request) => boolean }): T {
   const dev = opts?.dev ?? process.env.NODE_ENV !== "production";
   const limiter = opts?.limiter ?? createRateLimiter();
   const out: RouteMap = {};
@@ -30,6 +30,13 @@ export function hardenRoutes<T extends RouteMap>(routes: T, opts?: { dev?: boole
         if (rule && !limiter.check(rule.key, rule.rule)) {
           return applySecurityHeaders(
             Response.json({ error: { code: "RATE_LIMITED", message: "Too many requests" } }, { status: 429 }),
+            dev
+          );
+        }
+        // Puerta de acceso opcional (ACCESS_PASSWORD): solo actúa si está configurada.
+        if (opts?.accessGate && !opts.accessGate(req)) {
+          return applySecurityHeaders(
+            Response.json({ error: { code: "ACCESS_REQUIRED", message: "Access password required" } }, { status: 403 }),
             dev
           );
         }

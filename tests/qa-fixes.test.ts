@@ -511,29 +511,34 @@ describe("qa fixes", () => {
     expect(db.query<{ status: string }, [number]>("SELECT status FROM matches WHERE id = ?").get(third!.id)?.status).toBe("pending");
   });
 
-  it("gates party join behind JOIN_PASSWORD when set", async () => {
+  it("ACCESS_PASSWORD gates the app only when set; join stays automatic", async () => {
+    const { createAccessGate, accessCookieValue } = await import("../src/backend/auth/access");
     const routes = createParticipantRoutes(db);
-    const partyRoutes = createPartyRoutes(db);
     const pid = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES ('s-gated', 'G')").lastInsertRowid);
     const token = session(db, "participant", pid);
-    const join = (t: string, body?: unknown) => routes["/api/participants/join"].POST(new Request("http://localhost/api/participants/join", post(t, body)));
-    process.env.JOIN_PASSWORD = "lanfiesta";
+    const join = (t: string) => routes["/api/participants/join"].POST(new Request("http://localhost/api/participants/join", post(t)));
+    const gated = () => new Request("http://localhost/api/tournaments");
+
+    // Sin contraseña: la puerta no interviene.
+    expect(createAccessGate(db)(gated())).toBe(true);
+
+    process.env.ACCESS_PASSWORD = "lanfiesta";
     try {
-      expect((await join(token)).status).toBe(403);
-      expect((await join(token, { password: "nope" })).status).toBe(403);
-      expect(db.query<{ n: number }, [number, number]>("SELECT COUNT(*) AS n FROM party_memberships WHERE party_id = ? AND participant_id = ?").get(activePartyId, pid)?.n).toBe(0);
-      const okRes = await join(token, { password: "lanfiesta" });
-      expect((await okRes.json()).joined).toBe(true);
-      // La alta perezosa tampoco salta la verja.
-      const pid2 = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES ('s-gated2', 'G2')").lastInsertRowid);
-      await partyRoutes["/api/parties/active"].GET(new Request("http://localhost/api/parties/active", { headers: cookie(session(db, "participant", pid2)) }));
-      expect(db.query<{ n: number }, [number, number]>("SELECT COUNT(*) AS n FROM party_memberships WHERE party_id = ? AND participant_id = ?").get(activePartyId, pid2)?.n).toBe(0);
+      const gate = createAccessGate(db);
+      // Ruta normal sin cookie ni sesión → bloqueada.
+      expect(gate(gated())).toBe(false);
+      // Rutas exentas → pasan.
+      expect(gate(new Request("http://localhost/api/health"))).toBe(true);
+      expect(gate(new Request("http://localhost/api/auth/config"))).toBe(true);
+      // Con cookie de acceso válida → pasa.
+      expect(gate(new Request("http://localhost/api/tournaments", { headers: { cookie: `partyman_access=${accessCookieValue()}` } }))).toBe(true);
+      // Con sesión autenticada → pasa.
+      expect(gate(new Request("http://localhost/api/tournaments", { headers: cookie(token) }))).toBe(true);
+      // El join ya no pide contraseña: es automático.
+      expect((await (await join(token)).json()).joined).toBe(true);
     } finally {
-      delete process.env.JOIN_PASSWORD;
+      delete process.env.ACCESS_PASSWORD;
     }
-    // Sin verja: entra solo como antes.
-    const pid3 = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES ('s-free', 'F')").lastInsertRowid);
-    expect(await (await join(session(db, "participant", pid3))).json()).toMatchObject({ joined: true });
   });
 
   it("lazily joins a participant who opens the app after activation", async () => {

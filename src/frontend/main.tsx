@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Router, Route, Switch } from 'wouter';
 import { AuthProvider } from './components/AuthContext';
 import { ConfirmHost } from './components/ConfirmDialog';
+import { AccessGate } from './components/AccessGate';
 import { Dashboard } from './pages/Dashboard';
 import { ParticipantLogin } from './pages/login/ParticipantLogin';
 import { AdminLogin } from './pages/login/AdminLogin';
@@ -22,6 +23,7 @@ import { Backups } from './pages/admin/Backups';
 
 function App() {
   return (
+    <AccessGate>
     <AuthProvider>
       <ConfirmHost />
       <Router>
@@ -57,6 +59,7 @@ function App() {
         </Switch>
       </Router>
     </AuthProvider>
+    </AccessGate>
   );
 }
 

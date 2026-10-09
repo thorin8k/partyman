@@ -1,7 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { PartyService } from "../parties/service";
 import { requireAdmin, requireSession } from "../auth/guards";
-import { joinPasswordRequired } from "../auth/password";
 import { createBackup } from "../ops/backup";
 import { setParticipantRole, getAllParticipants, type ParticipantRole } from "../auth/participants";
 import type { CreatePartyInput, UpdatePartyInput } from "../../shared/contracts/parties";
@@ -57,8 +56,7 @@ export function createPartyRoutes(db: Database) {
     const party = service.getActive();
     // Alta perezosa: quien abre la app con party activa y sesión de participante
     // entra solo (cubre logins anteriores a la activación). Nunca falla a visitas.
-    // Con JOIN_PASSWORD no hay atajos: solo /api/participants/join con la clave.
-    if (party && !joinPasswordRequired()) {
+    if (party) {
       const ctx = requireSession(db, request);
       if (!(ctx instanceof Response) && ctx.session.subjectType === "participant") {
         db.run("INSERT OR IGNORE INTO party_memberships (party_id, participant_id, display_name_snapshot) VALUES (?, ?, (SELECT display_name FROM participants WHERE id = ?))",

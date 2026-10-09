@@ -4,7 +4,8 @@ import { sha256Hex, createSession } from "../auth/sessions";
 import { buildSteamRedirectUrl, createSteamState, verifySteamCallback, fetchSteamProfile } from "../auth/steam";
 import { upsertParticipant, joinActiveParty } from "../auth/participants";
 import { requireSession, requireAdmin, checkCsrf } from "../auth/guards";
-import { hashPassword, verifyPassword, joinPasswordRequired } from "../auth/password";
+import { hashPassword, verifyPassword } from "../auth/password";
+import { accessPasswordRequired, accessCookieHeader, isAccessGranted, verifyAccessPassword } from "../auth/access";
 
 export function createAuthRoutes(db: Database) {
   const config = loadConfig();
@@ -22,8 +23,16 @@ export function createAuthRoutes(db: Database) {
     "/auth/logout": {
       POST: handleLogout,
     },
+    "/api/access": {
+      POST: handleAccess,
+    },
     "/api/auth/config": {
-      GET: (_req: Request) => Response.json({ steamEnabled: config.steam.enabled, devTools: process.env.NODE_ENV !== "production", joinPasswordRequired: joinPasswordRequired() }),
+      GET: (req: Request) => Response.json({
+        steamEnabled: config.steam.enabled,
+        devTools: process.env.NODE_ENV !== "production",
+        accessRequired: accessPasswordRequired(),
+        accessGranted: isAccessGranted(req),
+      }),
     },
     "/api/me": {
       GET: handleGetMe,
@@ -74,8 +83,8 @@ export function createAuthRoutes(db: Database) {
       const { steamId } = await verifySteamCallback(params);
       const profile = await fetchSteamProfile(config.steam.apiKey, steamId);
       const participant = upsertParticipant(db, steamId, profile.nickname, profile.avatarUrl);
-      // Con JOIN_PASSWORD la membership la da el propio usuario en /api/participants/join.
-      if (!joinPasswordRequired()) joinActiveParty(db, participant.id, participant.displayName);
+      // Unirse a la party activa es automático al iniciar sesión con Steam.
+      joinActiveParty(db, participant.id, participant.displayName);
       const info = createSession(db, "participant", participant.id);
       console.log("[auth] Steam callback →", profile.nickname, "(steamId:", steamId, ")");
       return redirectWithSession(takeReturnTo(request), info);
@@ -84,6 +93,20 @@ export function createAuthRoutes(db: Database) {
       const dest = takeReturnTo(request);
       return Response.redirect(`${dest}${dest.includes("?") ? "&" : "?"}error=STEAM_UNAVAILABLE`, 302);
     }
+  }
+
+  // Puerta de acceso a la app: valida la contraseña y deja la cookie de acceso.
+  async function handleAccess(request: Request): Promise<Response> {
+    if (!accessPasswordRequired()) return Response.json({ ok: true });
+    const body = await request.json().catch(() => null);
+    if (!body || !verifyAccessPassword(body.password)) {
+      console.log("[auth] POST /api/access → FAILED");
+      return Response.json({ error: { code: "ACCESS_PASSWORD_INVALID", message: "Invalid access password" } }, { status: 403 });
+    }
+    const res = Response.json({ ok: true });
+    res.headers.append("set-cookie", accessCookieHeader(config.cookieSecure));
+    console.log("[auth] POST /api/access → granted");
+    return res;
   }
 
   async function handleAdminLogin(request: Request): Promise<Response> {

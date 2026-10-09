@@ -48,7 +48,7 @@ export function requireParticipant(db: Database, req: Request): AuthContext | Re
 export function checkCsrf(req: Request, allowedOrigins?: string[]): boolean {
   if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return true;
   const url = new URL(req.url);
-  if (url.pathname === "/auth/admin/login") return true;
+  if (url.pathname === "/auth/admin/login" || url.pathname === "/api/access") return true;
 
   const header = req.headers.get("x-partyman-csrf");
   const cookie = getCookie(req, "partyman_csrf");

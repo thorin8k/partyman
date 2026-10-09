@@ -54,8 +54,6 @@ const ERROR_ES: Record<string, string> = {
   PARTICIPANT_ONLY: 'Solo un participante puede hacer eso. Como admin, gestiona desde el panel.',
   PROPOSAL_NOT_FOUND: 'La propuesta ya no existe.',
   DUPLICATE_PROPOSAL: 'Ya existe esa propuesta.',
-  JOIN_PASSWORD_REQUIRED: 'Esta party pide contraseña para entrar.',
-  JOIN_PASSWORD_INVALID: 'Contraseña incorrecta.',
   VALIDATION_ERROR: 'Revisa los datos del formulario.',
 };
 
@@ -182,8 +180,6 @@ export function Dashboard() {
   const [notice, setNotice] = useState<string | null>(null);
   const [loadingData, setLoadingData] = useState(true);
   const [myPoints, setMyPoints] = useState<{ party: { points: number; rank: number } | null; all: { points: number; rank: number } | null }>({ party: null, all: null });
-  const [needJoinPw, setNeedJoinPw] = useState(false);
-  const [joinPw, setJoinPw] = useState('');
   const fetchingRef = useRef(false);
 
   useEffect(() => {
@@ -208,9 +204,6 @@ export function Dashboard() {
     try {
       const pa = await fetch('/api/parties/active', { signal }).catch(() => null);
       if (pa && pa.ok) setActiveParty((await pa.json()).party);
-      const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-      await fetch('/api/participants/join', { method: 'POST', headers: { 'X-Partyman-CSRF': csrf || '' }, signal })
-        .then(r => r.json().catch(() => null)).then(j => setNeedJoinPw(j?.reason === 'JOIN_PASSWORD_REQUIRED')).catch(() => {});
       await Promise.all([fetchPlanning(signal), fetchTournaments(signal)]);
     } finally { fetchingRef.current = false; setLoadingData(false); }
   };
@@ -243,17 +236,6 @@ export function Dashboard() {
 
   const ok = (msg: string) => { setNotice(msg); setError(null); };
   const fail = (code: unknown) => { setError(humanError(code)); };
-
-  const handleJoinWithPassword = async () => {
-    const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
-    const res = await fetch('/api/participants/join', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Partyman-CSRF': csrf || '' },
-      body: JSON.stringify({ password: joinPw }),
-    });
-    const data = await res.json().catch(() => null);
-    if (res.ok && data?.joined) { setJoinPw(''); setNeedJoinPw(false); ok('Dentro de la party.'); fetchAll(); }
-    else fail(data?.error?.code || data?.reason);
-  };
 
   const handleJoinActivity = async (activityId: number) => {
     const csrf = document.cookie.split(';').find(c => c.trim().startsWith('partyman_csrf='))?.split('=')[1];
@@ -353,12 +335,6 @@ export function Dashboard() {
             </p>
             {activeParty.location && <p style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}><span style={{ color: 'var(--neon-cyan)' }}>UBICACIÓN:</span> {activeParty.location}</p>}
             {activeParty.description && <p style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}><span style={{ color: 'var(--neon-cyan)' }}>DESCRIPCIÓN:</span> {activeParty.description}</p>}
-            {needJoinPw && (
-              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', maxWidth: '320px' }}>
-                <input type="password" placeholder="Contraseña de la party" value={joinPw} onChange={e => setJoinPw(e.target.value)} autoComplete="off" />
-                <button onClick={handleJoinWithPassword} style={rowBtnTouch}>ENTRAR</button>
-              </div>
-            )}
           </div>
         ) : (
           <div className="empty-state"><h3>SIN PARTY ACTIVA</h3><p style={{ fontSize: '0.875rem' }}>No hay party activa en este momento.</p></div>
