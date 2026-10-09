@@ -33,9 +33,23 @@ describe("public state", () => {
     const db = makeDb();
     const withOrigin = await (await createPublicRoutes(db, { publicOrigin: "http://192.168.1.100:8400/" })["/api/public/state"].GET()).json();
     expect(withOrigin.joinUrl).toBe("http://192.168.1.100:8400");
+    // Sin puerta configurada, el QR apunta a la URL limpia.
+    expect(withOrigin.qrUrl).toBe("http://192.168.1.100:8400");
 
     const noOrigin = await (await createPublicRoutes(db, { publicOrigin: "" })["/api/public/state"].GET()).json();
     expect(noOrigin.joinUrl).toBeNull();
+  });
+
+  it("embeds the access password in the QR url when the gate is set", async () => {
+    const db = makeDb();
+    process.env.ACCESS_PASSWORD = "s3cret party";
+    try {
+      const body = await (await createPublicRoutes(db, { publicOrigin: "https://party.example" })["/api/public/state"].GET()).json();
+      expect(body.joinUrl).toBe("https://party.example");
+      expect(body.qrUrl).toBe("https://party.example/?access=s3cret%20party");
+    } finally {
+      delete process.env.ACCESS_PASSWORD;
+    }
   });
 
   it("returns active party with attendees", async () => {

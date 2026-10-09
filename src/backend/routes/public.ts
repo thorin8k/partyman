@@ -1,11 +1,17 @@
 import type { Database } from "bun:sqlite";
 import { getLeaderboard } from "../scoring/service";
 import { sweepDueReports } from "./tournaments";
+import { accessPassword, accessPasswordRequired } from "../auth/access";
 
 export function createPublicRoutes(db: Database, opts?: { publicOrigin?: string }) {
   // URL canónica para el QR de unión: la que abre el móvil, no la del navegador
   // que muestra el display (proyector suele abrir por localhost).
   const joinUrl = (opts?.publicOrigin ?? process.env.PUBLIC_ORIGIN ?? "").replace(/\/$/, "") || null;
+  // El QR del display lleva la clave de acceso embebida: quien está en la party
+  // y escanea, entra ya dentro (solo si hay puerta configurada).
+  const qrUrl = joinUrl && accessPasswordRequired()
+    ? `${joinUrl}/?access=${encodeURIComponent(accessPassword())}`
+    : joinUrl;
   return {
     "/api/public/state": {
       GET: handleGetPublicState,
@@ -126,6 +132,7 @@ export function createPublicRoutes(db: Database, opts?: { publicOrigin?: string 
       activity,
       wifi: wifiSsid ? { ssid: wifiSsid, password: process.env.WIFI_PASSWORD ?? null } : null,
       joinUrl,
+      qrUrl,
       generatedAt: new Date().toISOString(),
     });
   }

@@ -13,20 +13,41 @@ export function AccessGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isAdminArea) { setState('granted'); return; }
+    const urlPassword = new URLSearchParams(window.location.search).get('access');
     fetch('/api/auth/config')
       .then(r => r.json())
-      .then(c => setState(!c.accessRequired || c.accessGranted ? 'granted' : 'locked'))
+      .then(async c => {
+        if (!c.accessRequired || c.accessGranted) { setState('granted'); return; }
+        // El QR del display lleva la clave embebida (?access=): entra directo.
+        if (urlPassword) {
+          const ok = await redeem(urlPassword);
+          stripAccessParam();
+          if (ok) { setState('granted'); return; }
+        }
+        setState('locked');
+      })
       .catch(() => setState('granted'));
   }, [isAdminArea]);
 
-  const submit = async () => {
-    setSubmitting(true); setError(null);
+  const redeem = async (pwd: string): Promise<boolean> => {
     const res = await fetch('/api/access', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    });
-    if (res.ok) setState('granted');
+      body: JSON.stringify({ password: pwd }),
+    }).catch(() => null);
+    return !!res && res.ok;
+  };
+
+  const stripAccessParam = () => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('access')) return;
+    url.searchParams.delete('access');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  };
+
+  const submit = async () => {
+    setSubmitting(true); setError(null);
+    if (await redeem(password)) setState('granted');
     else { setError('Contraseña incorrecta.'); setSubmitting(false); }
   };
 

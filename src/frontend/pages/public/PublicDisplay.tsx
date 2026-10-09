@@ -25,6 +25,7 @@ interface PublicState {
   activity: FeedEvent[];
   wifi: { ssid: string; password: string | null } | null;
   joinUrl: string | null;
+  qrUrl: string | null;
   generatedAt: string;
 }
 
@@ -340,7 +341,7 @@ export function PublicDisplay() {
             <h2 style={{ marginBottom: '0.5rem' }}>ÚNETE</h2>
             <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
               <div style={{ textAlign: 'center' }}>
-                {typeof window !== 'undefined' && <QrCode text={state.joinUrl || window.location.origin} size={160} />}
+                {typeof window !== 'undefined' && <QrCode text={state.qrUrl || state.joinUrl || window.location.origin} size={160} />}
                 <p style={{ fontSize: '1rem', fontWeight: 'bold', wordBreak: 'break-all', marginTop: '0.5rem' }}>{state.joinUrl || (typeof window !== 'undefined' ? window.location.origin : '')}</p>
                 <p style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>Escanea y entra con Steam</p>
               </div>
