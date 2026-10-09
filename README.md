@@ -249,7 +249,7 @@ docker run --rm --network host \
 
 ## Licencia
 
-Por definir.
+MIT. Ver [`LICENSE`](LICENSE).
 
 ## Soporte
 
