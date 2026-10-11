@@ -1,9 +1,8 @@
-import { StrictMode } from 'react';
+import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Router, Route, Switch } from 'wouter';
 import { AuthProvider } from './components/AuthContext';
 import { ConfirmHost } from './components/ConfirmDialog';
-import { AccessGate } from './components/AccessGate';
 import { Dashboard } from './pages/Dashboard';
 import { ParticipantLogin } from './pages/login/ParticipantLogin';
 import { AdminLogin } from './pages/login/AdminLogin';
@@ -20,10 +19,25 @@ import { Leaderboard } from './pages/history/Leaderboard';
 import { Rewards } from './pages/admin/Rewards';
 import { ParticipantHistory } from './pages/history/ParticipantHistory';
 import { Backups } from './pages/admin/Backups';
+import { Register } from './pages/login/Register';
+
+// El QR del display trae la contraseña de registro en ?access=; la guardamos en
+// la pestaña para usarla al registrarse y limpiamos la URL.
+function useCaptureAccessParam() {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const access = params.get('access');
+    if (!access) return;
+    try { sessionStorage.setItem('partyman_access_pwd', access); } catch { /* modo privado */ }
+    params.delete('access');
+    const qs = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+  }, []);
+}
 
 function App() {
+  useCaptureAccessParam();
   return (
-    <AccessGate>
     <AuthProvider>
       <ConfirmHost />
       <Router>
@@ -31,6 +45,7 @@ function App() {
           {/* Public routes */}
           <Route path="/" component={Dashboard} />
           <Route path="/login" component={ParticipantLogin} />
+          <Route path="/register" component={Register} />
           <Route path="/admin/login" component={AdminLogin} />
           <Route path="/display" component={PublicDisplay} />
           <Route path="/tournaments/:id" component={ParticipantTournamentDetail} />
@@ -59,7 +74,6 @@ function App() {
         </Switch>
       </Router>
     </AuthProvider>
-    </AccessGate>
   );
 }
 

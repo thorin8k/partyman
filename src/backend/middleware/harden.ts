@@ -10,7 +10,7 @@ type RouteMap = Record<string, Record<string, Handler>>;
 
 // Single composition point: body limit + rate limit before, headers after.
 // Bun.serve has no middleware chain, so backend.ts wraps the merged route map.
-export function hardenRoutes<T extends RouteMap>(routes: T, opts?: { dev?: boolean; limiter?: ReturnType<typeof createRateLimiter>; csrfOrigins?: string[]; accessGate?: (req: Request) => boolean }): T {
+export function hardenRoutes<T extends RouteMap>(routes: T, opts?: { dev?: boolean; limiter?: ReturnType<typeof createRateLimiter>; csrfOrigins?: string[] }): T {
   const dev = opts?.dev ?? process.env.NODE_ENV !== "production";
   const limiter = opts?.limiter ?? createRateLimiter();
   const out: RouteMap = {};
@@ -33,13 +33,7 @@ export function hardenRoutes<T extends RouteMap>(routes: T, opts?: { dev?: boole
             dev
           );
         }
-        // Puerta de acceso opcional (ACCESS_PASSWORD): solo actúa si está configurada.
-        if (opts?.accessGate && !opts.accessGate(req)) {
-          return applySecurityHeaders(
-            Response.json({ error: { code: "ACCESS_REQUIRED", message: "Access password required" } }, { status: 403 }),
-            dev
-          );
-        }
+
         // Spec: los bodies JSON exigen Content-Type application/json; JSON roto → 400 INVALID_JSON.
         // Solo cuando hay body real (los POST sin body del admin no llevan Content-Type;
         // el header content-length puede mentir, req.body no).

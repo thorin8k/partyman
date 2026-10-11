@@ -7,8 +7,8 @@ export function createPublicRoutes(db: Database, opts?: { publicOrigin?: string 
   // URL canónica para el QR de unión: la que abre el móvil, no la del navegador
   // que muestra el display (proyector suele abrir por localhost).
   const joinUrl = (opts?.publicOrigin ?? process.env.PUBLIC_ORIGIN ?? "").replace(/\/$/, "") || null;
-  // El QR del display lleva la clave de acceso embebida: quien está en la party
-  // y escanea, entra ya dentro (solo si hay puerta configurada).
+  // El QR del display lleva la contraseña de registro embebida: un amigo nuevo
+  // que escanea se registra directo (solo si el registro está protegido).
   const qrUrl = joinUrl && accessPasswordRequired()
     ? `${joinUrl}/?access=${encodeURIComponent(accessPassword())}`
     : joinUrl;

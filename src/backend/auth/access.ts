@@ -1,10 +1,8 @@
-import type { Database } from "bun:sqlite";
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { getSession } from "./sessions";
 
-// Contraseña de acceso a la app (ACCESS_PASSWORD; JOIN_PASSWORD se acepta como
-// alias heredado). Vacía = acceso libre. No es la contraseña de unión a la
-// party: el join es automático al iniciar sesión con Steam.
+// Contraseña de REGISTRO (ACCESS_PASSWORD; JOIN_PASSWORD como alias heredado).
+// Es una puerta para dar de alta usuarios nuevos: quien ya tiene su identidad
+// Steam registrada entra con Steam sin volver a pedirla. Vacía = registro libre.
 export function accessPassword(): string {
   return process.env.ACCESS_PASSWORD ?? process.env.JOIN_PASSWORD ?? "";
 }
@@ -22,48 +20,52 @@ export function verifyAccessPassword(input: unknown): boolean {
   return diff === 0;
 }
 
-const ACCESS_COOKIE = "partyman_access";
-const ACCESS_MSG = "partyman-access-v1";
-
-// Cookie derivada de la propia contraseña: estable entre reinicios, se invalida
-// al cambiarla. Saber la contraseña es, literalmente, el derecho de acceso.
-export function accessCookieValue(): string {
-  return createHmac("sha256", accessPassword()).update(ACCESS_MSG).digest("hex");
+// Registro pendiente: identifica al usuario de Steam que aún no tiene cuenta y
+// está a la espera de introducir la contraseña. Va firmado con la propia
+// contraseña, así que no necesita estado en servidor ni migración.
+export interface PendingRegistration {
+  steamId: string;
+  nickname: string;
+  avatarUrl: string | null;
+  exp: number;
 }
 
-export function isAccessGranted(req: Request): boolean {
-  if (!accessPasswordRequired()) return true;
-  const cookie = parseCookie(req, ACCESS_COOKIE);
-  if (!cookie) return false;
-  const a = Buffer.from(cookie);
-  const b = Buffer.from(accessCookieValue());
-  return a.length === b.length && timingSafeEqual(a, b);
+const PENDING_COOKIE = "partyman_pending";
+
+function sign(data: string): string {
+  return createHmac("sha256", accessPassword()).update(data).digest("hex");
 }
 
-export function accessCookieHeader(secure: boolean): string {
+export function pendingCookieValue(p: PendingRegistration): string {
+  const payload = Buffer.from(JSON.stringify(p)).toString("base64url");
+  return `${payload}.${sign(payload)}`;
+}
+
+export function pendingCookieHeader(p: PendingRegistration, secure: boolean): string {
   const sec = secure ? "; Secure" : "";
-  const maxAge = 60 * 60 * 24 * 30; // 30 días
-  return `${ACCESS_COOKIE}=${accessCookieValue()}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${maxAge}${sec}`;
+  return `${PENDING_COOKIE}=${pendingCookieValue(p)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=600${sec}`;
 }
 
-// Un request pasa la puerta si: no hay contraseña, va a una ruta exenta, trae
-// la cookie de acceso, o ya tiene sesión (participante/admin autenticados).
-export function createAccessGate(db: Database) {
-  return (req: Request): boolean => {
-    if (!accessPasswordRequired()) return true;
-    const path = new URL(req.url).pathname;
-    if (
-      path === "/api/health" ||
-      path === "/api/ready" ||
-      path === "/api/auth/config" ||
-      path === "/api/access" ||
-      path === "/auth/admin/login"
-    ) return true;
-    if (isAccessGranted(req)) return true;
-    const token = parseCookie(req, "partyman_session");
-    if (token && getSession(db, token)) return true;
-    return false;
-  };
+export function clearPendingCookieHeader(secure: boolean): string {
+  const sec = secure ? "; Secure" : "";
+  return `${PENDING_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${sec}`;
+}
+
+export function parsePendingCookie(req: Request): PendingRegistration | null {
+  const raw = parseCookie(req, PENDING_COOKIE);
+  if (!raw) return null;
+  const [payload, sig] = raw.split(".");
+  if (!payload || !sig) return null;
+  const a = Buffer.from(sig);
+  const b = Buffer.from(sign(payload));
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    const p = JSON.parse(Buffer.from(payload, "base64url").toString()) as PendingRegistration;
+    if (!p.steamId || typeof p.exp !== "number" || p.exp < Date.now()) return null;
+    return p;
+  } catch {
+    return null;
+  }
 }
 
 export function parseCookie(req: Request, name: string): string | null {

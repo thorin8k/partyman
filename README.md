@@ -91,7 +91,7 @@ docker run -d \
 | `UPLOADS_PATH` | Ruta de archivos subidos | `/uploads` |
 | `BACKUP_DIR` | Directorio de backups | `/data/backups` |
 | `BACKUP_KEEP` | Copias a conservar | `20` |
-| `ACCESS_PASSWORD` | Contraseña de acceso a la app (vacía = acceso libre) | - |
+| `ACCESS_PASSWORD` | Contraseña para registrarse (vacía = registro libre) | - |
 | `REPORT_TIMEOUT_MIN` | Minutos hasta auto-confirmar un resultado sin respuesta | `5` |
 | `STEAM_API_KEY` | API key de Steam (sin ella, nombres locales) | - |
 | `STEAM_ENABLED` | `false` desactiva el login Steam | `true` |
@@ -144,7 +144,8 @@ double-submit en writes con cookie, 401/403/404/409/422). Resumen por dominio:
   `GET /api/public/state`, `GET /display` (pantalla).
 - Auth: `GET /auth/steam`, `GET /auth/steam/callback`,
   `POST /auth/admin/login`, `POST /auth/logout`, `GET /api/me`.
-- Acceso: `POST /api/access` (puerta opcional con `ACCESS_PASSWORD`). El alta
+- Registro: `POST /api/register` (puerta opcional con `ACCESS_PASSWORD`; los ya
+  registrados entran con Steam sin contraseña). El alta
   en la party activa es automática al iniciar sesión con Steam.
 - Parties (admin): crear, activar, `finish`, archivar, borrar, wizard
   `POST /api/admin/parties/:id/close`, participantes y roles.

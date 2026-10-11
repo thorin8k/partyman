@@ -20,7 +20,6 @@ import { createActivityTournamentProposalRoutes } from "./backend/routes/activit
 import { createScoringRoutes } from "./backend/routes/scoring";
 import { createOperationsRoutes } from "./backend/routes/operations";
 import { hardenRoutes } from "./backend/middleware/harden";
-import { createAccessGate } from "./backend/auth/access";
 import { applySecurityHeaders } from "./backend/middleware/security-headers";
 
 const config = loadConfig();
@@ -74,7 +73,7 @@ const server = serve({
       ...proposalRoutes2,
       ...scoringRoutes,
       ...operationsRoutes,
-    }, { csrfOrigins: [config.publicOrigin], accessGate: createAccessGate(db) }),
+    }, { csrfOrigins: [config.publicOrigin] }),
 
     // Contrato API: una ruta /api desconocida es 404 JSON, nunca el shell del SPA.
     // Fuera de hardenRoutes para no exigir CSRF a un 404.

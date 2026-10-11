@@ -2,10 +2,10 @@ import type { Database } from "bun:sqlite";
 import { loadConfig } from "../config";
 import { sha256Hex, createSession } from "../auth/sessions";
 import { buildSteamRedirectUrl, createSteamState, verifySteamCallback, fetchSteamProfile } from "../auth/steam";
-import { upsertParticipant, joinActiveParty } from "../auth/participants";
+import { upsertParticipant, joinActiveParty, findParticipantBySteamId } from "../auth/participants";
 import { requireSession, requireAdmin, checkCsrf } from "../auth/guards";
 import { hashPassword, verifyPassword } from "../auth/password";
-import { accessPasswordRequired, accessCookieHeader, isAccessGranted, verifyAccessPassword } from "../auth/access";
+import { accessPasswordRequired, verifyAccessPassword, pendingCookieHeader, clearPendingCookieHeader, parsePendingCookie } from "../auth/access";
 
 export function createAuthRoutes(db: Database) {
   const config = loadConfig();
@@ -23,15 +23,14 @@ export function createAuthRoutes(db: Database) {
     "/auth/logout": {
       POST: handleLogout,
     },
-    "/api/access": {
-      POST: handleAccess,
+    "/api/register": {
+      POST: handleRegister,
     },
     "/api/auth/config": {
-      GET: (req: Request) => Response.json({
+      GET: (_req: Request) => Response.json({
         steamEnabled: config.steam.enabled,
         devTools: process.env.NODE_ENV !== "production",
         accessRequired: accessPasswordRequired(),
-        accessGranted: isAccessGranted(req),
       }),
     },
     "/api/me": {
@@ -81,13 +80,35 @@ export function createAuthRoutes(db: Database) {
 
     try {
       const { steamId } = await verifySteamCallback(params);
+
+      // Usuario ya registrado: entra directamente, sin contraseña.
+      const existing = findParticipantBySteamId(db, steamId);
+      if (existing) {
+        joinActiveParty(db, existing.id, existing.displayName);
+        const info = createSession(db, "participant", existing.id);
+        console.log("[auth] Steam callback →", existing.displayName, "(existente)");
+        return redirectWithSession(takeReturnTo(request), info);
+      }
+
       const profile = await fetchSteamProfile(config.steam.apiKey, steamId);
-      const participant = upsertParticipant(db, steamId, profile.nickname, profile.avatarUrl);
-      // Unirse a la party activa es automático al iniciar sesión con Steam.
-      joinActiveParty(db, participant.id, participant.displayName);
-      const info = createSession(db, "participant", participant.id);
-      console.log("[auth] Steam callback →", profile.nickname, "(steamId:", steamId, ")");
-      return redirectWithSession(takeReturnTo(request), info);
+
+      // Registro libre: alta directa.
+      if (!accessPasswordRequired()) {
+        const participant = upsertParticipant(db, steamId, profile.nickname, profile.avatarUrl);
+        joinActiveParty(db, participant.id, participant.displayName);
+        const info = createSession(db, "participant", participant.id);
+        console.log("[auth] Steam callback →", profile.nickname, "(nuevo, registro libre)");
+        return redirectWithSession(takeReturnTo(request), info);
+      }
+
+      // Usuario nuevo con puerta activa: pendiente de la contraseña de registro.
+      const pending = { steamId, nickname: profile.nickname, avatarUrl: profile.avatarUrl, exp: Date.now() + 10 * 60 * 1000 };
+      const res = new Response(null, { status: 302, headers: { location: "/register" } });
+      const sec = config.cookieSecure ? "; Secure" : "";
+      res.headers.append("set-cookie", pendingCookieHeader(pending, config.cookieSecure));
+      res.headers.append("set-cookie", `partyman_return_to=; Path=/; SameSite=Lax; Max-Age=0${sec}`);
+      console.log("[auth] Steam callback →", profile.nickname, "(nuevo, requiere contraseña de registro)");
+      return res;
     } catch (err) {
       console.log("[auth] Steam callback FAILED:", err);
       const dest = takeReturnTo(request);
@@ -95,17 +116,27 @@ export function createAuthRoutes(db: Database) {
     }
   }
 
-  // Puerta de acceso a la app: valida la contraseña y deja la cookie de acceso.
-  async function handleAccess(request: Request): Promise<Response> {
-    if (!accessPasswordRequired()) return Response.json({ ok: true });
+  // Alta de usuario nuevo: exige la contraseña de registro pendiente.
+  async function handleRegister(request: Request): Promise<Response> {
+    const pending = parsePendingCookie(request);
+    if (!pending) {
+      return Response.json({ error: { code: "NO_PENDING_REGISTRATION", message: "No pending registration" } }, { status: 409 });
+    }
     const body = await request.json().catch(() => null);
     if (!body || !verifyAccessPassword(body.password)) {
-      console.log("[auth] POST /api/access → FAILED");
+      console.log("[auth] POST /api/register → FAILED");
       return Response.json({ error: { code: "ACCESS_PASSWORD_INVALID", message: "Invalid access password" } }, { status: 403 });
     }
-    const res = Response.json({ ok: true });
-    res.headers.append("set-cookie", accessCookieHeader(config.cookieSecure));
-    console.log("[auth] POST /api/access → granted");
+    const participant = upsertParticipant(db, pending.steamId, pending.nickname, pending.avatarUrl);
+    joinActiveParty(db, participant.id, participant.displayName);
+    const info = createSession(db, "participant", participant.id);
+    const res = jsonWithSession(
+      { user: { id: participant.id, displayName: participant.displayName, avatarUrl: participant.avatarUrl, role: participant.role } },
+      200,
+      info
+    );
+    res.headers.append("set-cookie", clearPendingCookieHeader(config.cookieSecure));
+    console.log("[auth] POST /api/register →", participant.displayName);
     return res;
   }
 

@@ -58,6 +58,14 @@ export function findParticipantById(db: Database, id: number): Participant | nul
   return { id: row.id, steamId: row.steam_id, displayName: row.display_name, avatarUrl: row.avatar_url, role: row.role };
 }
 
+export function findParticipantBySteamId(db: Database, steamId: string): Participant | null {
+  const row = db
+    .query<ParticipantRow, [string]>("SELECT id, steam_id, display_name, avatar_url, role FROM participants WHERE steam_id = ?")
+    .get(steamId);
+  if (!row) return null;
+  return { id: row.id, steamId: row.steam_id, displayName: row.display_name, avatarUrl: row.avatar_url, role: row.role };
+}
+
 export function setParticipantRole(db: Database, participantId: number, role: ParticipantRole): void {
   db.run("UPDATE participants SET role = ? WHERE id = ?", [role, participantId]);
 }

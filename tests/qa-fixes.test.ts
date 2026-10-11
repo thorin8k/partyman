@@ -511,31 +511,28 @@ describe("qa fixes", () => {
     expect(db.query<{ status: string }, [number]>("SELECT status FROM matches WHERE id = ?").get(third!.id)?.status).toBe("pending");
   });
 
-  it("ACCESS_PASSWORD gates the app only when set; join stays automatic", async () => {
-    const { createAccessGate, accessCookieValue } = await import("../src/backend/auth/access");
-    const routes = createParticipantRoutes(db);
-    const pid = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES ('s-gated', 'G')").lastInsertRowid);
-    const token = session(db, "participant", pid);
-    const join = (t: string) => routes["/api/participants/join"].POST(new Request("http://localhost/api/participants/join", post(t)));
-    const gated = () => new Request("http://localhost/api/tournaments");
-
-    // Sin contraseña: la puerta no interviene.
-    expect(createAccessGate(db)(gated())).toBe(true);
+  it("ACCESS_PASSWORD gates new-user registration, not sessions", async () => {
+    const { pendingCookieValue } = await import("../src/backend/auth/access");
+    const auth = createAuthRoutes(db);
+    const pending = { steamId: "steam-reg-" + Date.now(), nickname: "Newbie", avatarUrl: null, exp: Date.now() + 60_000 };
+    const register = (cookieHeader: string, body: unknown) =>
+      auth["/api/register"].POST(new Request("http://localhost/api/register", {
+        method: "POST",
+        headers: { cookie: cookieHeader, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }));
 
     process.env.ACCESS_PASSWORD = "lanfiesta";
+    const pendingCookie = `partyman_pending=${pendingCookieValue(pending)}`;
     try {
-      const gate = createAccessGate(db);
-      // Ruta normal sin cookie ni sesión → bloqueada.
-      expect(gate(gated())).toBe(false);
-      // Rutas exentas → pasan.
-      expect(gate(new Request("http://localhost/api/health"))).toBe(true);
-      expect(gate(new Request("http://localhost/api/auth/config"))).toBe(true);
-      // Con cookie de acceso válida → pasa.
-      expect(gate(new Request("http://localhost/api/tournaments", { headers: { cookie: `partyman_access=${accessCookieValue()}` } }))).toBe(true);
-      // Con sesión autenticada → pasa.
-      expect(gate(new Request("http://localhost/api/tournaments", { headers: cookie(token) }))).toBe(true);
-      // El join ya no pide contraseña: es automático.
-      expect((await (await join(token)).json()).joined).toBe(true);
+      // Sin registro pendiente → 409.
+      expect((await register("partyman_session=x", { password: "lanfiesta" })).status).toBe(409);
+      // Contraseña incorrecta → 403 y no se crea el usuario.
+      expect((await register(pendingCookie, { password: "nope" })).status).toBe(403);
+      expect(db.query<{ id: number }, [string]>("SELECT id FROM participants WHERE steam_id = ?").get(pending.steamId)).toBeNull();
+      // Contraseña correcta → crea participante y sesión.
+      expect((await register(pendingCookie, { password: "lanfiesta" })).status).toBe(200);
+      expect(db.query<{ id: number }, [string]>("SELECT id FROM participants WHERE steam_id = ?").get(pending.steamId)?.id).toBeGreaterThan(0);
     } finally {
       delete process.env.ACCESS_PASSWORD;
     }
