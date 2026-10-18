@@ -55,3 +55,13 @@ The product optimizes for low operational overhead and a fun, glanceable experie
 ## Definition of Done
 
 A task is complete when its acceptance criteria pass, its API and schema behavior are documented, focused tests exist, the app still builds for production, and the implementation does not violate the single-container or minimal-dependency constraints.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as local markdown under `.scratch/<feature-slug>/`; `specs/` remains the source of truth for task specs. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.

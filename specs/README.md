@@ -42,13 +42,12 @@ The production server serves the React bundle and API from the same origin and p
 
 ## Shared Domain Vocabulary
 
-- **Party**: one dated LAN event. At most one party is active.
-- **Participant**: a stable local person, normally identified by Steam ID.
-- **Party membership**: a participant's automatic attendance in one party after Steam login.
-- **Game**: a catalog entry such as a game title, with player-count and setup metadata.
-- **Activity**: a scheduled non-tournament or tournament slot during a party.
-- **Tournament**: a competition attached to a party, with participants, matches, and results.
-- **Reward**: an achievement, title, prize, or points award recorded against a participant.
+The vocabulary has a single home: [`GLOSSARY.md`](../GLOSSARY.md) at the repository root. Use its terms everywhere (specs, tasks, test names, API contracts) and sharpen them there via `/domain-modeling`, never by writing a second copy.
+
+Invariants that hang off those terms stay in this document:
+
+- At most one **party** is active at a time.
+- A **participant** is normally identified by Steam ID, never by a display name.
 
 ## Cross-task Contracts
 
@@ -80,8 +79,9 @@ These contracts should stay stable while tasks are developed in parallel:
 
 - A participant may authenticate without an active party, but is added to `party_memberships` only when a party is active.
 - Steam OpenID supplies identity only. Profile display data is fetched with an optional `STEAM_API_KEY`; without it, use a generated local fallback such as `Participant #12` and a null avatar.
-- Initial tournaments are single-elimination, 2-16 participants, one game per match, and a score must have a winner; draws are invalid.
-- Game proposals use one yes/no vote per participant. A participant changes their vote by voting again and retracts it with `DELETE`.
+- Initial tournaments are single-elimination, 2-16 participants, one game per match. A match always has a winner; its score is optional, so a match can be reported won without a scoreline. Draws are invalid.
+- An Activity's upcoming/current/past state follows from its start and end times. An Admin may override it by finishing, cancelling or reopening one by hand; the override is deliberate and stays. See `GLOSSARY.md`.
+- Activity and tournament Proposals use one yes vote per Member. A Member changes their vote by voting again and retracts it with `DELETE`. Enough yeses approve the Proposal without an Admin action. Game proposals were an earlier shape and no longer exist (`017_drop_game_proposals.sql`).
 - The MVP backup is a validated SQLite database file. Upload archiving is optional until a media feature owns an upload schema.
 
 ## Environment and Volumes

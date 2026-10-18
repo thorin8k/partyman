@@ -63,4 +63,13 @@ idempotente, revocación al corregir ya implementada).
 
 ## Estado actual
 
-- Pendiente de implementar.
+- **Implementada y commiteada** (`b9b4a89`): `goleada`, `intocable`, `fiel` e
+  `ideologo` sembrados en `seedAchievements` y concedidos vía `awardAuto`.
+  `goleada` desde `routes/tournaments.ts` (diferencia >= 8 con marcador),
+  `ideologo` desde `routes/activity-tournament-proposals.ts` (propuesta aprobada).
+  Tests en `tests/autonomous.test.ts`.
+- Este `Estado actual` decia "Pendiente de implementar" hasta la 020. Era falso:
+  el commit `b9b4a89` es de esta task. Ver `specs/tasks/README.md`.
+- El `Scope` de esta task ya decia "diferencia >= 8" para `goleada`; la
+  descripcion de la semilla decia "8+ puntos". La spec tenia razon, la semilla
+  mentia. Corregido en la 020 (semilla + `migrations/018_goleada_description.sql`).

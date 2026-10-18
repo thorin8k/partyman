@@ -51,5 +51,6 @@ cuadro se genera únicamente con los presentes.
 
 - **OBSOLETA / DESCARTADA** (decisión de producto, 2026-09-19). Con login
   Steam, unirse al torneo ya es la asistencia; el check-in añade fricción
-  para un grupo de 10-15 personas. No se implementa. No reservar la
-  migración `017_checkin.sql`.
+  para un grupo de 10-15 personas. No se implementa.
+- El número `017` quedó libre y lo cogió `017_drop_game_proposals.sql` (retirada
+  de propuestas de juego). No crear `017_checkin.sql`.

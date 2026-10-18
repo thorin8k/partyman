@@ -57,5 +57,6 @@ ganador. Al finalizar, el bote se reparte entre los acertantes en puntos.
 
 - **OBSOLETA / DESCARTADA** (decisión de producto, 2026-09-19). Las porras
   añaden economía de puntos y bastante superficie (tabla, liquidación, UI)
-  para dos eventos al año. No se implementa. No reservar la migración
-  `018_porras.sql`.
+  para dos eventos al año. No se implementa.
+- El número `018` quedó libre y lo cogió `018_goleada_description.sql` (task
+  020). No crear `018_porras.sql`.

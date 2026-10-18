@@ -30,7 +30,7 @@ A party runs itself once the admin activates it: players propose, vote, play, an
 - Player widget: merged into the existing PERFIL card (`src/frontend/pages/Dashboard.tsx`, right-aligned next to the avatar), not a separate card — party total + rank and all-time total + rank, resolved client-side from the two public leaderboard endpoints by own participant id. No new endpoint (leaderboard DTOs are already public and redacted). Already implemented ahead of this task; keep placement.
 - Close wizard is sequential and resumable: each step is idempotent, failure leaves a visible step state for retry.
 - Every automatic transition writes an `activity_events` row so the display explains what happened without an admin.
-- Activity lifecycle stays clock-derived (`current/upcoming/finished` from `startsAt/endsAt`): no manual finish button, no `status` transitions to operate. Already implemented ahead of this task.
+- Activity lifecycle stays clock-derived (`current/upcoming/finished` from `startsAt/endsAt`) as the default. An Admin **may** override it by hand (FINALIZADA / CANCELADA / REABRIR in `AdminPlanning.tsx`, `PATCH /api/admin/activities/:id`); that escape hatch is deliberate, for when the clock does not match reality, and must not be removed. Already implemented ahead of this task.
 - `activity_participation` on join is already implemented ahead of this task (idempotent, leaving never subtracts).
 
 ## Acceptance Criteria
