@@ -299,6 +299,16 @@ try {
   await noErrors("display");
   await shot("display");
 
+  // 4b. Display rotativo (task 019): ?vista= clava una vista aunque esté vacía;
+  // clave inválida cae a rotación normal, nunca pantalla en blanco.
+  await goto(`${BASE}/display?vista=ranking`, "document.querySelector('.card, body')", "display-ranking");
+  ok(/RANKING TOP-5/.test(String(await uiEval("document.body.innerText"))), "display ?vista=ranking fija la vista");
+  await noErrors("display vista=ranking");
+  await goto(`${BASE}/display?vista=inventada`, "document.querySelector('.card, body')", "display-vista-invalida");
+  const rotTxt = String(await uiEval("document.body.innerText"));
+  ok(/TORNEOS|RANKING TOP-5|AHORA|SIGUIENTE|NOVEDADES|ÚNETE/.test(rotTxt), "display ?vista= inválida → rotación normal", rotTxt.slice(0, 120));
+  await noErrors("display vista inválida");
+
   db.close(); db = null;
   server.kill(); await server.exited;
   mcpProc?.kill();

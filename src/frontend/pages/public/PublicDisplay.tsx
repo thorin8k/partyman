@@ -4,6 +4,7 @@ import { wifiQrString } from '../../components/qr';
 import { badge, headerBtn } from '../../components/listRow';
 import { isByeSlot, slotLabel } from '../../components/bracket';
 import { nextMoment, eventIcon, eventLabel, type FeedEvent } from '../../components/activityFeed';
+import { planViews, contentKeys, ROTATE_MS, type ViewKey } from '../../components/displayViews';
 
 interface Tournament {
   id: number;
@@ -39,6 +40,12 @@ export function PublicDisplay() {
   const seenEventIdRef = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // `?vista=` clava una sola vista (p. ej. `?vista=bracket` en la final). Se lee una vez,
+  // no en cada sondeo: la URL no cambia durante la party. Clave inválida → rotación normal.
+  const forcedViewRef = useRef<string | null>(
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('vista') : null
+  );
+  const [viewIdx, setViewIdx] = useState(0);
 
   const fetchState = async () => {
     if (abortRef.current) abortRef.current.abort();
@@ -82,6 +89,18 @@ export function PublicDisplay() {
   }, [state?.tournaments.length]);
 
   useEffect(() => { setTournamentIdx(0); }, [state?.tournaments.length]);
+
+  // Rotación de vistas (task 019). Reutiliza el `state` ya sondeado cada 15s: la
+  // rotación no lanza fetch. Un solo intervalo, apagado si el plan tiene una vista.
+  const viewPlan = planViews(forcedViewRef.current, contentKeys(state, Date.now()));
+  const viewPlanKey = viewPlan.join(',');
+  useEffect(() => {
+    if (viewPlan.length <= 1) return; // una vista: fija, sin parpadeo inútil
+    const id = setInterval(() => setViewIdx(i => i + 1), ROTATE_MS);
+    return () => clearInterval(id);
+  }, [viewPlanKey]);
+  useEffect(() => { setViewIdx(0); }, [viewPlanKey]);
+  const view = viewPlan[viewIdx % viewPlan.length];
 
   useEffect(() => {
     if (!moment) return;
@@ -177,58 +196,35 @@ export function PublicDisplay() {
             </div>
           </div>
 
-          {state.activity.length > 0 && (
+          {view === 'ranking' && (
             <div className="card" style={{ gridColumn: '1 / -1' }}>
-              <h2 style={{ marginBottom: '1rem' }}>NOVEDADES</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {state.activity.slice(0, 8).map(e => (
-                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-                    <span style={{ fontSize: '1.125rem' }}>{eventIcon(e.eventType)}</span>
-                    <span style={{ flex: 1, fontSize: '1rem' }}>{e.message}</span>
-                    <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
-                      {new Date(e.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <h2 style={{ marginBottom: '1rem' }}>RANKING TOP-5</h2>
+              {state.leaderboard.length === 0 ? (
+                <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>Sin puntos repartidos aún</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {state.leaderboard.slice(0, 5).map((p, i) => (
+                    <div key={p.participantId} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', background: 'var(--bg-secondary)', border: `1px solid ${i === 0 ? 'var(--neon-yellow)' : 'var(--border)'}`, borderRadius: 'var(--radius)' }}>
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.875rem', color: i === 0 ? 'var(--neon-yellow)' : 'var(--text-dim)' }}>#{i + 1}</span>
+                      {p.avatarUrl ? (
+                        <img src={p.avatarUrl} alt="" style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
+                      ) : (
+                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--neon-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.875rem', fontWeight: 'bold', color: 'var(--bg)', flexShrink: 0 }}>
+                          {p.displayName.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span style={{ fontSize: '1.125rem', flex: 1 }}>{p.displayName}</span>
+                      <span style={{ color: 'var(--neon-green)', fontFamily: 'var(--font-display)', fontSize: '0.7rem' }}>{p.points} PTS</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          <div className="card">
-            <h2 style={{ marginBottom: '1rem' }}>ASISTENTES ({state.attendees.length})</h2>
-            {state.attendees.length === 0 ? (
-              <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>Sin asistentes aún</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '400px', overflow: 'auto' }}>
-                {(() => {
-                  const pts = new Map((state.leaderboard || []).map((p: any) => [p.participantId, p]));
-                  return [...state.attendees]
-                    .sort((a, b) => ((pts.get(b.id)?.points) || 0) - ((pts.get(a.id)?.points) || 0))
-                    .map((a, i) => (
-                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.625rem', color: i === 0 ? 'var(--neon-yellow)' : 'var(--text-dim)' }}>#{i + 1}</span>
-                        {a.avatarUrl ? (
-                          <img src={a.avatarUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
-                        ) : (
-                          <div style={{
-                            width: '32px', height: '32px', borderRadius: '50%',
-                            background: 'var(--neon-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--bg)', flexShrink: 0,
-                          }}>
-                            {a.displayName.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <span style={{ fontSize: '1rem', flex: 1 }}>{a.displayName}</span>
-                        <span style={{ color: 'var(--neon-green)', fontFamily: 'var(--font-display)', fontSize: '0.625rem' }}>{pts.get(a.id)?.points || 0} PTS</span>
-                      </div>
-                    ));
-                })()}
-              </div>
-            )}
-          </div>
-
-          <div className="card">
-            <h2 style={{ marginBottom: '1rem' }}>TORNEOS {state.tournaments.length > 1 && `(${tournamentIdx + 1}/${state.tournaments.length})`}</h2>
+          {view === 'bracket' && (
+            <div className="card" style={{ gridColumn: '1 / -1' }}>
+              <h2 style={{ marginBottom: '1rem' }}>TORNEOS {state.tournaments.length > 1 && `(${tournamentIdx + 1}/${state.tournaments.length})`}</h2>
             {state.tournaments.length === 0 ? (
               <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>No hay torneos programados</p>
             ) : (
@@ -292,11 +288,16 @@ export function PublicDisplay() {
                 )}
               </>
             )}
-          </div>
+            </div>
+          )}
 
-          {state.recentTournaments && state.recentTournaments.length > 0 && (
+          {view === 'resultado' && (
+            <>
             <div className="card">
               <h2 style={{ marginBottom: '1rem' }}>TORNEOS RECIENTES</h2>
+              {state.recentTournaments.length === 0 ? (
+                <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>Aún sin resultados</p>
+              ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {state.recentTournaments.map(t => (
                   <div key={t.id} style={{ padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--neon-green)', borderRadius: 'var(--radius)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -308,10 +309,30 @@ export function PublicDisplay() {
                   </div>
                 ))}
               </div>
+              )}
             </div>
+            <div className="card" style={{ gridColumn: '1 / -1' }}>
+              <h2 style={{ marginBottom: '1rem' }}>NOVEDADES</h2>
+              {state.activity.length === 0 ? (
+                <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>Sin novedades por ahora</p>
+              ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {state.activity.slice(0, 8).map(e => (
+                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+                    <span style={{ fontSize: '1.125rem' }}>{eventIcon(e.eventType)}</span>
+                    <span style={{ flex: 1, fontSize: '1rem' }}>{e.message}</span>
+                    <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                      {new Date(e.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              )}
+            </div>
+            </>
           )}
 
-          {(() => {
+          {view === 'actividad' && (() => {
             const now = new Date().getTime();
             const sorted = [...state.activities].sort((a, b) => +new Date(a.startsAt) - +new Date(b.startsAt));
             const live = sorted.filter(a => a.status !== 'finished' && +new Date(a.startsAt) <= now && now <= +new Date(a.endsAt));
@@ -337,7 +358,8 @@ export function PublicDisplay() {
             );
           })()}
 
-          <div className="card" style={{ borderColor: 'var(--neon-cyan)' }}>
+          {view === 'qr' && (
+          <div className="card" style={{ borderColor: 'var(--neon-cyan)', gridColumn: '1 / -1' }}>
             <h2 style={{ marginBottom: '0.5rem' }}>ÚNETE</h2>
             <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
               <div style={{ textAlign: 'center' }}>
@@ -354,39 +376,7 @@ export function PublicDisplay() {
               )}
             </div>
           </div>
-
-          <div className="card">
-            <h2 style={{ marginBottom: '1rem' }}>ACTIVIDADES</h2>
-            {state.activities.length === 0 ? (
-              <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>No hay actividades programadas</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {state.activities.map((a) => {
-                  const isLive = a.status !== 'finished' && new Date(a.startsAt) <= new Date() && new Date() <= new Date(a.endsAt);
-                  return (
-                  <div key={a.id} style={{ padding: '0.5rem', background: isLive ? 'rgba(0,255,136,0.05)' : 'var(--bg-secondary)', border: `1px solid ${isLive ? 'var(--neon-green)' : 'var(--border)'}`, borderRadius: 'var(--radius)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    {a.gameImage && <img src={a.gameImage} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <h3 style={{ fontSize: '1rem' }}>{a.title}</h3>
-                        {isLive && <span style={badge('var(--neon-green)')}>EN CURSO</span>}
-                      </div>
-                      <p style={{ fontSize: '1rem', color: 'var(--text-dim)', margin: '0.25rem 0 0' }}>
-                        {a.gameTitle ? `${a.gameTitle} · ` : ''}
-                        {new Date(a.startsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - {new Date(a.endsAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                        {a.capacity ? ` · ${a.participantCount || 0}/${a.capacity}` : ''}
-                      </p>
-                      {a.notes && <p style={{ fontSize: '0.65rem', color: 'var(--text-dim)', margin: '0.25rem 0 0', fontStyle: 'italic' }}>{a.notes}</p>}
-                      {a.participants && a.participants.length > 0 && (
-                        <p style={{ fontSize: '0.65rem', color: 'var(--text-dim)', margin: '0.25rem 0 0' }}>{a.participants.map(p => p.displayName).join(', ')}</p>
-                      )}
-                    </div>
-                  </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          )}
         </div>
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>

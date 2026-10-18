@@ -47,4 +47,19 @@ sin tocar nada. Útil en proyector durante la party.
 
 ## Estado actual
 
-- Pendiente de implementar.
+- Implementada: `src/frontend/components/displayViews.ts`
+  concentra la lógica pura (`VIEW_KEYS`, `ROTATE_MS = 15000`,
+  `contentKeys`, `planViews` — nunca devuelve plan vacío; cae a `qr`).
+  `PublicDisplay.tsx` rota con un solo `setInterval` sobre el `state` ya
+  sondeado (sin fetch extra); con plan de una vista el intervalo queda
+  apagado. `?vista=` se lee una vez; clave inválida → rotación normal.
+  Vistas: bracket (carrusel de torneos de 7s intacto), ranking top-5
+  (nuevo, reutiliza el patrón de filas de asistentes), resultado
+  (torneos recientes + novedades), actividad (AHORA/SIGUIENTE), qr.
+  Las tarjetas estáticas de asistentes/actividades/novedades salen solo
+  en su vista rotativa, no siempre.
+- Tests: `tests/display-views.test.ts` (6, lógica pura). UI:
+  `scripts/qa-ui.ts` verde con checks nuevos (`?vista=ranking` fija la
+  vista y `?vista=inventada` no queda en blanco), 28 checks en total.
+- Deuda de 021 liquidada en el mismo paso: sin `(db as any)` y con los
+  5 `point_rules` correctamente parametrizados en `scoring/service.ts`.
