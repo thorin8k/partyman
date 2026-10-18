@@ -21,7 +21,7 @@ const AUTO_ACHIEVEMENTS: Array<[string, string, string]> = [
   ["social_3_activities", "Sociable", "Unirse a 3 actividades de una party"],
   ["undefeated_party", "Invicto", "Ganar todos los torneos jugados de una party (mín. 2)"],
   ["party_mvp", "MVP", "Más puntos de la party"],
-  ["goleada", "Goleada", "Ganar un partido por 8+ puntos con puntuación registrada"],
+  ["goleada", "Goleada", "Ganar un partido por 8+ de diferencia, con marcador registrado"],
   ["intocable", "Intocable", "Ganar un torneo sin perder ningún partido"],
   ["fiel", "Fiel", "Jugar 5 torneos finalizados"],
   ["ideologo", "Ideólogo", "Que aprueben una propuesta tuya (actividad o torneo)"],
@@ -44,28 +44,39 @@ function achievementId(db: Database, code: string): number | null {
 export function awardAuto(db: Database, participantId: number, code: string, partyId: number | null, note: string): boolean {
   const achId = achievementId(db, code);
   if (!achId) return false;
-  const exists = db.query<{ n: number }, [number, number, number | null, number | null]>(
+  const alreadyHasIt = () => (db.query<{ n: number }, [number, number, number | null, number | null]>(
+    // party_id NULL nunca iguala a un party_id concreto, así que el caso global va aparte.
     "SELECT COUNT(*) AS n FROM participant_awards WHERE participant_id = ? AND achievement_id = ? AND ((party_id IS NULL AND ? IS NULL) OR party_id = ?)"
-  ).get(participantId, achId, partyId, partyId);
-  if (exists && exists.n > 0) return false;
+  ).get(participantId, achId, partyId, partyId)?.n ?? 0) > 0;
+  if (alreadyHasIt()) return false;
   const name = db.query<{ name: string }, [number]>("SELECT name FROM achievements WHERE id = ?").get(achId)!.name;
-  db.run("INSERT INTO participant_awards (participant_id, achievement_id, party_id, title, note) VALUES (?, ?, ?, ?, ?)",
-    [participantId, achId, partyId, name, note]);
+  try {
+    db.run("INSERT INTO participant_awards (participant_id, achievement_id, party_id, title, note) VALUES (?, ?, ?, ?, ?)",
+      [participantId, achId, partyId, name, note]);
+  } catch (e) {
+    // participant_awards_once_* (migración 019) solo puede disparar una cosa: dos
+    // llamadas simultáneas para el mismo (participante, reward, party). Si la fila
+    // está, otro camino la concedió primero y solo perdimos la carrera. Si NO está,
+    // el fallo es otro (FK rota, disco) y debe propagarse: tragárselo perdería un
+    // honor en silencio, que es justo lo que esta garantía viene a evitar.
+    if (alreadyHasIt()) return false;
+    throw e;
+  }
   return true;
 }
 
 export function logEvent(db: Database, partyId: number, participantId: number | null, eventType: string, message: string) {
   try {
-    (db as any).run("INSERT INTO activity_events (party_id, participant_id, event_type, message) VALUES (?, ?, ?, ?)",
+    db.run("INSERT INTO activity_events (party_id, participant_id, event_type, message) VALUES (?, ?, ?, ?)",
       [partyId, participantId, eventType, message]);
   } catch { /* events never block scoring */ }
 }
 
 // ponytail: unirse es la participación; salir nunca resta (ledger inmutable, idempotente).
 export function awardActivityJoin(db: Database, activityId: number, partyId: number, participantId: number) {
-  const rule = db.query<{ points: number }, [string]>("SELECT points FROM point_rules WHERE code = 'activity_participation' AND enabled = 1").get("activity_participation");
+  const rule = db.query<{ points: number }, [string]>("SELECT points FROM point_rules WHERE code = ? AND enabled = 1").get("activity_participation");
   if (!rule) return;
-  (db as any).run("INSERT OR IGNORE INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points) VALUES (?, ?, 'activity', ?, 'activity_participation', ?)",
+  db.run("INSERT OR IGNORE INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points) VALUES (?, ?, 'activity', ?, 'activity_participation', ?)",
     [participantId, partyId, `activity:${activityId}:${participantId}`, rule.points]);
 }
 
@@ -81,26 +92,26 @@ export function scoreTournamentFinished(db: Database, tournamentId: number, part
   ).get(tournamentId, tournamentId);
   const loserId = runnerUp ? (runnerUp.winner_id === runnerUp.participant_a_id ? runnerUp.participant_b_id : runnerUp.participant_a_id) : null;
 
-  const winRule = db.query<{ points: number }, [string]>("SELECT points FROM point_rules WHERE code = 'tournament_win' AND enabled = 1").get("tournament_win");
-  const runnerRule = db.query<{ points: number }, [string]>("SELECT points FROM point_rules WHERE code = 'tournament_runner_up' AND enabled = 1").get("tournament_runner_up");
+  const winRule = db.query<{ points: number }, [string]>("SELECT points FROM point_rules WHERE code = ? AND enabled = 1").get("tournament_win");
+  const runnerRule = db.query<{ points: number }, [string]>("SELECT points FROM point_rules WHERE code = ? AND enabled = 1").get("tournament_runner_up");
 
   if (winRule && winner.winner_id) {
-    (db as any).run("INSERT OR IGNORE INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points) VALUES (?, ?, 'tournament', ?, 'tournament_win', ?)",
+    db.run("INSERT OR IGNORE INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points) VALUES (?, ?, 'tournament', ?, 'tournament_win', ?)",
       [winner.winner_id, partyId, String(tournamentId), winRule.points]);
-    (db as any).run("INSERT OR IGNORE INTO activity_events (party_id, participant_id, event_type, message, source_type, source_id) VALUES (?, ?, 'tournament_win', ?, 'tournament', ?)",
+    db.run("INSERT OR IGNORE INTO activity_events (party_id, participant_id, event_type, message, source_type, source_id) VALUES (?, ?, 'tournament_win', ?, 'tournament', ?)",
       [partyId, winner.winner_id, `Ganó torneo ${tournament.name}`, tournamentId]);
   }
   if (runnerRule && loserId) {
-    (db as any).run("INSERT OR IGNORE INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points) VALUES (?, ?, 'tournament', ?, 'tournament_runner_up', ?)",
+    db.run("INSERT OR IGNORE INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points) VALUES (?, ?, 'tournament', ?, 'tournament_runner_up', ?)",
       [loserId, partyId, String(tournamentId), runnerRule.points]);
   }
 
   // Task 014: participation for everyone listed at finish + tournament-scoped auto achievements.
-  const partRule = db.query<{ points: number }, [string]>("SELECT points FROM point_rules WHERE code = 'tournament_participation' AND enabled = 1").get("tournament_participation");
+  const partRule = db.query<{ points: number }, [string]>("SELECT points FROM point_rules WHERE code = ? AND enabled = 1").get("tournament_participation");
   const listed = db.query<{ participant_id: number }, [number]>("SELECT participant_id FROM tournament_participants WHERE tournament_id = ?").all(tournamentId);
   if (partRule) {
     for (const p of listed) {
-      (db as any).run("INSERT OR IGNORE INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points) VALUES (?, ?, 'tournament', ?, 'tournament_participation', ?)",
+      db.run("INSERT OR IGNORE INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points) VALUES (?, ?, 'tournament', ?, 'tournament_participation', ?)",
         [p.participant_id, partyId, `${tournamentId}:${p.participant_id}`, partRule.points]);
     }
   }
@@ -126,10 +137,10 @@ export function scoreTournamentFinished(db: Database, tournamentId: number, part
 export function scorePartyParticipation(db: Database, partyId: number) {
   try {
     const members = db.query<{ participant_id: number }, [number]>("SELECT participant_id FROM party_memberships WHERE party_id = ?").all(partyId);
-    const rule = db.query<{ points: number }, [string]>("SELECT points FROM point_rules WHERE code = 'party_participation' AND enabled = 1").get("party_participation");
+    const rule = db.query<{ points: number }, [string]>("SELECT points FROM point_rules WHERE code = ? AND enabled = 1").get("party_participation");
     if (!rule) return;
     for (const m of members) {
-      (db as any).run("INSERT OR IGNORE INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points) VALUES (?, ?, 'party_membership', ?, 'party_participation', ?)",
+      db.run("INSERT OR IGNORE INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points) VALUES (?, ?, 'party_membership', ?, 'party_participation', ?)",
         [m.participant_id, partyId, `membership:${partyId}:${m.participant_id}`, rule.points]);
       const ever = db.query<{ n: number }, [number]>("SELECT COUNT(*) AS n FROM point_ledger WHERE participant_id = ? AND reason = 'party_participation' AND correction_of IS NULL AND NOT EXISTS (SELECT 1 FROM point_ledger c WHERE c.correction_of = point_ledger.id)").get(m.participant_id)?.n ?? 0;
       if (ever >= 1 && awardAuto(db, m.participant_id, "debut", partyId, "Primera party")) logEvent(db, partyId, m.participant_id, "achievement", "Debut en party");
@@ -149,10 +160,10 @@ export function scorePartyParticipation(db: Database, partyId: number) {
         if (b.points === top && top !== null && awardAuto(db, b.participantId, "party_mvp", partyId, "MVP de la party")) logEvent(db, partyId, b.participantId, "achievement", "MVP de la party");
       }
     } catch { /* board optional */ }
-    (db as any).run("INSERT OR REPLACE INTO party_scoring_runs (party_id, status, updated_at) VALUES (?, 'completed', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", [partyId]);
+    db.run("INSERT OR REPLACE INTO party_scoring_runs (party_id, status, updated_at) VALUES (?, 'completed', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", [partyId]);
     console.log("[scoring] Party #" + partyId + " participation scored");
   } catch (e: any) {
-    (db as any).run("INSERT OR REPLACE INTO party_scoring_runs (party_id, status, last_error, updated_at) VALUES (?, 'failed', ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", [partyId, String(e.message ?? e)]);
+    db.run("INSERT OR REPLACE INTO party_scoring_runs (party_id, status, last_error, updated_at) VALUES (?, 'failed', ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", [partyId, String(e.message ?? e)]);
   }
 }
 
@@ -161,14 +172,14 @@ export function getLeaderboard(db: Database, partyId?: number) {
     ? db.query<{ participant_id: number; display_name: string; avatar_url: string | null; total_points: number; wins: number }, [number]>(
         `SELECT p.id as participant_id, p.display_name, p.avatar_url,
          COALESCE(SUM(pl.points),0) as total_points,
-         COALESCE(SUM(CASE WHEN pl.reason='tournament_win' AND NOT EXISTS (SELECT 1 FROM point_ledger c WHERE c.correction_of = pl.id) THEN 1 ELSE 0 END),0) as wins
+         COALESCE(SUM(CASE WHEN pl.reason='tournament_win' AND pl.correction_of IS NULL AND NOT EXISTS (SELECT 1 FROM point_ledger c WHERE c.correction_of = pl.id) THEN 1 ELSE 0 END),0) as wins
          FROM participants p LEFT JOIN point_ledger pl ON pl.participant_id = p.id AND pl.party_id = ?
          GROUP BY p.id ORDER BY total_points DESC, wins DESC, p.display_name COLLATE NOCASE ASC, p.id ASC`
       ).all(partyId)
     : db.query<{ participant_id: number; display_name: string; avatar_url: string | null; total_points: number; wins: number }, []>(
         `SELECT p.id as participant_id, p.display_name, p.avatar_url,
          COALESCE(SUM(pl.points),0) as total_points,
-         COALESCE(SUM(CASE WHEN pl.reason='tournament_win' AND NOT EXISTS (SELECT 1 FROM point_ledger c WHERE c.correction_of = pl.id) THEN 1 ELSE 0 END),0) as wins
+         COALESCE(SUM(CASE WHEN pl.reason='tournament_win' AND pl.correction_of IS NULL AND NOT EXISTS (SELECT 1 FROM point_ledger c WHERE c.correction_of = pl.id) THEN 1 ELSE 0 END),0) as wins
          FROM participants p LEFT JOIN point_ledger pl ON pl.participant_id = p.id
          GROUP BY p.id ORDER BY total_points DESC, wins DESC, p.display_name COLLATE NOCASE ASC, p.id ASC`
       ).all();

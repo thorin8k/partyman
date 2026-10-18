@@ -200,6 +200,35 @@ describe("task 014 autonomous mode", () => {
     expect(db.query<{ winner_id: number }, [number]>("SELECT winner_id FROM matches WHERE id = ?").get(matchId)?.winner_id).toBe(m1);
   });
 
+  it("does not invent a score when the dispute winner reported without one", async () => {
+    const routes = createTournamentRoutes(db);
+    const ps = ["n1", "n2", "n3", "n4"].map((s, i) => member(db, `steam-${s}`, `N${i}`, partyId));
+    const tourId = Number(db.run(
+      "INSERT INTO tournaments (party_id, game_id, game_title_snapshot, name, format, status, max_participants) VALUES (?, 1, 'G', 'NoScoreCup', 'single', 'in_progress', 4)",
+      [partyId]).lastInsertRowid);
+    for (const p of ps) {
+      db.run("INSERT INTO tournament_participants (tournament_id, participant_id, display_name_snapshot, seed) VALUES (?, ?, ?, ?)", [tourId, p.id, `N${p.id}`, p.id]);
+    }
+    // participant_b reporta SIN score y gana la disputa: el marcador debe seguir vacío,
+    // no un 1-0 que en el bracket pintaría al perdedor por delante.
+    const a = ps[1].id, b = ps[2].id;
+    db.run("INSERT INTO matches (tournament_id, round, position, participant_a_id, participant_b_id, status) VALUES (?, 1, 0, ?, ?, 'pending')", [tourId, a, b]);
+    db.run("INSERT INTO matches (tournament_id, round, position, participant_a_id, participant_b_id, status) VALUES (?, 1, 1, ?, ?, 'pending')", [tourId, ps[0].id, ps[3].id]);
+    const mid = Number(db.query<{ id: number }, []>("SELECT last_insert_rowid() AS id").get()!.id - 1);
+
+    await routes["/api/matches/:id/report"].POST(new Request(`http://localhost/api/matches/${mid}/report`, post(ps[1].token, { winnerId: a, score: { a: 5, b: 3 } })));
+    await routes["/api/matches/:id/report"].POST(new Request(`http://localhost/api/matches/${mid}/report`, post(ps[2].token, { winnerId: b })));
+    for (const o of [ps[0], ps[3]]) {
+      await routes["/api/disputes/:id/vote"].POST(new Request(`http://localhost/api/disputes/${mid}/vote`, post(o.token, { winnerId: b })));
+    }
+
+    const row = db.query<{ winner_id: number; score_json: string | null }, [number]>("SELECT winner_id, score_json FROM matches WHERE id = ?").get(mid)!;
+    expect(row.winner_id).toBe(b);
+    expect(row.score_json).toBeNull();
+    // Este fichero comparte una DB entre tests: un torneo vivo bloquearía el wizard de cierre.
+    db.run("UPDATE tournaments SET status = 'cancelled' WHERE id = ?", [tourId]);
+  });
+
   it("awards auto achievements exactly once and closes via wizard", async () => {
     const tRoutes = createTournamentRoutes(db);
     const pRoutes = createPartyRoutes(db);

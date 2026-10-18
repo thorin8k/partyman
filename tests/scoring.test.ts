@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeAll, afterAll } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createScoringRoutes } from "../src/backend/routes/scoring";
-import { seedPointRules, seedAchievements, scoreTournamentFinished, scorePartyParticipation, getLeaderboard } from "../src/backend/scoring/service";
+import { seedPointRules, seedAchievements, awardAuto, scoreTournamentFinished, scorePartyParticipation, getLeaderboard } from "../src/backend/scoring/service";
 
 function makeTempDb(): { db: Database; close: () => void } {
   const db = new Database(":memory:");
@@ -22,6 +22,8 @@ function makeTempDb(): { db: Database; close: () => void } {
   db.exec("CREATE UNIQUE INDEX point_ledger_once ON point_ledger(source_type, source_key, participant_id, reason) WHERE correction_of IS NULL");
   db.exec("CREATE TABLE achievements (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, description TEXT)");
   db.exec("CREATE TABLE participant_awards (id INTEGER PRIMARY KEY AUTOINCREMENT, participant_id INTEGER NOT NULL, achievement_id INTEGER, party_id INTEGER, title TEXT NOT NULL, note TEXT, awarded_by INTEGER, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))");
+  db.exec("CREATE UNIQUE INDEX participant_awards_once_global ON participant_awards(participant_id, achievement_id) WHERE achievement_id IS NOT NULL AND party_id IS NULL");
+  db.exec("CREATE UNIQUE INDEX participant_awards_once_party ON participant_awards(participant_id, achievement_id, party_id) WHERE achievement_id IS NOT NULL AND party_id IS NOT NULL");
   db.exec("CREATE TABLE activity_events (id INTEGER PRIMARY KEY AUTOINCREMENT, party_id INTEGER, participant_id INTEGER, event_type TEXT NOT NULL, message TEXT NOT NULL, source_type TEXT, source_id INTEGER)");
   db.exec("CREATE TABLE party_scoring_runs (party_id INTEGER PRIMARY KEY, status TEXT NOT NULL, last_error TEXT, updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))");
   db.exec("CREATE TABLE audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, actor_participant_id INTEGER, actor_admin_id INTEGER, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id INTEGER NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}')");
@@ -68,6 +70,89 @@ describe("task 007 scoring", () => {
   });
 
   afterAll(() => ctx.close());
+
+  it("tells a lost race apart from a real insert failure", () => {
+    const local = makeTempDb();
+    const db = local.db;
+    seedAchievements(db);
+    const fay = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES ('steam-fay', 'Fay')").lastInsertRowid);
+    const p = Number(db.run("INSERT INTO parties (name, starts_at, ends_at, status) VALUES ('D','2026-01-01T00:00:00Z','2026-01-02T00:00:00Z','active')").lastInsertRowid);
+
+    // Camino normal: concede y no vuelve a conceder.
+    expect(awardAuto(db, fay, "debut", p, "n1")).toBe(true);
+    expect(awardAuto(db, fay, "debut", p, "n2")).toBe(false);
+
+    // Carrera perdida: el INSERT viola el índice único, la fila existe -> false, sin lanzar.
+    // Se simula con un trigger que convierte el duplicado en una violación real.
+    db.exec(`CREATE TRIGGER force_race BEFORE INSERT ON participant_awards
+             WHEN (SELECT COUNT(*) FROM participant_awards WHERE participant_id = NEW.participant_id AND achievement_id = NEW.achievement_id) > 0
+             BEGIN SELECT RAISE(ABORT, 'UNIQUE constraint failed'); END`);
+    const gia = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES ('steam-gia', 'Gia')").lastInsertRowid);
+    db.run("INSERT INTO participant_awards (participant_id, achievement_id, party_id, title) VALUES (?, (SELECT id FROM achievements WHERE code='debut'), ?, 'Debut')", [gia, p]);
+    expect(awardAuto(db, gia, "debut", p, "race")).toBe(false);   // tragado: perder la carrera no es fallo
+
+    // Fallo real (la fila NO existe tras el error): debe propagarse, no tragarse.
+    db.exec("DROP TRIGGER force_race");
+    db.exec(`CREATE TRIGGER force_fk BEFORE INSERT ON participant_awards
+             BEGIN SELECT RAISE(ABORT, 'FOREIGN KEY constraint failed'); END`);
+    const hal = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES ('steam-hal', 'Hal')").lastInsertRowid);
+    expect(() => awardAuto(db, hal, "debut", p, "fk")).toThrow();  // tragárselo perdería el honor en silencio
+    expect(db.query<{ n: number }, [number]>("SELECT COUNT(*) AS n FROM participant_awards WHERE participant_id = ?").get(hal)!.n).toBe(0);
+    local.close();
+  });
+
+  it("refuses a duplicate award at the database level, not just in the check", () => {
+    // Base propia: este describe comparte una DB y no quiero alterar el resto.
+    const local = makeTempDb();
+    const db = local.db;
+    seedAchievements(db);
+    const erin = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES ('steam-erin2', 'Erin')").lastInsertRowid);
+    const partyA = Number(db.run("INSERT INTO parties (name, starts_at, ends_at, status) VALUES ('A','2026-01-01T00:00:00Z','2026-01-02T00:00:00Z','active')").lastInsertRowid);
+    const partyB = Number(db.run("INSERT INTO parties (name, starts_at, ends_at, status) VALUES ('B','2026-01-01T00:00:00Z','2026-01-02T00:00:00Z','active')").lastInsertRowid);
+    const ach = db.query<{ id: number }, [string]>("SELECT id FROM achievements WHERE code = 'debut'").get("debut")!.id;
+
+    // Un INSERT directo saltándose awardAuto() es lo que hace la carrera.
+    // Si esto pasa, el índice único no está y un check-then-insert no basta.
+    db.run("INSERT INTO participant_awards (participant_id, achievement_id, party_id, title) VALUES (?, ?, ?, 'Debut')", [erin, ach, partyA]);
+    expect(() =>
+      db.run("INSERT INTO participant_awards (participant_id, achievement_id, party_id, title) VALUES (?, ?, ?, 'Debut')", [erin, ach, partyA])
+    ).toThrow();
+    expect(db.query<{ n: number }, [number, number]>("SELECT COUNT(*) AS n FROM participant_awards WHERE participant_id = ? AND achievement_id = ?").get(erin, ach)!.n).toBe(1);
+
+    // El mismo reward en OTRA party sí es legal: el índice es por (participant, reward, party).
+    db.run("INSERT INTO participant_awards (participant_id, achievement_id, party_id, title) VALUES (?, ?, ?, 'Debut')", [erin, ach, partyB]);
+
+    // Y con party_id NULL (fiel, regular_3_tournaments) también: por eso hay dos índices.
+    db.run("INSERT INTO participant_awards (participant_id, achievement_id, party_id, title) VALUES (?, ?, NULL, 'Habitual')", [erin, ach]);
+    expect(() =>
+      db.run("INSERT INTO participant_awards (participant_id, achievement_id, party_id, title) VALUES (?, ?, NULL, 'Habitual')", [erin, ach])
+    ).toThrow();
+
+    // Un premio manual sin achievement_id nunca choca (cada NULL es distinto en un índice único).
+    db.run("INSERT INTO participant_awards (participant_id, achievement_id, party_id, title) VALUES (?, NULL, ?, 'Manual')", [erin, partyA]);
+    db.run("INSERT INTO participant_awards (participant_id, achievement_id, party_id, title) VALUES (?, NULL, ?, 'Manual')", [erin, partyA]);
+    expect(db.query<{ n: number }, [number]>("SELECT COUNT(*) AS n FROM participant_awards WHERE participant_id = ?").get(erin)!.n).toBe(5);
+    local.close();
+  });
+
+  it("counts a correction row as points but never as a win", () => {
+    const local = makeTempDb();
+    const db = local.db;
+    // handlePointCorrection guarda el `reason` del admin como texto libre. Si un admin
+    // escribe literalmente "tournament_win" al anular una victoria, esa fila no puede
+    // contar como una victoria en el leaderboard: scoreTournamentFinished ya la excluye
+    // por correction_of IS NULL, y el leaderboard ahora exige lo mismo.
+    const zoe = Number(db.run("INSERT INTO participants (steam_id, display_name) VALUES ('steam-zoe', 'Zoe')").lastInsertRowid);
+    const p = Number(db.run("INSERT INTO parties (name, starts_at, ends_at, status) VALUES ('C','2026-01-01T00:00:00Z','2026-01-02T00:00:00Z','active')").lastInsertRowid);
+    db.run("INSERT INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points) VALUES (?, ?, 'tournament', 'ghost', 'tournament_win', 10)", [zoe, p]);
+    const row = db.query<{ id: number }, [number]>("SELECT id FROM point_ledger WHERE participant_id = ? AND source_key = 'ghost'").get(zoe)!.id;
+    db.run("INSERT INTO point_ledger (participant_id, party_id, source_type, source_key, reason, points, correction_of) VALUES (?, ?, 'tournament', 'ghost', 'tournament_win', -10, ?)", [zoe, p, row]);
+
+    const zoeRow = getLeaderboard(db, p).find((b) => b.participantId === zoe)!;
+    expect(zoeRow.points).toBe(0);   // +10 y -10 se anulan
+    expect(zoeRow.wins).toBe(0);     // y ninguna de las dos filas es una victoria
+    local.close();
+  });
 
   it("seeds default rules idempotently", () => {
     seedPointRules(ctx.db);

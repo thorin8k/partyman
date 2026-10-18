@@ -567,9 +567,12 @@ export function createTournamentRoutes(db: Database) {
       "SELECT winner_id, COUNT(*) AS n FROM dispute_votes WHERE match_id = ? GROUP BY winner_id ORDER BY n DESC"
     ).all(id);
     if (outsiders > 0 && tally.length > 0 && tally[0].n > outsiders / 2) {
-      const score = db.query<{ score_json: string }, [number, number]>(
+      // Sin marcador es un resultado legítimo (task 015). Antes aquí se fabricaba
+      // un {a:1,b:0}: si el ganador de la disputa era participant_b, el bracket
+      // pintaba al perdedor por delante. Un marcador que nadie jugó no se inventa.
+      const score = db.query<{ score_json: string | null }, [number, number]>(
         "SELECT score_json FROM match_reports WHERE match_id = ? AND winner_id = ? LIMIT 1"
-      ).get(id, tally[0].winner_id)?.score_json ?? JSON.stringify({ a: 1, b: 0 });
+      ).get(id, tally[0].winner_id)?.score_json ?? null;
       confirmMatchRow(db, match, tally[0].winner_id, score, auth.session.subjectId);
       const t = db.query<TournamentRow, [number]>("SELECT * FROM tournaments WHERE id = ?").get(match.tournament_id);
       if (t) logEvent(db, t.party_id, auth.session.subjectId, "dispute_resolved", `Disputa resuelta en ${t.name}`);
